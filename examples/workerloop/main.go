@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"sync"
 	"time"
 )
 
@@ -74,77 +73,4 @@ func main() {
 	time.Sleep(8 * time.Second)
 
 	fmt.Println("Application finished")
-}
-
-type Config struct {
-	Timeout    time.Duration
-	MaxRetries int
-	PromLabels map[string]string
-}
-
-func defaultConfig() Config {
-	return Config{
-		Timeout:    0,
-		MaxRetries: 0,
-		PromLabels: nil,
-	}
-}
-
-type Task interface {
-	Config() Config
-	Execute() error
-}
-
-type Observer struct {
-	cfg ObserverConfig
-	wg  sync.WaitGroup
-}
-
-func NewObserver(cfg ObserverConfig) *Observer {
-	return &Observer{
-		cfg: cfg,
-	}
-}
-
-type ObserverConfig struct {
-	PromLabels map[string]string
-}
-
-func defaultObserverConfig() ObserverConfig {
-	return ObserverConfig{
-		PromLabels: make(map[string]string),
-	}
-}
-
-func (o *Observer) Observe(task Task) {
-	o.wg.Add(1)
-	go func() {
-		defer o.wg.Done()
-		fmt.Println("Observed task:", task.Execute())
-	}()
-}
-
-func (o *Observer) ObserveFunc(fn func() error) {
-	task := &implJob{
-		fn:  fn,
-		cfg: defaultConfig(),
-	}
-	o.Observe(task)
-}
-
-func (o *Observer) Wait() {
-	o.wg.Wait()
-}
-
-type implJob struct {
-	fn  func() error
-	cfg Config
-}
-
-func (j *implJob) Config() Config {
-	return j.cfg
-}
-
-func (j *implJob) Execute() error {
-	return j.fn()
 }
