@@ -66,7 +66,7 @@ func NewObserver(cfg ObserverConfig) *Observer {
 }
 
 func (o *Observer) Do(cfg Config, fn func(ctx context.Context) error) {
-	task := &implJob{
+	task := &implTask{
 		cfg: cfg,
 		fn:  fn,
 	}
@@ -78,7 +78,7 @@ func (o *Observer) Do(cfg Config, fn func(ctx context.Context) error) {
 }
 
 func (o *Observer) Observe(fn func() error) {
-	task := &implJob{
+	task := &implTask{
 		cfg: defaultConfig(),
 		fn: func(ctx context.Context) error {
 			return fn() // ignore ctx
@@ -148,7 +148,7 @@ func (o *Observer) observe(task Task) {
 			cfg := task.Config()
 			cfg.MaxRetries--
 
-			retryTask := &implJob{
+			retryTask := &implTask{
 				fn:  task.Execute,
 				cfg: cfg,
 			}

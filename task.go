@@ -7,15 +7,15 @@ type Task interface {
 	Execute(ctx context.Context) error
 }
 
-type implJob struct {
+type implTask struct {
 	fn  func(ctx context.Context) error
 	cfg Config
 }
 
-func (j *implJob) Config() Config {
+func (j *implTask) Config() Config {
 	return j.cfg
 }
 
-func (j *implJob) Execute(ctx context.Context) error {
+func (j *implTask) Execute(ctx context.Context) error {
 	return j.fn(ctx)
 }
