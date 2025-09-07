@@ -5,7 +5,20 @@ import (
 	"log"
 	"math/rand"
 	"time"
+
+	viewprom "github.com/mcwalrus/view-prom"
 )
+
+var ob *viewprom.Observer
+
+func init() {
+	ob = viewprom.NewObserver(viewprom.ObserverConfig{
+		Namespace:   "example",
+		Subsystem:   "workerloop",
+		Description: "Worker loop",
+		Buckets:     []float64{0.01, 0.1, 1, 10, 100, 1000, 10_000},
+	})
+}
 
 // Job represents a unit of work
 type MyJob struct {
@@ -35,12 +48,10 @@ func main() {
 		{ID: 8, Data: "Sync with external API"},
 	}
 
-	ob := NewObserver()
-
 	log.Printf("Adding %d jobs to the queue", len(jobs))
 	for _, job := range jobs {
 		// Simulate long-running process (10 - 30 milliseconds)
-		ob.ObserveFunc(func() error {
+		ob.Observe(func() error {
 			log.Printf("Processing job %d: %s", job.ID, job.Data)
 			processingTime := time.Duration(rand.Intn(3)+1) * 100 * time.Millisecond
 			time.Sleep(processingTime)
@@ -60,7 +71,7 @@ func main() {
 
 	log.Println("Adding additional jobs...")
 	for _, job := range moreJobs {
-		ob.ObserveFunc(func() error {
+		ob.Observe(func() error {
 			log.Printf("Processing job %d: %s", job.ID, job.Data)
 			processingTime := time.Duration(rand.Intn(3)+1) * 100 * time.Millisecond
 			time.Sleep(processingTime)
