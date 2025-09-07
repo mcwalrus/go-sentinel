@@ -3,6 +3,7 @@ package viewprom
 import (
 	"context"
 	"errors"
+	"iter"
 	"sync"
 	"time"
 
@@ -92,6 +93,14 @@ func (o *Observer) ObserveTask(task Task) {
 	} else {
 		go o.observe(task)
 	}
+}
+
+func (o *Observer) ObserveIter(tasks iter.Seq[Task]) {
+	go func() {
+		for task := range tasks {
+			o.ObserveTask(task)
+		}
+	}()
 }
 
 func (o *Observer) Register(registry *prometheus.Registry) {
