@@ -6,13 +6,13 @@ import (
 	"math/rand"
 	"time"
 
-	viewprom "github.com/mcwalrus/view-prom"
+	sentinel "github.com/mcwalrus/go-sentinel"
 )
 
-var ob *viewprom.Observer
+var ob *sentinel.Observer
 
 func init() {
-	ob = viewprom.NewObserver(viewprom.ObserverConfig{
+	ob = sentinel.NewObserver(sentinel.ObserverConfig{
 		Namespace:   "example",
 		Subsystem:   "workerloop",
 		Description: "Worker loop",
