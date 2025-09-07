@@ -1,4 +1,4 @@
-module github.com/mcwalrus/view-prom
+module github.com/mcwalrus/go-taskscope
 
 go 1.23.0
 

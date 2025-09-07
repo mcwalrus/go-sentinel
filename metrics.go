@@ -83,7 +83,7 @@ func newMetrics(cfg ObserverConfig) *metrics {
 	}
 }
 
-func (m *metrics) Register(registry *prometheus.Registry) {
+func (m *metrics) Register(registry prometheus.Registerer) {
 	registry.MustRegister(
 		m.InFlight,
 		m.Successes,

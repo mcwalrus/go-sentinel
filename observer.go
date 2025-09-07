@@ -30,11 +30,15 @@ type ObserverConfig struct {
 	MetricsPrefix string
 	Description   string
 	Buckets       []float64
+	AutoRegister  bool
 }
 
 func (c ObserverConfig) isZero() bool {
 	if c.Namespace+c.Subsystem+c.MetricsPrefix+c.Description == "" {
 		if len(c.Buckets) == 0 {
+			return true
+		}
+		if c.AutoRegister {
 			return true
 		}
 	}
@@ -47,6 +51,7 @@ func DefaultConfig() ObserverConfig {
 		Subsystem:     "",
 		MetricsPrefix: "observer",
 		Buckets:       []float64{0.01, 0.1, 1, 10, 100, 1000, 10_000},
+		AutoRegister:  true,
 	}
 }
 
@@ -59,10 +64,14 @@ func NewObserver(cfg ObserverConfig) *Observer {
 	if cfg.isZero() {
 		cfg = DefaultConfig()
 	}
-	return &Observer{
+	ob := &Observer{
 		cfg:     cfg,
 		metrics: newMetrics(cfg),
 	}
+	if cfg.AutoRegister {
+		ob.metrics.Register(prometheus.DefaultRegisterer)
+	}
+	return ob
 }
 
 func (o *Observer) Do(cfg Config, fn func(ctx context.Context) error) {

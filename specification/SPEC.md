@@ -1,13 +1,12 @@
-# Reliable
+# taskscope
 
-Provides task reliablity features and obserability monitoring via exported Prometheus metrics.
+Provides task reliability features and observability monitoring via exported Prometheus metrics.    
 
 Features
 
-1. Promethesus metrics of worker pool.
-3. Provides visibility and logging of worker errors.
+1. Prometheus metrics of tasks / jobs.
+3. Visibility of task / job errors.
 4. Provides retry strategies and timeouts.
-6. Logging integration.
 
 Go routines return errors, if an error occurs within a routine, the reliablity handler will notify the promthesus endpoint.
 
