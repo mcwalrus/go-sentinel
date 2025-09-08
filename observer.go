@@ -1,9 +1,8 @@
-package viewprom
+package sentinel
 
 import (
 	"context"
 	"errors"
-	"iter"
 	"sync"
 	"time"
 
@@ -11,20 +10,15 @@ import (
 )
 
 type ObserverConfig struct {
-	Namespace     string
-	Subsystem     string
-	MetricsPrefix string
-	Description   string
-	Buckets       []float64
-	AutoRegister  bool
+	Namespace   string
+	Subsystem   string
+	Description string
+	Buckets     []float64
 }
 
 func (c ObserverConfig) isZero() bool {
-	if c.Namespace+c.Subsystem+c.MetricsPrefix+c.Description == "" {
+	if c.Namespace+c.Subsystem+c.Description == "" {
 		if len(c.Buckets) == 0 {
-			return true
-		}
-		if c.AutoRegister {
 			return true
 		}
 	}
@@ -33,11 +27,9 @@ func (c ObserverConfig) isZero() bool {
 
 func DefaultConfig() ObserverConfig {
 	return ObserverConfig{
-		Namespace:     "viewprom",
-		Subsystem:     "",
-		MetricsPrefix: "observer",
-		Buckets:       []float64{0.01, 0.1, 1, 10, 100, 1000, 10_000},
-		AutoRegister:  true,
+		Namespace: "viewprom",
+		Subsystem: "observer",
+		Buckets:   []float64{0.01, 0.1, 1, 10, 100, 1000, 10_000, 100_000},
 	}
 }
 
@@ -50,59 +42,58 @@ func NewObserver(cfg ObserverConfig) *Observer {
 	if cfg.isZero() {
 		cfg = DefaultConfig()
 	}
-	ob := &Observer{
+	return &Observer{
 		cfg:     cfg,
 		metrics: newMetrics(cfg),
 	}
-	if cfg.AutoRegister {
-		ob.metrics.Register(prometheus.DefaultRegisterer)
-	}
-	return ob
-}
-
-func (o *Observer) Do(cfg TaskConfig, fn func(ctx context.Context) error) {
-	task := &implTask{
-		cfg: cfg,
-		fn:  fn,
-	}
-	if !task.Config().Concurrent {
-		o.observe(task)
-	} else {
-		go o.observe(task)
-	}
-}
-
-func (o *Observer) Observe(fn func() error) {
-	task := &implTask{
-		cfg: defaultTaskConfig(),
-		fn: func(ctx context.Context) error {
-			return fn() // ignore ctx
-		},
-	}
-	o.observe(task)
-}
-
-func (o *Observer) ObserveTask(task Task) {
-	if !task.Config().Concurrent {
-		o.observe(task)
-	} else {
-		go o.observe(task)
-	}
-}
-
-func (o *Observer) ObserveIter(tasks iter.Seq[Task]) {
-	go func() {
-		for task := range tasks {
-			o.ObserveTask(task)
-		}
-	}()
 }
 
 func (o *Observer) Register(registry *prometheus.Registry) {
 	o.metrics.Register(registry)
 }
 
-func (o *Observer) observe(task Task) {
+func (o *Observer) MustRegister(registry *prometheus.Registry) {
+	o.metrics.MustRegister(registry)
+}
+
+func (o *Observer) Run(cfg TaskConfig, fn func(ctx context.Context) error) error {
+	task := &implTask{
+		cfg: cfg,
+		fn:  fn,
+	}
+	if !task.Config().Concurrent {
+		return o.observe(task)
+	} else {
+		go o.observe(task)
+	}
+	return nil
+}
+
+func (o *Observer) RunFunc(fn func() error) error {
+	task := &implTask{
+		cfg: defaultTaskConfig(),
+		fn: func(ctx context.Context) error {
+			return fn() // ignore ctx
+		},
+	}
+	if !task.Config().Concurrent {
+		return o.observe(task)
+	} else {
+		go o.observe(task)
+	}
+	return nil
+}
+
+func (o *Observer) RunTask(task Task) error {
+	if !task.Config().Concurrent {
+		return o.observe(task)
+	} else {
+		go o.observe(task)
+	}
+	return nil
+}
+
+func (o *Observer) observe(task Task) error {
 	defer func() {
 		if r := recover(); r != nil {
 			o.metrics.Panics.Inc()
@@ -152,13 +143,20 @@ func (o *Observer) observe(task Task) {
 			}
 
 			if !task.Config().Concurrent {
-				o.ObserveTask(retryTask)
+				err2 := o.observe(retryTask)
+				if err2 != nil {
+					return errors.Join(err, err2)
+				} else {
+					return nil
+				}
 			} else {
-				go o.ObserveTask(retryTask)
+				go o.observe(retryTask)
 			}
 		}
 
 	} else {
 		o.metrics.Successes.Inc()
 	}
+
+	return err
 }

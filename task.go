@@ -1,4 +1,4 @@
-package viewprom
+package sentinel
 
 import (
 	"context"
@@ -15,19 +15,20 @@ type implTask struct {
 	cfg TaskConfig
 }
 
-func (j *implTask) Config() TaskConfig {
-	return j.cfg
+func (t *implTask) Config() TaskConfig {
+	return t.cfg
 }
 
-func (j *implTask) Execute(ctx context.Context) error {
-	return j.fn(ctx)
+func (t *implTask) Execute(ctx context.Context) error {
+	return t.fn(ctx)
 }
 
 type TaskConfig struct {
 	Timeout       time.Duration
+	Concurrent    bool
 	MaxRetries    int
 	RecoverPanics bool
-	Concurrent    bool
+	RetryStrategy func(retryCount int) time.Duration
 }
 
 func defaultTaskConfig() TaskConfig {
@@ -36,5 +37,6 @@ func defaultTaskConfig() TaskConfig {
 		MaxRetries:    0,
 		RecoverPanics: false,
 		Concurrent:    false,
+		RetryStrategy: RetryStrategyImmediate,
 	}
 }

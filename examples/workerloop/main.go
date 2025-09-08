@@ -51,7 +51,7 @@ func main() {
 	log.Printf("Adding %d jobs to the queue", len(jobs))
 	for _, job := range jobs {
 		// Simulate long-running process (10 - 30 milliseconds)
-		ob.Observe(func() error {
+		ob.RunFunc(func() error {
 			log.Printf("Processing job %d: %s", job.ID, job.Data)
 			processingTime := time.Duration(rand.Intn(3)+1) * 100 * time.Millisecond
 			time.Sleep(processingTime)
@@ -71,7 +71,7 @@ func main() {
 
 	log.Println("Adding additional jobs...")
 	for _, job := range moreJobs {
-		ob.Observe(func() error {
+		ob.RunFunc(func() error {
 			log.Printf("Processing job %d: %s", job.ID, job.Data)
 			processingTime := time.Duration(rand.Intn(3)+1) * 100 * time.Millisecond
 			time.Sleep(processingTime)
