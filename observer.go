@@ -27,8 +27,8 @@ func (c ObserverConfig) isZero() bool {
 
 func DefaultConfig() ObserverConfig {
 	return ObserverConfig{
-		Namespace: "viewprom",
-		Subsystem: "observer",
+		Namespace: "",
+		Subsystem: "sentinel",
 		Buckets:   []float64{0.01, 0.1, 1, 10, 100, 1000, 10_000, 100_000},
 	}
 }
@@ -165,6 +165,5 @@ func (o *Observer) observe(task *implTask) error {
 	} else {
 		o.metrics.Successes.Inc()
 	}
-
 	return err
 }
