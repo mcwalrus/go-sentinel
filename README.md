@@ -72,6 +72,187 @@ func main() {
 }
 ```
 
+### Failure Handlers
+
+Handle task failures with error logging:
+
+```go
+package main
+
+import (
+    "errors"
+    "fmt"
+    "log"
+    "math/rand"
+    
+    sentinel "github.com/mcwalrus/go-sentinel"
+    "github.com/prometheus/client_golang/prometheus"
+)
+
+func main() {
+    observer := sentinel.NewObserver(sentinel.DefaultConfig())
+    registry := prometheus.NewRegistry()
+    observer.MustRegister(registry)
+    
+    // Run many times
+    for i := 0; i < 1000; i++ {
+        
+        // Task errors are recorded by the observer
+        err := observer.RunFunc(func() error {
+            if rand.Float64() < 0.5 {
+                return errors.New("your task failed")
+            }
+            fmt.Println("task was successful!")
+            return nil
+        })
+
+        // Provide custom error handling per error
+        if err != nil {
+            log.Printf("Task failed: %v", err)
+        }
+    }
+}
+```
+
+### Retry Handling
+
+Configure retry strategies for resilient task execution:
+
+```go
+package main
+
+import (
+    "context"
+    "errors"
+    "fmt"
+    "math/rand"
+    "time"
+    
+    sentinel "github.com/mcwalrus/go-sentinel"
+    "github.com/prometheus/client_golang/prometheus"
+)
+
+func main() {
+    observer := sentinel.NewObserver(sentinel.DefaultConfig())
+    registry := prometheus.NewRegistry()
+    observer.MustRegister(registry)
+    
+    // Exponential backoff retry strategy
+    config := sentinel.TaskConfig{
+        MaxRetries:    3,
+        Timeout:       10 * time.Second,
+        RetryStrategy: sentinel.RetryStrategyExponentialBackoff(100 * time.Millisecond),
+    }
+
+    // Retry failures, succeed after two attempts
+    var i int
+    err := observer.Run(config, func(ctx context.Context) error {
+        if i < 2 {
+            i++
+            fmt.Println("failed :( will retry...")
+            return errors.New("no good, try again")
+        }
+        fmt.Println("it works!")
+        return nil
+    })
+
+    // Expect run to succeed on final retry attempt
+    if err != nil {
+        fmt.Println("unexpected error:", err)
+    }
+}
+```
+
+### Panic Recovery
+
+Handle panics gracefully with recovery options:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    
+    sentinel "github.com/mcwalrus/go-sentinel"
+    "github.com/prometheus/client_golang/prometheus"
+)
+
+func main() {
+    observer := sentinel.NewObserver(sentinel.DefaultConfig())
+    registry := prometheus.NewRegistry()
+    observer.MustRegister(registry)
+    
+    // Panic recovery will be recovered and counted in metrics
+    config := sentinel.TaskConfig{
+        RecoverPanics: true,
+        Concurrent:    false,
+    }
+    observer.Run(config, func(ctx context.Context) error {
+        fmt.Println("Oh no, panic...")
+        panic("something went wrong!")
+    })
+    fmt.Println("continues after panic recovery")
+    
+    // Panic recovery disabled can allow the program to crash
+    func() {
+        config := sentinel.TaskConfig{
+            RecoverPanics: false,
+            Concurrent:    false,
+        }
+        defer func() {
+            if r := recover(); r != nil {
+                fmt.Println(r)
+            } 
+        }()
+        observer.Run(config, func(ctx context.Context) error {
+            fmt.Println("Oh no, I've slipped...")
+            panic("this will crash the program!")
+        })
+    }()
+
+    fmt.Println("r,r,r,- recovered!")
+}
+```
+
+### Task Implementation
+
+An alternative means to describe tasks through `sentinel.Task` interface:
+
+```go
+// Example task
+type EmailTask struct {
+    To      string
+    Subject string
+    Body    string
+}
+
+// Define task configuration
+func (e *EmailTask) Config() sentinel.TaskConfig {
+    return sentinel.TaskConfig{
+        Timeout:       30 * time.Second,
+        MaxRetries:    3,
+        RetryStrategy: sentinel.RetryStrategyExponentialBackoff(1 * time.Second),
+        RecoverPanics: true,
+        Concurrent:    true,
+    }
+}
+
+// Implement task handling
+func (e *EmailTask) Execute(ctx context.Context) error {
+    fmt.Printf("Sending email to %s: %s\n", e.To, e.Subject)
+    return nil
+}
+
+// Example usage
+observer.RunTask(&EmailTask{
+    To:      "user@example.com",
+    Subject: "Welcome!",
+    Body:    "Welcome to our service!",
+})
+```
+
 ### Multiple Observers
 
 Using multiple observers with different configurations for different types of tasks:
@@ -136,183 +317,6 @@ func main() {
 }
 ```
 
-### Failure Handlers
-
-Handle task failures with error logging:
-
-```go
-package main
-
-import (
-    "errors"
-    "fmt"
-    "log"
-    "math/rand"
-    
-    sentinel "github.com/mcwalrus/go-sentinel"
-    "github.com/prometheus/client_golang/prometheus"
-)
-
-func main() {
-    observer := sentinel.NewObserver(sentinel.DefaultConfig())
-    registry := prometheus.NewRegistry()
-    observer.MustRegister(registry)
-    
-    // Task errors are tracked by observer
-    for i := 0; i < 1000; i++ {
-        err := observer.RunFunc(func() error {
-            if rand.Float64() < 0.5 {
-                return errors.New("your task failed")
-            }
-            fmt.Println("task was successful!")
-            return nil
-        })
-        // Error already logged by observer metrics
-        if err != nil {
-            log.Printf("Task failed: %v", err)
-        }
-    }
-}
-```
-
-### Retry Handling
-
-Configure retry strategies for resilient task execution:
-
-```go
-package main
-
-import (
-    "context"
-    "errors"
-    "fmt"
-    "math/rand"
-    "time"
-    
-    sentinel "github.com/mcwalrus/go-sentinel"
-    "github.com/prometheus/client_golang/prometheus"
-)
-
-func main() {
-    observer := sentinel.NewObserver(sentinel.DefaultConfig())
-    registry := prometheus.NewRegistry()
-    observer.MustRegister(registry)
-    
-    // Usage of exponential backoff retry strategy
-    config := sentinel.TaskConfig{
-        MaxRetries:    3,
-        Timeout:       10 * time.Second,
-        RetryStrategy: sentinel.RetryStrategyExponentialBackoff(100 * time.Millisecond),
-    }
-
-    var i int
-    err := observer.Run(config, func(ctx context.Context) error {
-        if i < 2 {
-            i++
-            fmt.Println("failed :( will retry...")
-            return errors.New("no good, try again")
-        }
-        fmt.Println("it works!")
-        return nil
-    })
-
-    // Expect Run to succeed on final retry attempt
-    if err != nil {
-        fmt.Println("unexpected error:", err)
-    }
-}
-```
-
-### Panic Recovery
-
-Handle panics gracefully with recovery options:
-
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-    "os"
-    
-    sentinel "github.com/mcwalrus/go-sentinel"
-    "github.com/prometheus/client_golang/prometheus"
-)
-
-func main() {
-    observer := sentinel.NewObserver(sentinel.DefaultConfig())
-    registry := prometheus.NewRegistry()
-    observer.MustRegister(registry)
-    
-    // Panic recovery will be recovered and counted in metrics
-    config := sentinel.TaskConfig{
-        RecoverPanics: true,
-        Concurrent:    false,
-    }
-    observer.Run(config, func(ctx context.Context) error {
-        fmt.Println("Oh no, panic...")
-        panic("something went wrong!")
-    })
-    fmt.Println("continues after panic recovery")
-    
-    // Panic recovery disabled can allow the program to crash
-    func() {
-        config := sentinel.TaskConfig{
-            RecoverPanics: false,
-            Concurrent:    false,
-        }
-        defer func() {
-            if r := recover(); r != nil {
-                fmt.Println(r)
-            } 
-        }()
-        observer.Run(config, func(ctx context.Context) error {
-            fmt.Println("Oh no, I've slipped...")
-            panic("this will crash the program!")
-        })
-    }()
-
-    fmt.Println("r,r,r,- recovered!")
-}
-```
-
-### Task Implementation
-
-An alternative means to describe tasks is through the `sentinel.Task` interface:
-
-```go
-// Example task
-type EmailTask struct {
-    To      string
-    Subject string
-    Body    string
-}
-
-// Define task configuration
-func (e *EmailTask) Config() sentinel.TaskConfig {
-    return sentinel.TaskConfig{
-        Timeout:       30 * time.Second,
-        MaxRetries:    3,
-        RetryStrategy: sentinel.RetryStrategyExponentialBackoff(1 * time.Second),
-        RecoverPanics: true,
-        Concurrent:    true,
-    }
-}
-
-// Implement task handling
-func (e *EmailTask) Execute(ctx context.Context) error {
-    fmt.Printf("Sending email to %s: %s\n", e.To, e.Subject)
-    return nil
-}
-
-// Example usage
-observer.RunTask(&EmailTask{
-    To:      "user@example.com",
-    Subject: "Welcome!",
-    Body:    "Welcome to our service!",
-})
-```
-
 ### Prometheus Integration
 
 Use template for integrating sentinel with a prometheus endpoint:
@@ -353,3 +357,11 @@ func main() {
 - [ ] Circuit breaker with exposed Prometheus metrics
 - [ ] Distributed tracing integration, otel
 - [ ] Rate limiting capabilities
+
+## Contributing
+
+Please report any issues or feature requests to the [GitHub repository](https://github.com/mcwalrus/go-jitjson).
+
+## About
+
+This module is maintained by Max Collier under an MIT License Agreement.
