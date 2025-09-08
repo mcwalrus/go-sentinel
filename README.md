@@ -1,2 +1,3 @@
-# go-sentinel
-Sentinel provides reliability handling and observability monitoring in Go applications
+sentinel
+
+Sentinel provides task reliability and observability monitoring for Go applications. It wraps task execution with Prometheus metrics, error handling, retries, and timeouts — making background jobs and goroutines safe, measurable, and reliable.

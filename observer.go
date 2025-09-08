@@ -10,20 +10,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-type Config struct {
-	Timeout    time.Duration
-	MaxRetries int
-	Concurrent bool
-}
-
-func defaultConfig() Config {
-	return Config{
-		Timeout:    0,
-		MaxRetries: 0,
-		Concurrent: false,
-	}
-}
-
 type ObserverConfig struct {
 	Namespace     string
 	Subsystem     string
@@ -74,7 +60,7 @@ func NewObserver(cfg ObserverConfig) *Observer {
 	return ob
 }
 
-func (o *Observer) Do(cfg Config, fn func(ctx context.Context) error) {
+func (o *Observer) Do(cfg TaskConfig, fn func(ctx context.Context) error) {
 	task := &implTask{
 		cfg: cfg,
 		fn:  fn,
@@ -88,7 +74,7 @@ func (o *Observer) Do(cfg Config, fn func(ctx context.Context) error) {
 
 func (o *Observer) Observe(fn func() error) {
 	task := &implTask{
-		cfg: defaultConfig(),
+		cfg: defaultTaskConfig(),
 		fn: func(ctx context.Context) error {
 			return fn() // ignore ctx
 		},
@@ -120,7 +106,9 @@ func (o *Observer) observe(task Task) {
 	defer func() {
 		if r := recover(); r != nil {
 			o.metrics.Panics.Inc()
-			panic(r)
+			if !task.Config().RecoverPanics {
+				panic(r)
+			}
 		}
 	}()
 
@@ -156,13 +144,14 @@ func (o *Observer) observe(task Task) {
 			o.metrics.Retries.Inc()
 			cfg := task.Config()
 			cfg.MaxRetries--
+			completeTask()
 
 			retryTask := &implTask{
 				fn:  task.Execute,
 				cfg: cfg,
 			}
+
 			if !task.Config().Concurrent {
-				completeTask()
 				o.ObserveTask(retryTask)
 			} else {
 				go o.ObserveTask(retryTask)
