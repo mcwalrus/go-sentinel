@@ -69,7 +69,7 @@ func newMetrics(cfg ObserverConfig) *metrics {
 		Retries: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: cfg.Namespace,
 			Subsystem: cfg.Subsystem,
-			Name:      "attempted_retry",
+			Name:      "retry_attempts",
 			Help:      fmt.Sprintf("Number of retries from observed %s tasks", cfg.Description),
 		}),
 	}

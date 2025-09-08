@@ -1,15 +1,24 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"log"
 	"math/rand"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	sentinel "github.com/mcwalrus/go-sentinel"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-var ob *sentinel.Observer
+var (
+	ob       *sentinel.Observer
+	registry *prometheus.Registry
+)
 
 func init() {
 	ob = sentinel.NewObserver(sentinel.ObserverConfig{
@@ -18,6 +27,10 @@ func init() {
 		Description: "Worker loop",
 		Buckets:     []float64{0.01, 0.1, 1, 10, 100, 1000, 10_000},
 	})
+
+	// Create a custom registry and register our observer metrics
+	registry = prometheus.NewRegistry()
+	ob.MustRegister(registry)
 }
 
 // Job represents a unit of work
@@ -34,8 +47,7 @@ func (job *MyJob) Execute() error {
 	return nil
 }
 
-func main() {
-
+func run() {
 	// Add some jobs to the pool
 	jobs := []MyJob{
 		{ID: 1, Data: "Process user registration"},
@@ -80,8 +92,57 @@ func main() {
 		})
 	}
 
-	// Wait a bit more then shutdown
-	time.Sleep(8 * time.Second)
+	// Run additional jobs periodically until shutdown
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
 
-	fmt.Println("Application finished")
+	// Add a periodic job
+	jobID := 11
+	for range ticker.C {
+		currentJobID := jobID
+		jobID++
+		ob.RunFunc(func() error {
+			log.Printf("Processing periodic job %d", currentJobID)
+			processingTime := time.Duration(rand.Intn(5)+1) * 200 * time.Millisecond
+			time.Sleep(processingTime)
+			log.Printf("Completed periodic job %d (took %v)", currentJobID, processingTime)
+			return nil
+		})
+	}
+}
+
+func main() {
+	// Start metrics server in a goroutine
+	metricsServer := &http.Server{
+		Addr:    ":8080",
+		Handler: promhttp.HandlerFor(registry, promhttp.HandlerOpts{}),
+	}
+
+	go func() {
+		log.Println("Starting metrics server on :8080/metrics")
+		if err := metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Metrics server error: %v", err)
+		}
+	}()
+
+	// Handle shutdown signals
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		log.Println("Shutdown signal received, stopping gracefully...")
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+
+		// Shutdown metrics server
+		if err := metricsServer.Shutdown(shutdownCtx); err != nil {
+			log.Printf("Error shutting down metrics server: %v", err)
+		}
+	}()
+
+	// Keep running until shutdown signal
+	log.Println("Worker loop running... Press Ctrl+C to stop")
+
+	run()
 }
