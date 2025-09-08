@@ -10,19 +10,6 @@ type Task interface {
 	Execute(ctx context.Context) error
 }
 
-type implTask struct {
-	fn  func(ctx context.Context) error
-	cfg TaskConfig
-}
-
-func (t *implTask) Config() TaskConfig {
-	return t.cfg
-}
-
-func (t *implTask) Execute(ctx context.Context) error {
-	return t.fn(ctx)
-}
-
 type TaskConfig struct {
 	Timeout       time.Duration
 	Concurrent    bool
@@ -39,4 +26,18 @@ func defaultTaskConfig() TaskConfig {
 		Concurrent:    false,
 		RetryStrategy: RetryStrategyImmediate,
 	}
+}
+
+type implTask struct {
+	fn         func(ctx context.Context) error
+	cfg        TaskConfig
+	retryCount int
+}
+
+func (t *implTask) Config() TaskConfig {
+	return t.cfg
+}
+
+func (t *implTask) Execute(ctx context.Context) error {
+	return t.fn(ctx)
 }

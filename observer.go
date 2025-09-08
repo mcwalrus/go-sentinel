@@ -85,15 +85,19 @@ func (o *Observer) RunFunc(fn func() error) error {
 }
 
 func (o *Observer) RunTask(task Task) error {
+	t := &implTask{
+		cfg: task.Config(),
+		fn:  task.Execute,
+	}
 	if !task.Config().Concurrent {
-		return o.observe(task)
+		return o.observe(t)
 	} else {
-		go o.observe(task)
+		go o.observe(t)
 	}
 	return nil
 }
 
-func (o *Observer) observe(task Task) error {
+func (o *Observer) observe(task *implTask) error {
 	defer func() {
 		if r := recover(); r != nil {
 			o.metrics.Panics.Inc()
@@ -134,15 +138,20 @@ func (o *Observer) observe(task Task) error {
 		if task.Config().MaxRetries > 0 {
 			o.metrics.Retries.Inc()
 			cfg := task.Config()
-			cfg.MaxRetries--
+			task.retryCount++
 			completeTask()
 
+			retryAttempt := cfg.MaxRetries - task.retryCount
+			wait := cfg.RetryStrategy(retryAttempt)
+			time.Sleep(wait)
+
 			retryTask := &implTask{
-				fn:  task.Execute,
-				cfg: cfg,
+				fn:         task.Execute,
+				cfg:        cfg,
+				retryCount: task.retryCount,
 			}
 
-			if !task.Config().Concurrent {
+			if !retryTask.Config().Concurrent {
 				err2 := o.observe(retryTask)
 				if err2 != nil {
 					return errors.Join(err, err2)
@@ -153,7 +162,6 @@ func (o *Observer) observe(task Task) error {
 				go o.observe(retryTask)
 			}
 		}
-
 	} else {
 		o.metrics.Successes.Inc()
 	}
