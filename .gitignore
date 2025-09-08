@@ -26,6 +26,8 @@ go.work.sum
 
 # env file
 .env
+*~
+previous.md
 
 # Editor/IDE
 # .idea/
