@@ -156,9 +156,11 @@ func (o *Observer) observe(task *implTask) error {
 			task.retryCount++
 			completeTask()
 
+			var wait time.Duration
 			retryAttempt := cfg.MaxRetries - task.retryCount
-			wait := cfg.RetryStrategy(retryAttempt)
-			time.Sleep(wait)
+			if cfg.RetryStrategy != nil {
+				wait = cfg.RetryStrategy(retryAttempt)
+			}
 
 			retryTask := &implTask{
 				fn:         task.Execute,
@@ -166,6 +168,7 @@ func (o *Observer) observe(task *implTask) error {
 				retryCount: task.retryCount,
 			}
 
+			time.Sleep(wait)
 			if !retryTask.Config().Concurrent {
 				err2 := o.observe(retryTask)
 				if err2 != nil {
