@@ -26,10 +26,10 @@ var (
 
 func init() {
 	ob = sentinel.NewObserver(sentinel.ObserverConfig{
-		Namespace:   "example",
-		Subsystem:   "workerloop",
-		Description: "Worker loop",
-		Buckets:     []float64{0.01, 0.1, 1, 10, 100, 1000, 10_000},
+		Namespace:       "example",
+		Subsystem:       "workerloop",
+		Description:     "Worker loop",
+		BucketDurations: []float64{0.01, 0.1, 1, 10, 100, 1000, 10_000},
 	})
 	registry = prometheus.NewRegistry()
 	ob.MustRegister(registry)
@@ -60,6 +60,9 @@ func (task *ProcessingTask) Execute(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	timeoutCtx, cancelTimeout := context.WithTimeout(ctx, 1*time.Millisecond)
+	defer cancelTimeout()
+
 	// find current attempt number
 	currentAttempt := atomic.AddInt64(&attemptCount, 1)
 	log.Printf("Starting task %s (attempt #%d)", task.TaskID, currentAttempt)
@@ -83,8 +86,9 @@ func (task *ProcessingTask) Execute(ctx context.Context) error {
 
 	// timeout on every seventh attempt
 	if currentAttempt%7 == 0 {
+		time.Sleep(1 * time.Millisecond)
 		log.Printf("Task %s timed out (attempt #%d)", task.TaskID, currentAttempt)
-		return fmt.Errorf("processing timeout for task %s at attempt %d: %w", task.TaskID, currentAttempt, ctx.Err())
+		return fmt.Errorf("processing timeout for task %s at attempt %d: %w", task.TaskID, currentAttempt, timeoutCtx.Err())
 	}
 
 	// fail with error on every fourth attempt

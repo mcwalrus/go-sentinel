@@ -10,15 +10,23 @@ import (
 )
 
 type ObserverConfig struct {
-	Namespace   string
-	Subsystem   string
-	Description string
-	Buckets     []float64
+	Namespace       string
+	Subsystem       string
+	Description     string
+	BucketUnits     BucketUnit
+	BucketDurations []float64
 }
+
+type BucketUnit int
+
+const (
+	BucketUnitSeconds BucketUnit = iota
+	BucketUnitMilliseconds
+)
 
 func (c ObserverConfig) isZero() bool {
 	if c.Namespace+c.Subsystem+c.Description == "" {
-		if len(c.Buckets) == 0 {
+		if len(c.BucketDurations) == 0 {
 			return true
 		}
 	}
@@ -27,9 +35,10 @@ func (c ObserverConfig) isZero() bool {
 
 func DefaultConfig() ObserverConfig {
 	return ObserverConfig{
-		Namespace: "",
-		Subsystem: "sentinel",
-		Buckets:   []float64{0.01, 0.1, 1, 10, 100, 1000, 10_000, 100_000},
+		Namespace:       "",
+		Subsystem:       "sentinel",
+		BucketUnits:     BucketUnitSeconds,
+		BucketDurations: []float64{0.01, 0.1, 1, 10, 100, 10_000},
 	}
 }
 
@@ -42,12 +51,18 @@ func NewObserver(cfg ObserverConfig) *Observer {
 	if cfg.isZero() {
 		cfg = DefaultConfig()
 	}
+	if cfg.BucketUnits == BucketUnitMilliseconds {
+		for i, v := range cfg.BucketDurations {
+			cfg.BucketDurations[i] = v * 1000
+		}
+	}
 	return &Observer{
 		cfg:     cfg,
 		metrics: newMetrics(cfg),
 	}
 }
 
+// Test by registering twice with the same registry.
 func (o *Observer) Register(registry *prometheus.Registry) {
 	o.metrics.Register(registry)
 }

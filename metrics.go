@@ -64,7 +64,7 @@ func newMetrics(cfg ObserverConfig) *metrics {
 			Subsystem: cfg.Subsystem,
 			Name:      "observed_duration",
 			Help:      fmt.Sprintf("Runtime of observed %s tasks", cfg.Description),
-			Buckets:   cfg.Buckets,
+			Buckets:   cfg.BucketDurations,
 		}),
 		Retries: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: cfg.Namespace,
@@ -73,6 +73,18 @@ func newMetrics(cfg ObserverConfig) *metrics {
 			Help:      fmt.Sprintf("Number of retries from observed %s tasks", cfg.Description),
 		}),
 	}
+}
+
+func (m *metrics) MustRegister(registry prometheus.Registerer) {
+	registry.MustRegister(
+		m.InFlight,
+		m.Successes,
+		m.Errors,
+		m.TimeoutErrors,
+		m.Panics,
+		m.ObservedRuntimes,
+		m.Retries,
+	)
 }
 
 func (m *metrics) Register(registry prometheus.Registerer) error {
@@ -92,16 +104,4 @@ func (m *metrics) Register(registry prometheus.Registerer) error {
 		}
 	}
 	return joinErrs
-}
-
-func (m *metrics) MustRegister(registry prometheus.Registerer) {
-	registry.MustRegister(
-		m.InFlight,
-		m.Successes,
-		m.Errors,
-		m.TimeoutErrors,
-		m.Panics,
-		m.ObservedRuntimes,
-		m.Retries,
-	)
 }
