@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -17,8 +18,10 @@ import (
 )
 
 var (
-	ob       *sentinel.Observer
-	registry *prometheus.Registry
+	ob           *sentinel.Observer
+	registry     *prometheus.Registry
+	limitChan    chan struct{}
+	attemptCount int64
 )
 
 func init() {
@@ -28,144 +31,107 @@ func init() {
 		Description: "Worker loop",
 		Buckets:     []float64{0.01, 0.1, 1, 10, 100, 1000, 10_000},
 	})
-
-	// Create a custom registry and register our observer metrics
 	registry = prometheus.NewRegistry()
 	ob.MustRegister(registry)
+	limitChan = make(chan struct{}, 10)
 }
 
-// Task represents a processing task with various outcomes
+// Task represents a processing task, implements sentinel.Task
 type ProcessingTask struct {
-	TaskID      string
-	Operation   string
-	Payload     map[string]interface{}
-	ShouldPanic bool
-	ShouldFail  bool
+	TaskID string
+}
+
+func (task *ProcessingTask) Config() sentinel.TaskConfig {
+	return sentinel.TaskConfig{
+		Timeout:       5 * time.Second,
+		Concurrent:    true,
+		RecoverPanics: true,
+		MaxRetries:    2,
+		RetryStrategy: sentinel.RetryStrategyImmediate,
+	}
 }
 
 func (task *ProcessingTask) Execute(ctx context.Context) error {
-	log.Printf("Starting task %s: %s", task.TaskID, task.Operation)
+	limitChan <- struct{}{}
+	defer func() {
+		<-limitChan
+	}()
 
-	// Simulate variable processing time (50ms to 3s)
-	processingTime := time.Duration(rand.Intn(2950)+50) * time.Millisecond
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-	// Check for context cancellation during processing
+	// find current attempt number
+	currentAttempt := atomic.AddInt64(&attemptCount, 1)
+	log.Printf("Starting task %s (attempt #%d)", task.TaskID, currentAttempt)
+	if currentAttempt > 100_000 {
+		currentAttempt = atomic.SwapInt64(&attemptCount, 0)
+	}
+
+	// simulate processing time between 500ms to 5000ms
+	processingTime := time.Duration(rand.Intn(4500)+500) * time.Millisecond
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-time.After(processingTime / 3):
-		// Continue processing
+	case <-time.After(processingTime):
 	}
 
-	// Simulate panic scenarios (caught by sentinel)
-	if task.ShouldPanic {
-		log.Printf("Task %s triggering panic!", task.TaskID)
-		panic(fmt.Sprintf("simulated panic in task %s", task.TaskID))
+	// panic on every 10th attempt
+	if currentAttempt%10 == 0 {
+		log.Printf("Task %s triggering panic! (attempt #%d)", task.TaskID, currentAttempt)
+		panic(fmt.Sprintf("simulated panic in task %s at attempt %d", task.TaskID, currentAttempt))
 	}
 
-	// Simulate processing work
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-time.After(processingTime * 2 / 3):
-		// Continue processing
+	// timeout on every seventh attempt
+	if currentAttempt%7 == 0 {
+		log.Printf("Task %s timed out (attempt #%d)", task.TaskID, currentAttempt)
+		return fmt.Errorf("processing timeout for task %s at attempt %d: %w", task.TaskID, currentAttempt, ctx.Err())
 	}
 
-	// Simulate failure scenarios
-	if task.ShouldFail {
-		log.Printf("Task %s failed with error", task.TaskID)
-		return fmt.Errorf("processing failed for task %s: %s", task.TaskID, task.Operation)
+	// fail with error on every fourth attempt
+	if currentAttempt%4 == 0 {
+		log.Printf("Task %s failed (attempt #%d)", task.TaskID, currentAttempt)
+		return fmt.Errorf("processing failed for task %s at attempt %d", task.TaskID, currentAttempt)
 	}
 
-	log.Printf("Completed task %s (took %v)", task.TaskID, processingTime)
+	// Otherwise, succeed on every other attempt
+	log.Printf("Completed task %s successfully (attempt #%d, took %v)", task.TaskID, currentAttempt, processingTime)
 	return nil
 }
 
 func run() {
-	// Create initial batch of tasks with various scenarios
-	initialTasks := createTaskBatch("batch-1", 12)
+	taskID := 1
+	burstCycle := 0
 
-	log.Printf("Starting %d initial tasks concurrently", len(initialTasks))
+	log.Println("Starting task processing with burst periods...")
 
-	// Launch all initial tasks concurrently to demonstrate multiple in-flight requests
-	for _, task := range initialTasks {
-		currentTask := task // Capture for closure
-		ob.Run(sentinel.TaskConfig{
-			Concurrent:    true,
-			RecoverPanics: true,
-			MaxRetries:    2,
-			RetryStrategy: sentinel.RetryStrategyExponentialBackoff(100 * time.Millisecond),
-			Timeout:       3 * time.Second,
-		}, func(ctx context.Context) error {
-			return currentTask.Execute(ctx)
-		})
-	}
-
-	// Let initial batch process
-	time.Sleep(2 * time.Second)
-
-	// Add more tasks periodically to maintain load
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
-	batchID := 2
 	for range ticker.C {
-		// Create smaller batches periodically
-		batchTasks := createTaskBatch(fmt.Sprintf("batch-%d", batchID), 4)
-		batchID++
+		burstCycle++
 
-		log.Printf("Adding batch of %d tasks", len(batchTasks))
+		var tasksToCreate int
+		if burstCycle%3 == 0 {
+			// Burst period: create 8-12 tasks
+			tasksToCreate = rand.Intn(5) + 8
+			log.Printf("BURST PERIOD: Creating %d tasks (cycle %d)", tasksToCreate, burstCycle)
+		} else {
+			// Normal period: create 1-3 tasks
+			tasksToCreate = rand.Intn(3) + 1
+			log.Printf("Normal period: Creating %d tasks (cycle %d)", tasksToCreate, burstCycle)
+		}
 
-		for _, task := range batchTasks {
-			currentTask := task // Capture for closure
-			ob.Run(sentinel.TaskConfig{
-				Concurrent:    true,
-				RecoverPanics: true,
-				MaxRetries:    1,
-				RetryStrategy: sentinel.RetryStrategyLinearBackoff(200 * time.Millisecond),
-				Timeout:       4 * time.Second,
-			}, func(ctx context.Context) error {
-				return currentTask.Execute(ctx)
-			})
+		for i := 0; i < tasksToCreate; i++ {
+			task := &ProcessingTask{
+				TaskID: fmt.Sprintf("task-%04d", taskID),
+			}
+			taskID++
+			ob.RunTask(task)
 		}
 	}
-}
-
-// createTaskBatch generates a batch of tasks with realistic scenarios
-func createTaskBatch(batchID string, count int) []*ProcessingTask {
-	operations := []string{
-		"process-payment", "send-notification", "generate-report",
-		"sync-database", "validate-user", "update-inventory",
-		"backup-data", "analyze-metrics", "compress-files",
-		"send-email", "update-cache", "process-image",
-	}
-
-	tasks := make([]*ProcessingTask, count)
-
-	for i := 0; i < count; i++ {
-		// Create realistic failure and panic scenarios
-		failureRate := 0.15 // 15% failure rate
-		panicRate := 0.08   // 8% panic rate
-
-		tasks[i] = &ProcessingTask{
-			TaskID:    fmt.Sprintf("%s-task-%03d", batchID, i+1),
-			Operation: operations[rand.Intn(len(operations))],
-			Payload: map[string]interface{}{
-				"user_id":   rand.Intn(10000),
-				"timestamp": time.Now().Unix(),
-				"priority":  []string{"low", "medium", "high"}[rand.Intn(3)],
-				"size":      rand.Intn(1000) + 100,
-			},
-			ShouldFail:  rand.Float64() < failureRate,
-			ShouldPanic: rand.Float64() < panicRate,
-		}
-	}
-
-	return tasks
 }
 
 func main() {
-	// Start metrics server in a goroutine
 	metricsServer := &http.Server{
 		Addr:    ":8080",
 		Handler: promhttp.HandlerFor(registry, promhttp.HandlerOpts{}),
@@ -178,23 +144,19 @@ func main() {
 		}
 	}()
 
-	// Handle shutdown signals
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
 	go func() {
 		<-sigChan
 		log.Println("Shutdown signal received, stopping gracefully...")
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer shutdownCancel()
-
-		// Shutdown metrics server
 		if err := metricsServer.Shutdown(shutdownCtx); err != nil {
-			log.Printf("Error shutting down metrics server: %v", err)
+			log.Fatalf("Error shutting down metrics server: %v", err)
 		}
+		os.Exit(0)
 	}()
 
-	// Keep running until shutdown signal
 	log.Println("Worker loop running... Press Ctrl+C to stop")
 
 	run()
