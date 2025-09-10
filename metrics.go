@@ -62,7 +62,7 @@ func newMetrics(cfg ObserverConfig) *metrics {
 		ObservedRuntimes: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Namespace: cfg.Namespace,
 			Subsystem: cfg.Subsystem,
-			Name:      "duration_observed_seconds",
+			Name:      "observed_duration_seconds",
 			Help:      fmt.Sprintf("The execution duration of observed %s", cfg.Description),
 			Buckets:   cfg.BucketDurations,
 		}),

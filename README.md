@@ -18,12 +18,12 @@ Default configuration automatically exports the following Prometheus metrics:
 | Metric | Type | Description |
 |--------|------|-------------|
 | `sentinel_in_flight` | Gauge | Current number of running tasks |
-| `sentinel_success_total` | Counter | Total successful task completions |
-| `sentinel_errors_total` | Counter | Total failed tasks |
-| `sentinel_timeout_total` | Counter | Total timed-out tasks |
-| `sentinel_panics_total` | Counter | Total panics recovered in tasks |
-| `sentinel_runtime_seconds` | Histogram | Task execution duration distribution |
-| `sentinel_retries_total` | Counter | Total retry attempts |
+| `sentinel_successes_total` | Counter | Total successful task completions |
+| `sentinel_errors_total` | Counter | Total task execution failures |
+| `sentinel_timeout_errors_total` | Counter | Total timed-out based failures |
+| `sentinel_panic_occurances_total` | Counter | Total panic occurances in tasks |
+| `sentinel_observed_duration_seconds` | Histogram | Task execution duration distribution |
+| `sentinel_retry_attempts_total` | Counter | Total retry attempts after failures |
 
 ## Installation
 
@@ -158,7 +158,7 @@ func main() {
 
     // Expect run to succeed on final retry attempt
     if err != nil {
-        fmt.Println("unexpected error:", err)
+        panic("unexpected error", err)
     }
 }
 ```
@@ -201,18 +201,20 @@ func main() {
             RecoverPanics: false,
             Concurrent:    false,
         }
+
         defer func() {
             if r := recover(); r != nil {
-                fmt.Println(r)
+                fmt.Println("recovered:", r)
             } 
         }()
+
         observer.Run(config, func(ctx context.Context) error {
             fmt.Println("Oh no, I've slipped...")
             panic("this will crash the program!")
         })
     }()
 
-    fmt.Println("r,r,r,- recovered!")
+    fmt.Println("You found me!")
 }
 ```
 
@@ -233,9 +235,9 @@ func (e *EmailTask) Config() sentinel.TaskConfig {
     return sentinel.TaskConfig{
         Timeout:       30 * time.Second,
         MaxRetries:    3,
-        RetryStrategy: sentinel.RetryStrategyExponentialBackoff(1 * time.Second),
-        RecoverPanics: true,
         Concurrent:    true,
+        RecoverPanics: true,
+        RetryStrategy: sentinel.RetryStrategyExponentialBackoff(1 * time.Second),
     }
 }
 
@@ -290,10 +292,9 @@ func main() {
     })
     observer2.MustRegister(registry)
     
-    // Background task executed with Concurrent=true
     _ = observer1.Run(sentinel.TaskConfig{
         Timeout:       5 * time.Minute,
-        Concurrent:    true,
+        Concurrent:    true, // Background tasks
         RecoverPanics: true,
     }, func(ctx context.Context) error {
         fmt.Println("Processing background task...")
@@ -301,10 +302,9 @@ func main() {
         return nil
     })
 
-    // Critical task is blocking with Concurrent=false
     _ = observer2.Run(sentinel.TaskConfig{
         Timeout:       30 * time.Second,
-        Concurrent:    false,
+        Concurrent:    false, // Synchronous task
         RecoverPanics: true,
     }, func(ctx context.Context) error {
         fmt.Println("Critical business operations...")
@@ -356,7 +356,6 @@ func main() {
 - [ ] Consider labels support, Vec support
 - [ ] Circuit breaker with exposed Prometheus metrics
 - [ ] Distributed tracing integration, otel
-- [ ] Rate limiting capabilities
 
 ## Contributing
 
