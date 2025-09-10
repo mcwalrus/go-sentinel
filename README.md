@@ -204,7 +204,7 @@ func main() {
 
         defer func() {
             if r := recover(); r != nil {
-                fmt.Println("recovered:", r)
+                fmt.Println("r,r,r- recovered!")
             } 
         }()
 
@@ -214,7 +214,7 @@ func main() {
         })
     }()
 
-    fmt.Println("You found me!")
+    fmt.Println("Oh, you found me! :0")
 }
 ```
 
