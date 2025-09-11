@@ -351,6 +351,12 @@ func main() {
 }
 ```
 
+## QA
+
+Why are vectors, labels and curried labels not supported by this libary?
+
+These are advanced problems... Provide an answer to this through claude.
+
 ## Roadmap
 
 - [ ] Consider labels support, Vec support

@@ -38,7 +38,8 @@ type ObserverConfig struct {
 	BucketDurations []float64
 
 	// ConstLabels are used to attach fixed labels to this metrics. By default, no labels
-	// are attached. Please refer to [prometheus.Opts].ConstLabels for more information.
+	// are attached. An example case could be identifying metrics between multiple instances of
+	// identical workloads. Please refer to [prometheus.Opts].ConstLabels for more information.
 	ConstLabels prometheus.Labels
 }
 
