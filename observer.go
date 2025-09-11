@@ -36,6 +36,10 @@ type ObserverConfig struct {
 	// BucketDurations defines the histogram buckets for task duration metrics.
 	// Values are interpreted according to BucketUnits.
 	BucketDurations []float64
+
+	// ConstLabels are used to attach fixed labels to this metrics. By default, no labels
+	// are attached. Please refer to [prometheus.Opts].ConstLabels for more information.
+	ConstLabels prometheus.Labels
 }
 
 // BucketUnit represents the unit of time for histogram bucket durations.
