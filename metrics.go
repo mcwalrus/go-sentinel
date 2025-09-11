@@ -57,20 +57,20 @@ func newMetrics(cfg ObserverConfig) *metrics {
 			Namespace: cfg.Namespace,
 			Subsystem: cfg.Subsystem,
 			Name:      "panic_occurances_total",
-			Help:      fmt.Sprintf("Number of panics from observed %s", cfg.Description),
+			Help:      fmt.Sprintf("Number of panic occurances from observed %s", cfg.Description),
 		}),
 		ObservedRuntimes: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Namespace: cfg.Namespace,
 			Subsystem: cfg.Subsystem,
 			Name:      "observed_duration_seconds",
-			Help:      fmt.Sprintf("The execution duration of observed %s", cfg.Description),
+			Help:      fmt.Sprintf("Histogram of the observed runtime durations of %s", cfg.Description),
 			Buckets:   cfg.BucketDurations,
 		}),
 		Retries: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: cfg.Namespace,
 			Subsystem: cfg.Subsystem,
 			Name:      "retry_attempts_total",
-			Help:      fmt.Sprintf("Number of retries from observed %s", cfg.Description),
+			Help:      fmt.Sprintf("Number of retry attempts from observed %s", cfg.Description),
 		}),
 	}
 }
@@ -96,12 +96,13 @@ func (m *metrics) Register(registry prometheus.Registerer) error {
 		m.ObservedRuntimes,
 		m.Retries,
 	}
-	var joinErrs error
+	var errs []error
 	for _, col := range collectors {
 		err := registry.Register(col)
 		if err != nil {
-			joinErrs = errors.Join(joinErrs, err)
+			errs = append(errs, err)
 		}
 	}
-	return joinErrs
+
+	return errors.Join(errs...)
 }

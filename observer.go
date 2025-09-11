@@ -89,7 +89,7 @@ func NewObserver(cfg ObserverConfig) *Observer {
 			cfg.Subsystem = "sentinel"
 		}
 		if cfg.Description == "" {
-			cfg.Description = "tasks"
+			cfg.Description = "process tasks"
 		}
 		if cfg.BucketUnits == BucketUnitMilliseconds {
 			for i, v := range cfg.BucketDurations {
