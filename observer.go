@@ -202,19 +202,17 @@ func (o *Observer) observe(task *implTask) error {
 			cfg := task.Config()
 			completeTask()
 
-			// Reached the maximum number of retries
+			// Maximum retries reached
 			if task.retryCount >= cfg.MaxRetries {
 				return err
 			}
 
-			// Handle circuit breaker to avoid retries
 			if cfg.RetryCurcuitBreaker != nil {
 				if cfg.RetryCurcuitBreaker(err) {
 					return err
 				}
 			}
 
-			// Handle retry strategy determines wait
 			if cfg.RetryStrategy != nil {
 				wait := cfg.RetryStrategy(task.retryCount)
 				if wait > 0 {
@@ -222,7 +220,6 @@ func (o *Observer) observe(task *implTask) error {
 				}
 			}
 
-			// Create a new task for retry attempt
 			retryTask := &implTask{
 				fn:         task.Execute,
 				cfg:        cfg,
@@ -235,7 +232,7 @@ func (o *Observer) observe(task *implTask) error {
 				if err2 != nil {
 					return errors.Join(err, err2)
 				} else {
-					// Following retry was successful
+					// Recursive retry was successful
 					return nil
 				}
 			} else {

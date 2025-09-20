@@ -1,4 +1,4 @@
-# Worker Loop Example with Prometheus Metrics
+# Worker Loop Example
 
 This example demonstrates how to use the go-sentinel library to observe worker tasks and expose Prometheus metrics.
 
@@ -26,19 +26,19 @@ docker-compose up -d
 Access:
 - **Application metrics**: http://localhost:8080/metrics
 - **Prometheus**: http://localhost:9090
-- **Grafana**: http://localhost:3000 (admin/admin)
+- **Grafana**: http://localhost:3000
 
 ## Exposed Metrics
 
 | Metric | Type | Description |
 |--------|------|-------------|
 | `example_workerloop_in_flight` | Gauge | Tasks currently running |
-| `example_workerloop_successes` | Counter | Total successful tasks |
-| `example_workerloop_errors` | Counter | Total failed tasks |
-| `example_workerloop_timeout_errors` | Counter | Total timeout errors |
-| `example_workerloop_panic_occurances` | Counter | Total panics |
-| `example_workerloop_observed_duration` | Histogram | Task execution time |
-| `example_workerloop_attempted_retry` | Counter | Total retry attempts |
+| `example_workerloop_successes_total` | Counter | Total successful tasks |
+| `example_workerloop_errors_total` | Counter | Total failed tasks |
+| `example_workerloop_timeouts_total` | Counter | Total timeout errors |
+| `example_workerloop_panics_total` | Counter | Total panics |
+| `example_workerloop_durations_seconds` | Histogram | Task execution time |
+| `example_workerloop_retries_total` | Counter | Total retry attempts |
 
 ## Cleanup
 
