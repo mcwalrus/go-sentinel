@@ -31,16 +31,24 @@ type ObserverConfig struct {
 	Description string
 
 	// BucketUnits specifies the time unit interpretation for BucketDurations values.
+	// Defaults to [BucketUnitSeconds] if not specified.
 	BucketUnits BucketUnit
 
 	// BucketDurations defines the histogram buckets for task duration metrics.
 	// Values are interpreted according to BucketUnits.
 	BucketDurations []float64
 
+	// DefaultTaskConfig specifies the default task configuration for the Observer.
+	// If not specified, a default task configuration will be used with panic recovery.
+	DefaultTaskConfig *TaskConfig
+
 	// ConstLabels are used to attach fixed labels to this metrics. By default, no labels
-	// are attached. An example case could be identifying metrics between multiple instances of
-	// identical workloads. Please refer to [prometheus.Opts].ConstLabels for more information.
+	// are attached. Please refer to [prometheus.Opts].ConstLabels for more information.
 	ConstLabels prometheus.Labels
+
+	// AutoRegister specifies whether to automatically register the default Prometheus registry.
+	// This is useful when using the [prometheus.DefaultRegisterer] to register the metrics.
+	AutoRegister bool
 }
 
 // BucketUnit represents the unit of time for histogram bucket durations.
@@ -96,28 +104,37 @@ func NewObserver(cfg ObserverConfig) *Observer {
 		if cfg.Description == "" {
 			cfg.Description = "process tasks"
 		}
+
+		// Adjust bucket durations back to seconds if necessary
 		if cfg.BucketUnits == BucketUnitMilliseconds {
 			for i, v := range cfg.BucketDurations {
 				cfg.BucketDurations[i] = v * 1000
 			}
 		}
 	}
-	return &Observer{
+
+	o := &Observer{
 		cfg:     cfg,
 		metrics: newMetrics(cfg),
 	}
+
+	if cfg.AutoRegister {
+		o.MustRegister(prometheus.DefaultRegisterer)
+	}
+
+	return o
 }
 
 // Register registers all Observer metrics with the provided Prometheus registry.
 // Use [MustRegister] if you want the program to panic on registration conflicts.
-func (o *Observer) Register(registry *prometheus.Registry) {
+func (o *Observer) Register(registry prometheus.Registerer) {
 	o.metrics.Register(registry)
 }
 
 // MustRegister registers all Observer metrics with the provided Prometheus registry.
 // This method panics if any metric registration failures. Use [Register] if you prefer
 // to handle registration errors gracefully.
-func (o *Observer) MustRegister(registry *prometheus.Registry) {
+func (o *Observer) MustRegister(registry prometheus.Registerer) {
 	o.metrics.MustRegister(registry)
 }
 
