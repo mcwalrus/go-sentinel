@@ -426,46 +426,94 @@ func TestObserve_InFlightMetrics(t *testing.T) {
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
-	var maxInFlight float64
-	var wg sync.WaitGroup
+	t.Run("concurrent in-flight tracking", func(t *testing.T) {
+		const numTasks = 10
+		const activeDuration = 30 * time.Millisecond
+		startBarrier := make(chan struct{})
+		var wg sync.WaitGroup
 
-	// Run multiple concurrent tasks to test in-flight metrics
-	numTasks := 5
-	wg.Add(numTasks)
+		wg.Add(numTasks)
 
-	for i := 0; i < numTasks; i++ {
-		go func() {
-			defer wg.Done()
-			task := &testTask{
-				cfg: TaskConfig{
-					Timeout:    time.Second,
-					Concurrent: false,
-				},
-				fn: func(ctx context.Context) error {
-					// Check in-flight count during execution
-					current := testutil.ToFloat64(observer.metrics.InFlight)
-					if current > maxInFlight {
-						maxInFlight = current
-					}
-					time.Sleep(50 * time.Millisecond) // Simulate work
-					return nil
-				},
-			}
-			observer.RunTask(task)
-		}()
-	}
+		// Start all tasks concurrently
+		for range numTasks {
+			go func() {
+				defer wg.Done()
 
-	wg.Wait()
+				task := &testTask{
+					cfg: TaskConfig{
+						Timeout:    time.Second,
+						Concurrent: false,
+					},
+					fn: func(ctx context.Context) error {
+						<-startBarrier
+						time.Sleep(activeDuration)
 
-	// After all tasks complete, in-flight should be 0
-	if got := testutil.ToFloat64(observer.metrics.InFlight); got != 0 {
-		t.Errorf("Expected InFlight=0 after all tasks complete, got %f", got)
-	}
+						return nil
+					},
+				}
 
-	// We should have seen some tasks in flight concurrently
-	if maxInFlight == 0 {
-		t.Error("Expected to see some tasks in flight during execution")
-	}
+				err := observer.RunTask(task)
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+			}()
+		}
+		// Wait for all tasks to start
+		time.Sleep(10 * time.Millisecond)
+
+		// Verify that we have 10 tasks in flight
+		inFlightCount := testutil.ToFloat64(observer.metrics.InFlight)
+		if inFlightCount != numTasks {
+			t.Errorf("Expected InFlight=%d when all tasks active, got %f", numTasks, inFlightCount)
+		}
+
+		// Release all tasks and wait for them to complete
+		close(startBarrier)
+		wg.Wait()
+
+		// Verify that in-flight count returns to 0
+		finalInFlight := testutil.ToFloat64(observer.metrics.InFlight)
+		if finalInFlight != 0 {
+			t.Errorf("Expected InFlight=0 after all tasks complete, got %f", finalInFlight)
+		}
+		if got := testutil.ToFloat64(observer.metrics.Successes); got != numTasks {
+			t.Errorf("Expected Successes=%d, got %f", numTasks, got)
+		}
+	})
+
+	t.Run("validate concurrent in-flight metrics", func(t *testing.T) {
+		task := &testTask{
+			cfg: TaskConfig{
+				Timeout:    time.Second,
+				Concurrent: false,
+			},
+			// During execution, we should have 1 task in flight
+			fn: func(ctx context.Context) error {
+				inFlight := testutil.ToFloat64(observer.metrics.InFlight)
+				if inFlight != 1 {
+					t.Errorf("Expected InFlight=1 during task execution, got %f", inFlight)
+				}
+				time.Sleep(10 * time.Millisecond)
+				return nil
+			},
+		}
+
+		// Before execution, should be 0
+		if got := testutil.ToFloat64(observer.metrics.InFlight); got != 0 {
+			t.Errorf("Expected InFlight=0 before execution, got %f", got)
+		}
+
+		// Execute task
+		err := observer.RunTask(task)
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+
+		// After execution, should be 0 again
+		if got := testutil.ToFloat64(observer.metrics.InFlight); got != 0 {
+			t.Errorf("Expected InFlight=0 after execution, got %f", got)
+		}
+	})
 }
 
 func TestObserve_ConcurrentExecution(t *testing.T) {
