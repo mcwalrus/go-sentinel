@@ -665,6 +665,26 @@ func TestObserve_MetricsRecording(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "concurrent task with retries returning an error",
+			task: &testTask{
+				cfg: TaskConfig{
+					MaxRetries:    3,
+					Concurrent:    true,
+					RetryStrategy: RetryStrategyImmediate,
+				},
+				fn: func(ctx context.Context) error {
+					return errors.New("test error")
+				},
+			},
+			wantErr: false,
+			validate: func(t *testing.T, observer *Observer) {
+				time.Sleep(10 * time.Millisecond)
+				if got := testutil.ToFloat64(observer.metrics.Errors); got != 4 {
+					t.Errorf("Expected Errors=4, got %f", got)
+				}
+			},
+		},
 	}
 
 	for i, scenario := range scenarios {
@@ -750,4 +770,50 @@ func TestObserve_ContextTimeout(t *testing.T) {
 	if got := testutil.ToFloat64(observer.metrics.Successes); got != 0 {
 		t.Errorf("Expected Successes=0, got %f", got)
 	}
+}
+
+func Benchmark_ObserverRun(b *testing.B) {
+	observer := NewObserver(testConfigTB(b))
+	registry := prometheus.NewRegistry()
+	observer.MustRegister(registry)
+
+	b.Run("simple function", func(b *testing.B) {
+		cfg := TaskConfig{Concurrent: false}
+		for i := 0; i < b.N; i++ {
+			observer.Run(cfg, func(ctx context.Context) error {
+				return nil
+			})
+		}
+	})
+
+	b.Run("function with work", func(b *testing.B) {
+		cfg := TaskConfig{Concurrent: false}
+		for i := 0; i < b.N; i++ {
+			observer.Run(cfg, func(ctx context.Context) error {
+				time.Sleep(time.Microsecond)
+				return nil
+			})
+		}
+	})
+
+	b.Run("concurrent functions", func(b *testing.B) {
+		cfg := TaskConfig{Concurrent: true}
+		for i := 0; i < b.N; i++ {
+			observer.Run(cfg, func(ctx context.Context) error {
+				return nil
+			})
+		}
+	})
+
+	b.Run("with timeout", func(b *testing.B) {
+		cfg := TaskConfig{
+			Timeout:    time.Second,
+			Concurrent: false,
+		}
+		for i := 0; i < b.N; i++ {
+			observer.Run(cfg, func(ctx context.Context) error {
+				return nil
+			})
+		}
+	})
 }

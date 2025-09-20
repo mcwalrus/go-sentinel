@@ -101,6 +101,7 @@ func (m *metrics) MustRegister(registry prometheus.Registerer) {
 // It returns an error if any metric fails to register.
 func (m *metrics) Register(registry prometheus.Registerer) error {
 	collectors := []prometheus.Collector{
+		m.InFlight,
 		m.Successes,
 		m.Errors,
 		m.TimeoutErrors,
