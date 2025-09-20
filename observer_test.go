@@ -314,7 +314,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 			}
 		}()
 
-		observer.RunTask(task)
+		_ = observer.RunTask(task)
 	})
 }
 
@@ -485,7 +485,10 @@ func TestObserve_RetryStrategy(t *testing.T) {
 			},
 		}
 
-		observer.RunTask(task)
+		err := observer.RunTask(task)
+		if err == nil {
+			t.Errorf("Expected error, got nil")
+		}
 
 		if len(retryStrategyCalls) != 2 {
 			t.Fatalf("Expected 1 retry strategy call, got %d", len(retryStrategyCalls))
@@ -813,11 +816,11 @@ func TestMultipleObservers(t *testing.T) {
 	registry2 := prometheus.NewRegistry()
 	observer2.MustRegister(registry2)
 
-	observer.RunFunc(func() error {
+	_ = observer.RunFunc(func() error {
 		return nil
 	})
 
-	observer2.RunFunc(func() error {
+	_ = observer2.RunFunc(func() error {
 		return nil
 	})
 
@@ -901,7 +904,7 @@ func Benchmark_ObserverRun(b *testing.B) {
 	b.Run("simple function", func(b *testing.B) {
 		cfg := TaskConfig{Concurrent: false}
 		for i := 0; i < b.N; i++ {
-			observer.Run(cfg, func(ctx context.Context) error {
+			_ = observer.Run(cfg, func(ctx context.Context) error {
 				return nil
 			})
 		}
@@ -910,7 +913,7 @@ func Benchmark_ObserverRun(b *testing.B) {
 	b.Run("function with work", func(b *testing.B) {
 		cfg := TaskConfig{Concurrent: false}
 		for i := 0; i < b.N; i++ {
-			observer.Run(cfg, func(ctx context.Context) error {
+			_ = observer.Run(cfg, func(ctx context.Context) error {
 				time.Sleep(time.Microsecond)
 				return nil
 			})
@@ -920,7 +923,7 @@ func Benchmark_ObserverRun(b *testing.B) {
 	b.Run("concurrent functions", func(b *testing.B) {
 		cfg := TaskConfig{Concurrent: true}
 		for i := 0; i < b.N; i++ {
-			observer.Run(cfg, func(ctx context.Context) error {
+			_ = observer.Run(cfg, func(ctx context.Context) error {
 				return nil
 			})
 		}
@@ -932,7 +935,7 @@ func Benchmark_ObserverRun(b *testing.B) {
 			Concurrent: false,
 		}
 		for i := 0; i < b.N; i++ {
-			observer.Run(cfg, func(ctx context.Context) error {
+			_ = observer.Run(cfg, func(ctx context.Context) error {
 				return nil
 			})
 		}

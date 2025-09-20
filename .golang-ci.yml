@@ -1,0 +1,42 @@
+version: "2"
+
+run:
+  tests: true
+
+linters:
+  enable:
+    - thelper
+    - reassign
+    - errchkjson
+    - revive
+  settings:
+    revive:
+      severity: warning
+      rules:
+        - name: exported
+          severity: error
+        - name: var-naming
+          severity: warning
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 3
+  
+formatters:
+  enable:
+    - gofumpt
+  settings:
+    gofumpt:
+      extra-rules: true
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

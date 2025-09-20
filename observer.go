@@ -102,7 +102,9 @@ func (o *Observer) Run(cfg TaskConfig, fn func(ctx context.Context) error) error
 	if !task.Config().Concurrent {
 		return o.observe(task)
 	} else {
-		go o.observe(task)
+		go func() {
+			_ = o.observe(task)
+		}()
 	}
 	return nil
 }
@@ -121,7 +123,9 @@ func (o *Observer) RunFunc(fn func() error) error {
 	if !task.Config().Concurrent {
 		return o.observe(task)
 	} else {
-		go o.observe(task)
+		go func() {
+			_ = o.observe(task)
+		}()
 	}
 	return nil
 }
@@ -137,7 +141,9 @@ func (o *Observer) RunTask(task Task) error {
 	if !task.Config().Concurrent {
 		return o.observe(t)
 	} else {
-		go o.observe(t)
+		go func() {
+			_ = o.observe(t)
+		}()
 	}
 	return nil
 }
@@ -233,7 +239,9 @@ func (o *Observer) observe(task *implTask) error {
 					return nil
 				}
 			} else {
-				go o.observe(retryTask)
+				go func() {
+					_ = o.observe(retryTask)
+				}()
 			}
 		}
 	} else {

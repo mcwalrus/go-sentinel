@@ -1,15 +1,21 @@
 # Sentinel
 
+[![Go Version](https://img.shields.io/github/go-mod/go-version/mcwalrus/go-sentinel)](https://golang.org/)
+[![Go Report Card](https://goreportcard.com/badge/github.com/mcwalrus/go-sentinel)](https://goreportcard.com/report/github.com/mcwalrus/go-sentinel)
+[![codecov](https://codecov.io/gh/mcwalrus/go-sentinel/branch/main/graph/badge.svg)](https://codecov.io/gh/mcwalrus/go-sentinel) 
+[![GoDoc](https://godoc.org/github.com/mcwalrus/go-sentinel?status.svg)](https://godoc.org/github.com/mcwalrus/go-sentinel)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Sentinel provides reliability handling and observability monitoring in Go applications. It wraps task execution with Prometheus metrics, observing errors, panic occurances, retries, and timeouts — making critical routines safe, measurable, and reliable. Use the library as a drop-in solution for new projects or existing applications.
 
 ## Features
 
-- **Prometheus Metrics**: Comprehensive observability with built-in metrics
-- **Timeouts**: Context-based timeout handling for processes
+- **Prometheus Metrics**: Observability through pre-defined metrics
 - **Errors**: Observed errors are reported by metrics 
+- **Timeouts**: Context-based timeout handling for processes
 - **Panic Recovery**: Safe panic recovery with optional propagation
 - **Concurrency Control**: Synchronous or asynchronous task execution
-- **Retry Logic**: Configurable retry strategies
+- **Retry Logic**: Configurable retry strategies, curcuit breaking, etc
 
 ## Metrics
 
@@ -355,7 +361,7 @@ func main() {
 
 ## Contributing
 
-Please report any issues or feature requests to the [GitHub repository](https://github.com/mcwalrus/go-jitjson).
+Please report any issues or feature requests to the [GitHub repository](https://github.com/mcwalrus/go-sentinel).
 
 ## About
 
