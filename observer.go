@@ -30,37 +30,20 @@ type ObserverConfig struct {
 	// text like: "Number of successes from observed background processes".
 	Description string
 
-	// BucketUnits specifies the time unit interpretation for BucketDurations values.
-	// Defaults to [BucketUnitSeconds] if not specified.
-	BucketUnits BucketUnit
-
 	// BucketDurations defines the histogram buckets for task duration metrics.
-	// Values are interpreted according to BucketUnits.
+	// Each recorded runtime duration is assigned within one of the specified buckets.
+	// Please refer to [prometheus.HistogramOpts].Buckets for more information.
 	BucketDurations []float64
-
-	// DefaultTaskConfig specifies the default task configuration for the Observer.
-	// If not specified, a default task configuration will be used with panic recovery.
-	DefaultTaskConfig *TaskConfig
 
 	// ConstLabels are used to attach fixed labels to this metrics. By default, no labels
 	// are attached. Please refer to [prometheus.Opts].ConstLabels for more information.
 	ConstLabels prometheus.Labels
 
-	// AutoRegister specifies whether to automatically register the default Prometheus registry.
-	// This is useful when using the [prometheus.DefaultRegisterer] to register the metrics.
-	AutoRegister bool
+	// DefaultTaskConfig specifies the default [TaskConfig] for calls to [Observer.RunFunc].
+	// If not specified, a basic task configuration of panic recovery without retry attempts
+	// will be used.
+	DefaultTaskConfig *TaskConfig
 }
-
-// BucketUnit represents the unit of time for histogram bucket durations.
-type BucketUnit int
-
-const (
-	// BucketUnitSeconds indicates that BucketDurations values are in seconds.
-	BucketUnitSeconds BucketUnit = iota
-
-	// BucketUnitMilliseconds indicates that BucketDurations values are in milliseconds.
-	BucketUnitMilliseconds
-)
 
 func (c ObserverConfig) isZero() bool {
 	if c.Namespace+c.Subsystem+c.Description == "" {
@@ -69,18 +52,6 @@ func (c ObserverConfig) isZero() bool {
 		}
 	}
 	return false
-}
-
-// DefaultConfig returns a default ObserverConfig with defaults for most use cases.
-// Consider updating the namespace, subsystem, and description to match your application.
-func DefaultConfig() ObserverConfig {
-	return ObserverConfig{
-		Namespace:       "",
-		Subsystem:       "sentinel",
-		Description:     "tasks",
-		BucketUnits:     BucketUnitSeconds,
-		BucketDurations: []float64{0.01, 0.1, 1, 10, 100, 10_000},
-	}
 }
 
 // Observer monitors and measures task executions, collecting Prometheus metrics
@@ -93,36 +64,18 @@ type Observer struct {
 
 // NewObserver creates a new Observer instance with the specified configuration.
 // The Observer will need to be registered with a Prometheus registry to expose metrics.
-// Note the oberserver does not need to be registered with a Prometheus registry to work.
+// Please refer to [MustRegister] and [Register] for more information.
 func NewObserver(cfg ObserverConfig) *Observer {
-	if cfg.isZero() {
-		cfg = DefaultConfig()
-	} else {
-		if cfg.Subsystem == "" {
-			cfg.Subsystem = "sentinel"
-		}
-		if cfg.Description == "" {
-			cfg.Description = "process tasks"
-		}
-
-		// Adjust bucket durations back to seconds if necessary
-		if cfg.BucketUnits == BucketUnitMilliseconds {
-			for i, v := range cfg.BucketDurations {
-				cfg.BucketDurations[i] = v * 1000
-			}
-		}
+	if cfg.Subsystem == "" && cfg.Namespace == "" {
+		cfg.Subsystem = "sentinel"
 	}
-
-	o := &Observer{
+	if cfg.Description == "" {
+		cfg.Description = "tasks"
+	}
+	return &Observer{
 		cfg:     cfg,
 		metrics: newMetrics(cfg),
 	}
-
-	if cfg.AutoRegister {
-		o.MustRegister(prometheus.DefaultRegisterer)
-	}
-
-	return o
 }
 
 // Register registers all Observer metrics with the provided Prometheus registry.
@@ -159,7 +112,7 @@ func (o *Observer) Run(cfg TaskConfig, fn func(ctx context.Context) error) error
 // Panic recovery is ignored by default and needs to be manually handled.
 func (o *Observer) RunFunc(fn func() error) error {
 	task := &implTask{
-		cfg: defaultTaskConfig(),
+		cfg: o.defaultTaskConfig(),
 		fn: func(ctx context.Context) error {
 			return fn() // ignore ctx
 		},
@@ -186,6 +139,14 @@ func (o *Observer) RunTask(task Task) error {
 		go o.observe(t)
 	}
 	return nil
+}
+
+// defaultTaskConfig returns the default task configuration for the Observer.
+func (o *Observer) defaultTaskConfig() TaskConfig {
+	if o.cfg.DefaultTaskConfig != nil {
+		return *o.cfg.DefaultTaskConfig
+	}
+	return defaultTaskConfig()
 }
 
 // observe is the internal method that observes the task execution and handles retries.
