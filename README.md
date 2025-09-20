@@ -6,16 +6,15 @@
 [![GoDoc](https://godoc.org/github.com/mcwalrus/go-sentinel?status.svg)](https://godoc.org/github.com/mcwalrus/go-sentinel)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Sentinel provides reliability handling and observability monitoring in Go applications. It wraps task execution with Prometheus metrics, observing errors, panic occurances, retries, and timeouts — making critical routines safe, measurable, and reliable. Use the library as a drop-in solution for new projects or existing applications.
+Sentinel provides reliability handling and observability monitoring in Go applications. It wraps task execution with Prometheus metrics, observing for successes, errors caught, panic occurances, retries, and timeouts — making critical routines safe, measurable, and reliable. Use the library as a drop-in solution for new projects or existing applications.
 
 ## Features
 
-- **Prometheus Metrics**: Observability through pre-defined metrics
-- **Errors**: Observed errors are reported by metrics 
-- **Timeouts**: Context-based timeout handling for processes
+- **Prometheus Metrics**: Observability of tasks from pre-defined metrics
+- **Timeouts**: Context timeout support handling for processes
+- **Retry Logic**: Configurable retry strategies with curcuit breaker support
 - **Panic Recovery**: Safe panic recovery with optional propagation
-- **Concurrency Control**: Synchronous or asynchronous task execution
-- **Retry Logic**: Configurable retry strategies, curcuit breaking, etc
+- **Concurrent Mode**: Synchronous or asynchronous task execution
 
 ## Metrics
 
@@ -27,11 +26,12 @@ Default configuration automatically exports the following Prometheus metrics:
 | `sentinel_success_total` | Counter | Total successful task completions |
 | `sentinel_errors_total` | Counter | Total task executions failures |
 | `sentinel_timeouts_total` | Counter | Total timed-out based failures |
-| `sentinel_panics_total` | Counter | Total recovered panic occurances in tasks |
-| `sentinel_durations_seconds` | Histogram | Task execution duration distribution |
-| `sentinel_retries_total` | Counter | Total retry attempts asfter failures |
+| `sentinel_panics_total` | Counter | Total panic occurances in tasks |
+| `sentinel_durations_seconds` | Histogram | Distribution of task executions |
+| `sentinel_retries_total` | Counter | Total retry attempts after failures |
 
-Note failed retry attempts will appear in the errors_total.
+
+Failed retry attempts are counted with the `errors_total` counter.
 
 ## Installation
 
