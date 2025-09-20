@@ -6,10 +6,10 @@
 [![GoDoc](https://godoc.org/github.com/mcwalrus/go-sentinel?status.svg)](https://godoc.org/github.com/mcwalrus/go-sentinel)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Sentinel provides reliability handling and observability monitoring in Go applications. It wraps task execution with Prometheus metrics, observing for successes, errors caught, panic occurances, retries, and timeouts — making critical routines safe, measurable, and reliable. Use the library as a drop-in solution for new projects or existing applications.
+Sentinel provides reliability handling and observability monitoring in Go applications. It wraps task execution with Prometheus metrics, observing for successes, errors caught, panic occurances, retries, and timeouts — making critical routines safe, measurable, and robust. Use the library as a drop-in solution for new projects or existing applications.
 
 ## Features
-
+s
 - **Prometheus Metrics**: Observability of tasks from pre-defined metrics
 - **Timeouts**: Context timeout support handling for processes
 - **Retry Logic**: Configurable retry strategies with curcuit breaker support
