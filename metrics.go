@@ -7,7 +7,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// Promthesus metrics:
+// Promtheus metrics:
 
 // - In Flight
 // - Successes

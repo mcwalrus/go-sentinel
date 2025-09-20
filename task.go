@@ -58,14 +58,12 @@ type TaskConfig struct {
 
 func defaultTaskConfig() TaskConfig {
 	return TaskConfig{
-		Timeout:       0,
-		MaxRetries:    0,
-		Concurrent:    false,
-		RecoverPanics: false,
-		RetryStrategy: RetryStrategyImmediate,
-		RetryCurcuitBreaker: func(err error) bool {
-			return false
-		},
+		Timeout:             0,
+		MaxRetries:          0,
+		Concurrent:          false,
+		RecoverPanics:       true,
+		RetryStrategy:       RetryStrategyImmediate,
+		RetryCurcuitBreaker: nil,
 	}
 }
 
