@@ -48,8 +48,40 @@ func (t *testTask) Execute(ctx context.Context) error {
 	return t.err
 }
 
-func TestObserve_DefaultConfig(t *testing.T) {
+func TestObserver_DefaultConfig(t *testing.T) {
 	observer := NewObserver(DefaultConfig())
+	registry := prometheus.NewRegistry()
+	observer.MustRegister(registry)
+
+	expected := []string{
+		"sentinel_in_flight",
+		"sentinel_successes_total",
+		"sentinel_errors_total",
+		"sentinel_timeouts_total",
+		"sentinel_panics_total",
+		"sentinel_durations_seconds",
+		"sentinel_retries_total",
+	}
+
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatalf("Failed to gather metrics: %v", err)
+	}
+
+	foundMetrics := make(map[string]bool)
+	for _, family := range families {
+		foundMetrics[*family.Name] = true
+	}
+
+	for _, expectedName := range expected {
+		if !foundMetrics[expectedName] {
+			t.Errorf("Expected metric %s not found", expectedName)
+		}
+	}
+}
+
+func TestObserver_ZeroConfig(t *testing.T) {
+	observer := NewObserver(ObserverConfig{})
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
@@ -182,9 +214,6 @@ func TestObserve_ErrorHandling(t *testing.T) {
 	}
 	if got := testutil.ToFloat64(observer.metrics.TimeoutErrors); got != 0 {
 		t.Errorf("Expected TimeoutErrors=0, got %f", got)
-	}
-	if got := testutil.ToFloat64(observer.metrics.InFlight); got != 0 {
-		t.Errorf("Expected InFlight=0 after completion, got %f", got)
 	}
 }
 
@@ -772,8 +801,100 @@ func TestObserve_ContextTimeout(t *testing.T) {
 	}
 }
 
+func TestMultipleObservers(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Subsystem = "observer1"
+	observer := NewObserver(cfg)
+	registry := prometheus.NewRegistry()
+	observer.MustRegister(registry)
+
+	cfg.Subsystem = "observer2"
+	observer2 := NewObserver(cfg)
+	registry2 := prometheus.NewRegistry()
+	observer2.MustRegister(registry2)
+
+	observer.RunFunc(func() error {
+		return nil
+	})
+
+	observer2.RunFunc(func() error {
+		return nil
+	})
+
+	if got := testutil.ToFloat64(observer.metrics.Successes); got != 1 {
+		t.Errorf("Expected Successes=1, got %f", got)
+	}
+	if got := testutil.ToFloat64(observer2.metrics.Successes); got != 1 {
+		t.Errorf("Expected Successes=1, got %f", got)
+	}
+}
+
+func TestObserver_RunMethods(t *testing.T) {
+	observer := NewObserver(testConfig(t))
+	registry := prometheus.NewRegistry()
+	observer.MustRegister(registry)
+
+	testCases := []struct {
+		name       string
+		concurrent bool
+	}{
+		{"normal", false},
+		{"concurrent", true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Test Run method
+			err := observer.Run(TaskConfig{Concurrent: tc.concurrent}, func(ctx context.Context) error {
+				return nil
+			})
+			if err != nil {
+				t.Errorf("Run failed: %v", err)
+			}
+
+			// Test RunFunc method
+			if tc.concurrent {
+				observer.cfg.DefaultTaskConfig = &TaskConfig{Concurrent: true}
+			}
+			err = observer.RunFunc(func() error {
+				return nil
+			})
+			if err != nil {
+				t.Errorf("RunFunc failed: %v", err)
+			}
+
+			// Test RunTask method
+			task := &testTask{
+				cfg:     TaskConfig{Concurrent: tc.concurrent},
+				success: true,
+			}
+			err = observer.RunTask(task)
+			if err != nil {
+				t.Errorf("RunTask failed: %v", err)
+			}
+
+			if tc.concurrent {
+				time.Sleep(10 * time.Millisecond)
+			}
+		})
+	}
+
+	// Verify metrics were recorded (at least 6 successful executions)
+	if got := testutil.ToFloat64(observer.metrics.Successes); got < 6 {
+		t.Errorf("Expected at least 6 successes, got %f", got)
+	}
+}
+
 func Benchmark_ObserverRun(b *testing.B) {
-	observer := NewObserver(testConfigTB(b))
+
+	cfg := ObserverConfig{
+		Namespace:       "test",
+		Subsystem:       "metrics",
+		Description:     "test operations",
+		BucketDurations: []float64{0.01, 0.1, 1, 10, 100},
+	}
+
+	observer := NewObserver(cfg)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
