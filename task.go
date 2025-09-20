@@ -23,7 +23,8 @@ type Task interface {
 type TaskConfig struct {
 	// Timeout specifies a context timeout duration for task execution.
 	// If set to 0, no timeout is applied. The context passed to Execute()
-	// will be cancelled when the timeout is reached.
+	// will return a [context.DeadlineExceeded] error when the timeout is reached.
+	// It is the responsibility of the observed function to handle the context timeout.
 	Timeout time.Duration
 
 	// MaxRetries specifies the maximum number of retry attempts for failed tasks.

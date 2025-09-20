@@ -215,35 +215,42 @@ func (o *Observer) observe(task *implTask) error {
 		if task.Config().MaxRetries > 0 {
 			o.metrics.Retries.Inc()
 			cfg := task.Config()
-			retryAttempt := cfg.MaxRetries - task.retryCount
 			completeTask()
 
+			// Reached the maximum number of retries
+			if task.retryCount >= cfg.MaxRetries {
+				return err
+			}
+
+			// Handle circuit breaker to avoid retries
 			if cfg.RetryCurcuitBreaker != nil {
 				if cfg.RetryCurcuitBreaker(err) {
 					return err
 				}
 			}
 
+			// Handle retry strategy determines wait
 			if cfg.RetryStrategy != nil {
-				wait := cfg.RetryStrategy(retryAttempt)
+				wait := cfg.RetryStrategy(task.retryCount)
 				if wait > 0 {
 					time.Sleep(wait)
 				}
 			}
 
+			// Create a new task for retry attempt
 			retryTask := &implTask{
 				fn:         task.Execute,
 				cfg:        cfg,
 				retryCount: task.retryCount + 1,
 			}
 
-			// Handles concurrency settings
+			// Handle task concurrency settings
 			if !retryTask.Config().Concurrent {
 				err2 := o.observe(retryTask)
 				if err2 != nil {
 					return errors.Join(err, err2)
 				} else {
-					// Successful on retry attempt
+					// Following retry was successful
 					return nil
 				}
 			} else {
