@@ -36,10 +36,10 @@ func TestMetricsMustRegister(t *testing.T) {
 		"test_metrics_in_flight",
 		"test_metrics_successes_total",
 		"test_metrics_errors_total",
-		"test_metrics_timeout_errors_total",
-		"test_metrics_panic_occurances_total",
+		"test_metrics_timeouts_total",
+		"test_metrics_panics_total",
 		"test_metrics_observed_duration_seconds",
-		"test_metrics_retry_attempts_total",
+		"test_metrics_retries_total",
 	}
 
 	foundMetrics := make(map[string]bool)
@@ -177,10 +177,10 @@ func TestMetricLabels(t *testing.T) {
 				"in_flight":                 "in_flight",
 				"successes_total":           "successes_total",
 				"errors_total":              "errors_total",
-				"timeout_errors_total":      "timeout_errors_total",
-				"panic_occurances_total":    "panic_occurances_total",
+				"timeouts_total":            "timeouts_total",
+				"panics_total":              "panics_total",
 				"observed_duration_seconds": "observed_duration_seconds",
-				"retry_attempts_total":      "retry_attempts_total",
+				"retries_total":             "retries_total",
 			},
 		},
 		{
@@ -195,10 +195,10 @@ func TestMetricLabels(t *testing.T) {
 				"in_flight":                 "myapp_workers_in_flight",
 				"successes_total":           "myapp_workers_successes_total",
 				"errors_total":              "myapp_workers_errors_total",
-				"timeout_errors_total":      "myapp_workers_timeout_errors_total",
-				"panic_occurances_total":    "myapp_workers_panic_occurances_total",
+				"timeouts_total":            "myapp_workers_timeouts_total",
+				"panics_total":              "myapp_workers_panics_total",
 				"observed_duration_seconds": "myapp_workers_observed_duration_seconds",
-				"retry_attempts_total":      "myapp_workers_retry_attempts_total",
+				"retries_total":             "myapp_workers_retries_total",
 			},
 		},
 		{
@@ -213,10 +213,10 @@ func TestMetricLabels(t *testing.T) {
 				"in_flight":                 "api_in_flight",
 				"successes_total":           "api_successes_total",
 				"errors_total":              "api_errors_total",
-				"timeout_errors_total":      "api_timeout_errors_total",
-				"panic_occurances_total":    "api_panic_occurances_total",
+				"timeouts_total":            "api_timeouts_total",
+				"panics_total":              "api_panics_total",
 				"observed_duration_seconds": "api_observed_duration_seconds",
-				"retry_attempts_total":      "api_retry_attempts_total",
+				"retries_total":             "api_retries_total",
 			},
 		},
 	}
@@ -267,10 +267,10 @@ func TestMetricHelpText(t *testing.T) {
 		"in_flight":                 "Number of observed test operations in flight",
 		"successes_total":           "Number of successes from observed test operations",
 		"errors_total":              "Number of errors from observed test operations",
-		"timeout_errors_total":      "Number of timeout errors from observed test operations",
-		"panic_occurances_total":    "Number of panic occurances from observed test operations",
-		"observed_duration_seconds": "Histogram of the observed runtime durations of test operations",
-		"retry_attempts_total":      "Number of retry attempts from observed test operations",
+		"timeouts_total":            "Number of timeout errors from observed test operations",
+		"panics_total":              "Number of panic occurances from observed test operations",
+		"observed_duration_seconds": "Histogram of the observed durations of test operations",
+		"retries_total":             "Number of retry attempts from observed test operations",
 	}
 
 	for _, family := range families {

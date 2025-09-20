@@ -27,7 +27,8 @@ type ObserverConfig struct {
 
 	// Description is used in the help text for generated metrics to describe what type
 	// of tasks are being observed. For example, "background processes" results in help
-	// text like: "Number of successes from observed background processes".
+	// text like: "Number of successes from observed background processes". Defaults to
+	// "tasks".
 	Description string
 
 	// BucketDurations defines the histogram buckets for task duration metrics.
@@ -43,15 +44,6 @@ type ObserverConfig struct {
 	// If not specified, a basic task configuration of panic recovery without retry attempts
 	// will be used.
 	DefaultTaskConfig *TaskConfig
-}
-
-func (c ObserverConfig) isZero() bool {
-	if c.Namespace+c.Subsystem+c.Description == "" {
-		if len(c.BucketDurations) == 0 {
-			return true
-		}
-	}
-	return false
 }
 
 // Observer monitors and measures task executions, collecting Prometheus metrics

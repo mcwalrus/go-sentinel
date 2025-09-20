@@ -18,12 +18,14 @@ Default configuration automatically exports the following Prometheus metrics:
 | Metric | Type | Description |
 |--------|------|-------------|
 | `sentinel_in_flight` | Gauge | Current number of running tasks |
-| `sentinel_successes_total` | Counter | Total successful task completions |
-| `sentinel_errors_total` | Counter | Total task execution failures |
-| `sentinel_timeout_errors_total` | Counter | Total timed-out based failures |
-| `sentinel_panic_occurances_total` | Counter | Total panic occurances in tasks |
+| `sentinel_success_total` | Counter | Total successful task completions |
+| `sentinel_errors_total` | Counter | Total task executions failures |
+| `sentinel_timeouts_total` | Counter | Total timed-out based failures |
+| `sentinel_panics_total` | Counter | Total recovered panic occurances in tasks |
 | `sentinel_observed_duration_seconds` | Histogram | Task execution duration distribution |
-| `sentinel_retry_attempts_total` | Counter | Total retry attempts after failures |
+| `sentinel_retries_total` | Counter | Total retry attempts asfter failures |
+
+Note failed retry attempts will appear in the errors_total.
 
 ## Installation
 
@@ -350,18 +352,6 @@ func main() {
     // Your application code...
 }
 ```
-
-## QA
-
-Why are vectors, labels and curried labels not supported by this libary?
-
-These are advanced problems... Provide an answer to this through claude.
-
-## Roadmap
-
-- [ ] Consider labels support, Vec support
-- [ ] Circuit breaker with exposed Prometheus metrics
-- [ ] Distributed tracing integration, otel
 
 ## Contributing
 
