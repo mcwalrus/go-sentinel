@@ -48,6 +48,54 @@ func (t *testTask) Execute(ctx context.Context) error {
 	return t.err
 }
 
+func TestObserve_DefaultConfig(t *testing.T) {
+	observer := NewObserver(DefaultConfig())
+	registry := prometheus.NewRegistry()
+	observer.MustRegister(registry)
+
+	expected := []string{
+		"sentinel_in_flight",
+		"sentinel_successes_total",
+		"sentinel_errors_total",
+		"sentinel_timeouts_total",
+		"sentinel_panics_total",
+		"sentinel_durations_seconds",
+		"sentinel_retries_total",
+	}
+
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatalf("Failed to gather metrics: %v", err)
+	}
+
+	foundMetrics := make(map[string]bool)
+	for _, family := range families {
+		foundMetrics[*family.Name] = true
+	}
+
+	for _, expectedName := range expected {
+		if !foundMetrics[expectedName] {
+			t.Errorf("Expected metric %s not found", expectedName)
+		}
+	}
+}
+
+func TestObserve_Register(t *testing.T) {
+	observer := NewObserver(DefaultConfig())
+	registry := prometheus.NewRegistry()
+
+	// First registration should succeed
+	err := observer.Register(registry)
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+
+	// Re-registration should return an error
+	if err := observer.Register(registry); err == nil {
+		t.Errorf("Expected error, got nil")
+	}
+}
+
 func TestObserve_SuccessfulExecution(t *testing.T) {
 	observer := NewObserver(testConfig(t))
 	registry := prometheus.NewRegistry()
@@ -88,7 +136,7 @@ func TestObserve_SuccessfulExecution(t *testing.T) {
 
 	var histogramSampleCount uint64
 	for _, family := range families {
-		if *family.Name == "test_metrics_observed_duration_seconds" {
+		if *family.Name == "test_metrics_durations_seconds" {
 			if len(family.Metric) > 0 && family.Metric[0].Histogram != nil {
 				histogramSampleCount = *family.Metric[0].Histogram.SampleCount
 				break
@@ -644,7 +692,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 
 			var histogramSampleCount uint64
 			for _, family := range families {
-				if *family.Name == "test_metrics_observed_duration_seconds" {
+				if *family.Name == "test_metrics_durations_seconds" {
 					if len(family.Metric) > 0 && family.Metric[0].Histogram != nil {
 						histogramSampleCount = *family.Metric[0].Histogram.SampleCount
 						break

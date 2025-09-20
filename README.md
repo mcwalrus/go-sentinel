@@ -22,7 +22,7 @@ Default configuration automatically exports the following Prometheus metrics:
 | `sentinel_errors_total` | Counter | Total task executions failures |
 | `sentinel_timeouts_total` | Counter | Total timed-out based failures |
 | `sentinel_panics_total` | Counter | Total recovered panic occurances in tasks |
-| `sentinel_observed_duration_seconds` | Histogram | Task execution duration distribution |
+| `sentinel_durations_seconds` | Histogram | Task execution duration distribution |
 | `sentinel_retries_total` | Counter | Total retry attempts asfter failures |
 
 Note failed retry attempts will appear in the errors_total.

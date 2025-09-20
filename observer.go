@@ -46,6 +46,15 @@ type ObserverConfig struct {
 	DefaultTaskConfig *TaskConfig
 }
 
+func DefaultConfig() ObserverConfig {
+	return ObserverConfig{
+		Namespace:       "",
+		Subsystem:       "sentinel",
+		Description:     "tasks",
+		BucketDurations: []float64{0.01, 0.1, 1, 10, 100},
+	}
+}
+
 // Observer monitors and measures task executions, collecting Prometheus metrics
 // for successes, failures, timeouts, panics, retries, and execution durations.
 // It provides methods to execute tasks with various configuration options.
@@ -72,8 +81,8 @@ func NewObserver(cfg ObserverConfig) *Observer {
 
 // Register registers all Observer metrics with the provided Prometheus registry.
 // Use [MustRegister] if you want the program to panic on registration conflicts.
-func (o *Observer) Register(registry prometheus.Registerer) {
-	o.metrics.Register(registry)
+func (o *Observer) Register(registry prometheus.Registerer) error {
+	return o.metrics.Register(registry)
 }
 
 // MustRegister registers all Observer metrics with the provided Prometheus registry.
