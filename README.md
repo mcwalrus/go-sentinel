@@ -10,12 +10,12 @@ Sentinel provides reliability handling and observability monitoring in Go applic
 
 ## Features
 
-- 📊 **Prometheus Metrics**: Observability of tasks from pre-defined metrics
-- ✨ **Composable Pattern**: Multiple obervers can be employeed at once
-- ⏱️ **Timeouts**: Context timeout support for handling task deadlines
-- 🔄 **Retry Logic**: Configurable retry strategies, curcuit breaker support
-- 🔥 **Panic Recovery**: Safe panic recovery with optional propagation
-- ⚙️ **Concurrent Mode**: Synchronous or asynchronous task execution
+- **Prometheus Metrics**: Observability of tasks from pre-defined metrics
+- **Composable Pattern**: Multiple obervers can be employeed at once
+- **Retry Logic**: Configure retry strategies with curcuit breaking support
+- **Context Timeout**: Timeout support for handling task deadlines
+- **Panic Recovery**: Panic recovery safety or standard panic propagation
+- **Concurrent Mode**: Synchronous or asynchronous task execution
 
 ## Metrics
 
@@ -315,68 +315,6 @@ observer.RunTask(&EmailTask{
     Subject: "Welcome!",
     Body:    "Welcome to our service!",
 })
-```
-
-### Multiple Observers
-
-Using multiple observers with different configurations for different types of tasks:
-
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-    "time"
-    
-    sentinel "github.com/mcwalrus/go-sentinel"
-    "github.com/prometheus/client_golang/prometheus"
-)
-
-func main() {
-    registry := prometheus.NewRegistry()
-    
-    // First observer
-    observer1 := sentinel.NewObserver(sentinel.ObserverConfig{
-        Namespace:   "app",
-        Subsystem:   "background_tasks",
-        Description: "Background processing tasks",
-        Buckets:     []float64{0.1, 0.5, 1, 2, 5, 10, 30},
-    })
-    observer1.MustRegister(registry)
-    
-    // Second observer
-    observer2 := sentinel.NewObserver(sentinel.ObserverConfig{
-        Namespace:   "app", 
-        Subsystem:   "critical_tasks",
-        Description: "Critical business operations",
-        Buckets:     []float64{1, 10, 60, 300, 1800},
-    })
-    observer2.MustRegister(registry)
-    
-    _ = observer1.Run(sentinel.TaskConfig{
-        Timeout:       5 * time.Minute,
-        Concurrent:    true, // Background tasks
-        RecoverPanics: true,
-    }, func(ctx context.Context) error {
-        fmt.Println("Processing background task...")
-        time.Sleep(30 * time.Second)
-        return nil
-    })
-
-    _ = observer2.Run(sentinel.TaskConfig{
-        Timeout:       30 * time.Second,
-        Concurrent:    false, // Synchronous task
-        RecoverPanics: true,
-    }, func(ctx context.Context) error {
-        fmt.Println("Critical business operations...")
-        time.Sleep(2 * time.Second)
-        return nil
-    })
-
-    // Waits for blocking task execution ...
-    fmt.Println("Waits for critial task to complete")
-}
 ```
 
 ### Prometheus Integration
