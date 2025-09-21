@@ -310,7 +310,7 @@ func main() {
 	log.Println("Multiple observers running... Press Ctrl+C to stop")
 	log.Println("Metrics available at: http://localhost:8080/metrics")
 	log.Println("Prometheus UI: http://localhost:9090")
-	log.Println("Grafana UI: http://localhost:3000 (admin/admin)")
+	log.Println("Grafana UI: http://localhost:3000")
 
 	run()
 }
