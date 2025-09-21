@@ -1,10 +1,8 @@
-version: '3.8'
-
 services:
   multiple-observers:
     build:
-      context: ../../..
-      dockerfile: examples/workerloop/multiple-observers/Dockerfile
+      context: ../..
+      dockerfile: examples/multiple-observers/Dockerfile
     container_name: multiple-observers-app
     ports:
       - "8080:8080"
@@ -44,36 +42,19 @@ services:
       - ./grafana-dashboards:/etc/grafana/provisioning/dashboards
       - ./grafana-datasources:/etc/grafana/provisioning/datasources
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      # - GF_USERS_ALLOW_SIGN_UP=false
+      # - GF_INSTALL_PLUGINS=grafana-piechart-panel
     networks:
       - monitoring
     restart: unless-stopped
     depends_on:
       - prometheus
 
-  alertmanager:
-    image: prom/alertmanager:latest
-    container_name: alertmanager-multi-obs
-    ports:
-      - "9093:9093"
-    volumes:
-      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml
-      - alertmanager_data:/alertmanager
-    command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
-      - '--web.external-url=http://localhost:9093'
-    networks:
-      - monitoring
-    restart: unless-stopped
-
 volumes:
   prometheus_data:
   grafana_data:
-  alertmanager_data:
 
 networks:
   monitoring:

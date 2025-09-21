@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # Install git and ca-certificates (needed for downloading modules)
 RUN apk --no-cache add git ca-certificates
@@ -16,7 +16,8 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o multiple-observers ./examples/workerloop/multiple-observers/
+WORKDIR /app/examples/multiple-observers
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o multiple-observers .
 
 # Final stage
 FROM alpine:latest
@@ -27,7 +28,7 @@ RUN apk --no-cache add ca-certificates tzdata
 WORKDIR /root/
 
 # Copy the binary from builder
-COPY --from=builder /app/multiple-observers .
+COPY --from=builder /app/examples/multiple-observers/multiple-observers .
 
 # Expose port
 EXPOSE 8080
