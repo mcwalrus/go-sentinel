@@ -84,36 +84,3 @@ func TestRetryStrategyExponentialBackoff(t *testing.T) {
 		})
 	}
 }
-
-func TestRetryStrategyExponentialBackoffWithLimit(t *testing.T) {
-	factor := 50 * time.Millisecond
-	limit := 300 * time.Millisecond
-	strategy := RetryStrategyExponentialBackoffWithLimit(factor, limit)
-
-	tests := []struct {
-		retries  int
-		expected time.Duration
-	}{
-		{0, 0},
-		{1, 50 * time.Millisecond},
-		{2, 100 * time.Millisecond},
-		{3, 200 * time.Millisecond},
-		{4, 300 * time.Millisecond},
-		{5, 300 * time.Millisecond},
-		{10, 300 * time.Millisecond},
-	}
-
-	for _, tt := range tests {
-		t.Run("", func(t *testing.T) {
-			result := strategy(tt.retries)
-			if result != tt.expected {
-				t.Errorf(
-					"RetryStrategyExponentialBackoffWithLimit(%d) = %v, expected %v",
-					tt.retries,
-					result,
-					tt.expected,
-				)
-			}
-		})
-	}
-}

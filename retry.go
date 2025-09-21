@@ -11,7 +11,6 @@ var (
 	_ RetryStrategy = RetryStrategyImmediate
 	_ RetryStrategy = RetryStrategyLinearBackoff(0)
 	_ RetryStrategy = RetryStrategyExponentialBackoff(0)
-	_ RetryStrategy = RetryStrategyExponentialBackoffWithLimit(0, 0)
 )
 
 // RetryStrategyImmediate is a retry strategy that performs immediately with no delay.
@@ -33,18 +32,6 @@ func RetryStrategyExponentialBackoff(factor time.Duration) RetryStrategy {
 			return 0
 		} else {
 			return time.Duration(1<<uint(retries-1)) * factor
-		}
-	}
-}
-
-// RetryStrategyExponentialBackoffWithLimit returns a retry strategy that implements exponential backoff with a maximum limit.
-func RetryStrategyExponentialBackoffWithLimit(factor time.Duration, limit time.Duration) RetryStrategy {
-	return func(retries int) time.Duration {
-		result := RetryStrategyExponentialBackoff(factor)(retries)
-		if result > limit {
-			return limit
-		} else {
-			return result
 		}
 	}
 }
