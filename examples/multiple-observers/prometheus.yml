@@ -1,0 +1,34 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "alert_rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'multiple-observers'
+    static_configs:
+      - targets: ['multiple-observers:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+    scrape_timeout: 5s
+    # Add labels to distinguish this application
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'app_(background_tasks|critical_tasks|api_requests)_.*'
+        target_label: 'observer_type'
+        replacement: '${1}'
+
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']
