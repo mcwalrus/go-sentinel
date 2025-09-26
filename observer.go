@@ -36,7 +36,7 @@ type ObserverConfig struct {
 	// Please refer to [prometheus.HistogramOpts].Buckets for more information.
 	BucketDurations []float64
 
-	// ConstLabels are used to attach fixed labels to this metrics. By default, no labels
+	// ConstLabels are used to attach fixed labels to these metrics. By default, no labels
 	// are attached. Please refer to [prometheus.Opts].ConstLabels for more information.
 	ConstLabels prometheus.Labels
 
@@ -46,12 +46,15 @@ type ObserverConfig struct {
 	DefaultTaskConfig *TaskConfig
 }
 
+// DefaultConfig returns the default configuration for an [Observer].
+// It is recommended to use your own configuration to manage metrics.
+
 func DefaultConfig() ObserverConfig {
 	return ObserverConfig{
 		Namespace:       "",
 		Subsystem:       "sentinel",
 		Description:     "tasks",
-		BucketDurations: []float64{0.01, 0.1, 1, 10, 100},
+		BucketDurations: []float64{0.01, 0.1, 1, 5, 10, 30, 60, 120},
 	}
 }
 
@@ -65,7 +68,7 @@ type Observer struct {
 
 // NewObserver creates a new Observer instance with the specified configuration.
 // The Observer will need to be registered with a Prometheus registry to expose metrics.
-// Please refer to [MustRegister] and [Register] for more information.
+// Please refer to [Observer.MustRegister] and [Observer.Register] for more information.
 func NewObserver(cfg ObserverConfig) *Observer {
 	if cfg.Subsystem == "" && cfg.Namespace == "" {
 		cfg.Subsystem = "sentinel"
@@ -80,19 +83,19 @@ func NewObserver(cfg ObserverConfig) *Observer {
 }
 
 // Register registers all Observer metrics with the provided Prometheus registry.
-// Use [MustRegister] if you want the program to panic on registration conflicts.
+// Use [Observer.MustRegister] if you want the program to panic on registration conflicts.
 func (o *Observer) Register(registry prometheus.Registerer) error {
 	return o.metrics.Register(registry)
 }
 
 // MustRegister registers all Observer metrics with the provided Prometheus registry.
-// This method panics if any metric registration failures. Use [Register] if you prefer
+// This method panics if any metric registration failures. Use [Observer.Register] if you prefer
 // to handle registration errors gracefully.
 func (o *Observer) MustRegister(registry prometheus.Registerer) {
 	o.metrics.MustRegister(registry)
 }
 
-// Run executes a function with the specified task configuration and observes it's execution.
+// Run executes a function with the specified task configuration and observes its execution.
 // All execution metrics (duration, success/failure, retries, etc) will be automatically recorded.
 func (o *Observer) Run(cfg TaskConfig, fn func(ctx context.Context) error) error {
 	task := &implTask{
@@ -109,7 +112,7 @@ func (o *Observer) Run(cfg TaskConfig, fn func(ctx context.Context) error) error
 	return nil
 }
 
-// RunFunc executes a simple function once without a timeout and observes it's execution.
+// RunFunc executes a simple function once without a timeout and observes its execution.
 // All execution metrics (duration, success/failure, panic, etc) will be automatically recorded.
 // If a [context.DeadlineExceeded] error is returned, it is recorded as a timeout occurrence.
 // Panic recovery is ignored by default and needs to be manually handled.
@@ -130,7 +133,7 @@ func (o *Observer) RunFunc(fn func() error) error {
 	return nil
 }
 
-// RunTask executes a [Task] implementation and observes it's execution.
+// RunTask executes a [Task] implementation and observes its execution.
 // The task.Config() method determines the execution behavior (timeout, retries, concurrency, etc).
 // All execution metrics (duration, success/failure, retries, etc) will be automatically recorded.
 func (o *Observer) RunTask(task Task) error {
@@ -207,8 +210,8 @@ func (o *Observer) observe(task *implTask) error {
 				return err
 			}
 
-			if cfg.RetryCurcuitBreaker != nil {
-				if cfg.RetryCurcuitBreaker(err) {
+			if cfg.RetryCircuitBreaker != nil {
+				if cfg.RetryCircuitBreaker(err) {
 					return err
 				}
 			}

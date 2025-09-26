@@ -6,30 +6,31 @@ import (
 )
 
 // Task represents a unit of work that can be executed and monitored by an [Observer].
-// Implementations can alternatively describe workloads instead of a functional approach.
+// Implementations can describe workloads alternatively than using a functional approach.
 type Task interface {
-	// Config returns the configuration for a task to be handled by the [Observer],
-	// including timeout, retry behavior, concurrency settings, and panic recovery options.
+	// Config returns the [TaskConfig] for how the task will be handled by the [Observer].
+	// This provides task retry behavior, concurrency settings, and panic recovery options.
 	Config() TaskConfig
 
-	// Execute performs the task work. The provided context may include timeout constraints
-	// based on the task configuration. If a [context.DeadlineExceeded] error is returned,
-	// it is recorded as a timeout occurrence by the [Observer].
+	// Execute performs the task work. If a [context.DeadlineExceeded] error is returned,
+	// it is recorded as a timeout occurrence by the [Observer]. The [TaskConfig] timeout
+	// is used by the context passed to the method.
 	Execute(ctx context.Context) error
 }
 
 // TaskConfig defines the configuration options for task execution and monitoring.
-// The [Observer] uses this configuration to determine the execution behavior of a task.
+// The [Observer] uses this configuration to determine the execution behavior of a [Task].
+
 type TaskConfig struct {
-	// Timeout specifies a context timeout duration for task execution.
-	// If set to 0, no timeout is applied. The context passed to Execute()
-	// will return a [context.DeadlineExceeded] error when the timeout is reached.
-	// It is the responsibility of the observed function to handle the context timeout.
+	// Timeout duration is the deadline for the context passed to [Task.Execute].
+	// A zero value means no timeout is applied. When the timeout is exceeded, the context
+	// will return [context.DeadlineExceeded], and it is the responsibility of the [Task]
+	// to handle and return the error.
 	Timeout time.Duration
 
-	// MaxRetries specifies the maximum number of retry attempts for failed tasks.
-	// If set to 0, no retries are performed. Each retry attempt is recorded via metrics.
-	// The [Observer] records the metrics for each attempt to run the task individually.
+	// MaxRetries specifies the maximum number of retry attempts for failed [Task.Execute].
+	// If set to zero, no retries are performed. Each retry attempt is recorded via metrics.
+	// The [Observer] records the metrics for each attempt to run the [Task] individually.
 	MaxRetries int
 
 	// Concurrent determines whether the task should run asynchronously.
@@ -50,10 +51,10 @@ type TaskConfig struct {
 	// If nil, [RetryStrategyImmediate] is used.
 	RetryStrategy func(retryCount int) time.Duration
 
-	// RetryCurcuitBreaker determines whether the task will avoid the next retry attempt.
+	// RetryCircuitBreaker determines whether the task will avoid the next retry attempt.
 	// If returns true, the [Observer] will break the retry attempt and return the error.
 	// If returns false, the [Observer] will continue to retry the task.
-	RetryCurcuitBreaker func(err error) bool
+	RetryCircuitBreaker func(err error) bool
 }
 
 func defaultTaskConfig() TaskConfig {
@@ -63,7 +64,7 @@ func defaultTaskConfig() TaskConfig {
 		Concurrent:          false,
 		RecoverPanics:       true,
 		RetryStrategy:       RetryStrategyImmediate,
-		RetryCurcuitBreaker: nil,
+		RetryCircuitBreaker: nil,
 	}
 }
 

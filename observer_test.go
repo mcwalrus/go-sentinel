@@ -427,7 +427,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 				MaxRetries:    5,
 				Concurrent:    false,
 				RetryStrategy: RetryStrategyImmediate,
-				RetryCurcuitBreaker: func(err error) bool {
+				RetryCircuitBreaker: func(err error) bool {
 					// Break circuit on specific error
 					return errors.Is(err, expectedErr)
 				},
