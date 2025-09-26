@@ -165,8 +165,10 @@ func (o *Observer) observe(task *implTask) (err error) {
 	}
 
 	o.metrics.InFlight.Inc()
+	start := time.Now()
 	defer func() {
 		o.metrics.InFlight.Dec()
+		o.metrics.ObservedRuntimes.Observe(time.Since(start).Seconds())
 		if r := recover(); r != nil {
 			o.metrics.Panics.Inc()
 			if !task.Config().RecoverPanics {
@@ -192,11 +194,7 @@ func (o *Observer) executeTask(task *implTask) error {
 	}
 
 	// Execute the task
-	start := time.Now()
 	err := task.Execute(ctx)
-	o.metrics.ObservedRuntimes.Observe(
-		time.Since(start).Seconds(),
-	)
 
 	// Handle errors
 	if err != nil {
