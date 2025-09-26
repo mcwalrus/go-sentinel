@@ -6,7 +6,6 @@ package sentinel
 import (
 	"context"
 	"errors"
-	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -159,40 +158,47 @@ func (o *Observer) defaultTaskConfig() TaskConfig {
 	return defaultTaskConfig()
 }
 
-// observe is the internal method that observes the task execution and handles retries.
-func (o *Observer) observe(task *implTask) error {
+// observe is the internal method that observes the task execution.
+func (o *Observer) observe(task *implTask) (err error) {
+	if o.metrics == nil {
+		return errors.New("observer not properly initialized")
+	}
+
+	o.metrics.InFlight.Inc()
 	defer func() {
+		o.metrics.InFlight.Dec()
 		if r := recover(); r != nil {
 			o.metrics.Panics.Inc()
 			if !task.Config().RecoverPanics {
 				panic(r)
+			} else {
+				err = errors.New("panic occurred for task execution")
 			}
 		}
 	}()
 
-	start := time.Now()
-	o.metrics.InFlight.Inc()
-	observeOnce := sync.Once{}
+	return o.executeTask(task)
+}
 
-	completeTask := func() {
-		observeOnce.Do(func() {
-			o.metrics.InFlight.Dec()
-			o.metrics.ObservedRuntimes.Observe(
-				time.Since(start).Seconds(),
-			)
-		})
-	}
-	defer completeTask()
-
-	ctx := context.Background()
+// executeTask contains the main task execution logic and handles retries.
+func (o *Observer) executeTask(task *implTask) error {
+	var (
+		ctx    = context.Background()
+		cancel context.CancelFunc
+	)
 	if task.Config().Timeout > 0 {
-		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, task.Config().Timeout)
 		defer cancel()
 	}
 
 	// Execute the task
+	start := time.Now()
 	err := task.Execute(ctx)
+	o.metrics.ObservedRuntimes.Observe(
+		time.Since(start).Seconds(),
+	)
+
+	// Handle errors
 	if err != nil {
 		o.metrics.Errors.Inc()
 		if errors.Is(err, context.DeadlineExceeded) {
@@ -203,7 +209,6 @@ func (o *Observer) observe(task *implTask) error {
 		if task.Config().MaxRetries > 0 {
 			o.metrics.Retries.Inc()
 			cfg := task.Config()
-			completeTask()
 
 			// Maximum retries reached
 			if task.retryCount >= cfg.MaxRetries {
