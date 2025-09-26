@@ -1,10 +1,11 @@
 # Multiple Observers Example
 
-This example demonstrates how to use multiple `go-sentinel` observers to monitor different types of tasks with distinct configurations and metrics. Each observer is optimized for its specific use case and provides separate metrics for monitoring.
+Example demonstrates how multiple `go-sentinel` observers can monitor different tasks or workloads with distinct configurations and metrics. Each observer is optimised for its specific use case and provides separate metrics for monitoring.
 
-### Prerequisites
-- Docker and Docker Compose
-- Go 1.23+ (for local development)
+## Prerequisites
+
+- Go 1.23 or later
+- Docker and Docker Compose (for containerized setup)
 
 ## Task Types
 
@@ -24,28 +25,33 @@ This example demonstrates how to use multiple `go-sentinel` observers to monitor
 - Failure rate: ~5% (every 20th task)
 - Max retries: 1 with immediate retry
 
+## Usage
+
+### Local Development
+
+```bash
+go run main.go
+```
+
 ### Docker Compose
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
-### Services 
-   - **Application**: http://localhost:8080/metrics
-   - **Prometheus**: http://localhost:9090
-   - **Grafana**: http://localhost:3000
+### Services
 
-### Docker Cleanup
+- **Application metrics**: http://localhost:8080/metrics
+- **Prometheus**: http://localhost:9090
+- **Grafana**: http://localhost:3000
 
-```bash
-docker-compose down
-```
 
 ### Prometheus Queries
 
 Here are some useful Prometheus queries to monitor the different observers:
 
 #### Success Rate by Observer Type
+
 ```promql
 rate(app_background_tasks_successes_total[5m]) - rate(app_background_tasks_errors_total[5m])
 rate(app_critical_tasks_successes_total[5m]) - rate(app_critical_tasks_errors_total[5m])
@@ -53,6 +59,7 @@ rate(app_api_requests_successes_total[5m]) - rate(app_api_requests_errors_total[
 ```
 
 #### Average Duration by Observer Type
+
 ```promql
 rate(app_background_tasks_durations_seconds_sum[5m]) / rate(app_background_tasks_durations_seconds_count[5m])
 rate(app_critical_tasks_durations_seconds_sum[5m]) / rate(app_critical_tasks_durations_seconds_count[5m])
@@ -60,6 +67,7 @@ rate(app_api_requests_durations_seconds_sum[5m]) / rate(app_api_requests_duratio
 ```
 
 #### 95th Percentile Duration
+
 ```promql
 histogram_quantile(0.95, rate(app_background_tasks_durations_seconds_bucket[5m]))
 histogram_quantile(0.95, rate(app_critical_tasks_durations_seconds_bucket[5m]))
@@ -73,12 +81,8 @@ The application provides detailed logging for each task execution:
 - `[CRITICAL]` - Critical task logs  
 - `[API]` - API task logs
 
-### Health Check
-
-The Docker container includes health checks on the `/metrics` endpoint. You can also manually check:
+## Cleanup
 
 ```bash
-curl http://localhost:8080/metrics
+docker-compose down -v
 ```
-
-This should return Prometheus-formatted metrics for all three observers.

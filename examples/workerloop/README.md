@@ -23,7 +23,8 @@ Access metrics at: http://localhost:8080/metrics
 docker-compose up -d
 ```
 
-Access:
+### Services
+
 - **Application metrics**: http://localhost:8080/metrics
 - **Prometheus**: http://localhost:9090
 - **Grafana**: http://localhost:3000

@@ -6,13 +6,13 @@
 [![GoDoc](https://godoc.org/github.com/mcwalrus/go-sentinel?status.svg)](https://godoc.org/github.com/mcwalrus/go-sentinel)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Sentinel provides reliability handling and observability monitoring in Go applications. It wraps task execution with Prometheus metrics, observing for successes, errors caught, panic occurances, retries, and timeouts - making critical routines more resilent, observable, and robust. Use the library as a drop-in solution for new projects or existing applications.
+Sentinel provides reliability handling and observability monitoring in Go applications. It wraps task execution with Prometheus metrics, observing for successes, errors caught, panic occurrences, retries, and timeouts - making critical routines more resilient, observable, and robust. Use the library as a drop-in solution for new projects or existing applications.
 
 ## Features
 
 - **Prometheus Metrics**: Observability of tasks from pre-defined metrics
-- **Composable Pattern**: Multiple obervers can be employeed at once
-- **Retry Logic**: Configure retry strategies with curcuit breaking support
+- **Composable Pattern**: Multiple observers can be employed at once
+- **Retry Logic**: Configure retry strategies with circuit breaking support
 - **Context Timeout**: Timeout support for handling task deadlines
 - **Panic Recovery**: Panic recovery safety or standard panic propagation
 - **Concurrent Mode**: Synchronous or asynchronous task execution
@@ -27,7 +27,7 @@ Default configuration automatically exports the following Prometheus metrics:
 | `sentinel_success_total` | Counter | Total successful task completions |
 | `sentinel_errors_total` | Counter | Total task executions failures |
 | `sentinel_timeouts_total` | Counter | Total timeout based failures |
-| `sentinel_panics_total` | Counter | Total task panic occurances |
+| `sentinel_panics_total` | Counter | Total task panic occurrences |
 | `sentinel_durations_seconds` | Histogram | Distribution of task executions |
 | `sentinel_retries_total` | Counter | Total retry attempts after failures |
 
@@ -240,7 +240,7 @@ func main() {
 }
 ```
 
-Note, panic occurances are still counted when `RecoverPanics=false`. Panic recovery is false by default in case panic propagation should signal some event, or action to be taken by the application. `RecoverPanics=true` when tasks are observed through the Observer method [RunFunc](https://pkg.go.dev/github.com/mcwalrus/go-sentinel#Observer.RunFunc) instead.
+Note panic occurrences are counted even when `RecoverPanics=false`. Enabling panic recovery should be explicitly set through TaskConfig incase panic propagation should signal specific handling up the stack, or other action to be taken by the application. `RecoverPanics=true` when tasks are observed through the Observer method [RunFunc](https://pkg.go.dev/github.com/mcwalrus/go-sentinel#Observer.RunFunc).
 
 ### Concurrent Mode
 
