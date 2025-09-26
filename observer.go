@@ -6,7 +6,6 @@ package sentinel
 import (
 	"context"
 	"errors"
-	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -97,6 +96,7 @@ func (o *Observer) MustRegister(registry prometheus.Registerer) {
 
 // Run executes a function with the specified task configuration and observes its execution.
 // All execution metrics (duration, success/failure, retries, etc) will be automatically recorded.
+// When cfg.RecoverPanics is true, returns an error if a panic occurs and is recovered.
 func (o *Observer) Run(cfg TaskConfig, fn func(ctx context.Context) error) error {
 	task := &implTask{
 		cfg: cfg,
@@ -115,7 +115,7 @@ func (o *Observer) Run(cfg TaskConfig, fn func(ctx context.Context) error) error
 // RunFunc executes a simple function once without a timeout and observes its execution.
 // All execution metrics (duration, success/failure, panic, etc) will be automatically recorded.
 // If a [context.DeadlineExceeded] error is returned, it is recorded as a timeout occurrence.
-// Panic recovery is ignored by default and needs to be manually handled.
+// When RecoverPanics is true, returns an error if a panic occurs and is recovered.
 func (o *Observer) RunFunc(fn func() error) error {
 	task := &implTask{
 		cfg: o.defaultTaskConfig(),
@@ -136,6 +136,7 @@ func (o *Observer) RunFunc(fn func() error) error {
 // RunTask executes a [Task] implementation and observes its execution.
 // The task.Config() method determines the execution behavior (timeout, retries, concurrency, etc).
 // All execution metrics (duration, success/failure, retries, etc) will be automatically recorded.
+// When task.Config().RecoverPanics is true, returns an error if a panic occurs and is recovered.
 func (o *Observer) RunTask(task Task) error {
 	t := &implTask{
 		cfg: task.Config(),
@@ -159,40 +160,45 @@ func (o *Observer) defaultTaskConfig() TaskConfig {
 	return defaultTaskConfig()
 }
 
-// observe is the internal method that observes the task execution and handles retries.
-func (o *Observer) observe(task *implTask) error {
+// observe is the internal method that observes the task execution.
+func (o *Observer) observe(task *implTask) (err error) {
+	if o.metrics == nil {
+		return errors.New("observer not properly initialized")
+	}
+
+	o.metrics.InFlight.Inc()
+	start := time.Now()
 	defer func() {
+		o.metrics.InFlight.Dec()
+		o.metrics.ObservedRuntimes.Observe(time.Since(start).Seconds())
 		if r := recover(); r != nil {
 			o.metrics.Panics.Inc()
 			if !task.Config().RecoverPanics {
 				panic(r)
+			} else {
+				err = errors.New("panic occurred for task execution")
 			}
 		}
 	}()
 
-	start := time.Now()
-	o.metrics.InFlight.Inc()
-	observeOnce := sync.Once{}
+	return o.executeTask(task)
+}
 
-	completeTask := func() {
-		observeOnce.Do(func() {
-			o.metrics.InFlight.Dec()
-			o.metrics.ObservedRuntimes.Observe(
-				time.Since(start).Seconds(),
-			)
-		})
-	}
-	defer completeTask()
-
-	ctx := context.Background()
+// executeTask contains the main task execution logic and handles retries.
+func (o *Observer) executeTask(task *implTask) error {
+	var (
+		ctx    = context.Background()
+		cancel context.CancelFunc
+	)
 	if task.Config().Timeout > 0 {
-		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, task.Config().Timeout)
 		defer cancel()
 	}
 
 	// Execute the task
 	err := task.Execute(ctx)
+
+	// Handle errors
 	if err != nil {
 		o.metrics.Errors.Inc()
 		if errors.Is(err, context.DeadlineExceeded) {
@@ -203,7 +209,6 @@ func (o *Observer) observe(task *implTask) error {
 		if task.Config().MaxRetries > 0 {
 			o.metrics.Retries.Inc()
 			cfg := task.Config()
-			completeTask()
 
 			// Maximum retries reached
 			if task.retryCount >= cfg.MaxRetries {

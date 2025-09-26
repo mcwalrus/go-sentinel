@@ -40,9 +40,10 @@ type TaskConfig struct {
 	// returned by [errors.Join].
 	Concurrent bool
 
-	// RecoverPanics determines whether panics should be caught and recovered.
-	// If true, panics are caught, recorded via metrics, and the task execution continues.
-	// If false, panics are still recorded, but can propagate and potentially crash the program.
+	// RecoverPanics determines whether panics should be caught and recover gracefully,
+	// or ignored and propagate up the stack. When true, panics are caught, recorded via metrics,
+	// where an error is returned by the [Observer] indicating that a panic occurred. When false,
+	// panics are still recorded, but can propagate and potentially crash the program.
 	RecoverPanics bool
 
 	// RetryStrategy defines the wait duration calculation between retry attempts.
