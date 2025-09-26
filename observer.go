@@ -96,6 +96,7 @@ func (o *Observer) MustRegister(registry prometheus.Registerer) {
 
 // Run executes a function with the specified task configuration and observes its execution.
 // All execution metrics (duration, success/failure, retries, etc) will be automatically recorded.
+// When cfg.RecoverPanics is true, returns an error if a panic occurs and is recovered.
 func (o *Observer) Run(cfg TaskConfig, fn func(ctx context.Context) error) error {
 	task := &implTask{
 		cfg: cfg,
@@ -114,7 +115,7 @@ func (o *Observer) Run(cfg TaskConfig, fn func(ctx context.Context) error) error
 // RunFunc executes a simple function once without a timeout and observes its execution.
 // All execution metrics (duration, success/failure, panic, etc) will be automatically recorded.
 // If a [context.DeadlineExceeded] error is returned, it is recorded as a timeout occurrence.
-// Panic recovery is ignored by default and needs to be manually handled.
+// When RecoverPanics is true, returns an error if a panic occurs and is recovered.
 func (o *Observer) RunFunc(fn func() error) error {
 	task := &implTask{
 		cfg: o.defaultTaskConfig(),
@@ -135,6 +136,7 @@ func (o *Observer) RunFunc(fn func() error) error {
 // RunTask executes a [Task] implementation and observes its execution.
 // The task.Config() method determines the execution behavior (timeout, retries, concurrency, etc).
 // All execution metrics (duration, success/failure, retries, etc) will be automatically recorded.
+// When task.Config().RecoverPanics is true, returns an error if a panic occurs and is recovered.
 func (o *Observer) RunTask(task Task) error {
 	t := &implTask{
 		cfg: task.Config(),
