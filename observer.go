@@ -102,14 +102,7 @@ func (o *Observer) Run(cfg TaskConfig, fn func(ctx context.Context) error) error
 		cfg: cfg,
 		fn:  fn,
 	}
-	if !task.Config().Concurrent {
-		return o.observe(task)
-	} else {
-		go func() {
-			_ = o.observe(task)
-		}()
-	}
-	return nil
+	return o.observe(task)
 }
 
 // RunFunc executes a function with the DefaultTaskConfig and observes its execution.
@@ -123,14 +116,7 @@ func (o *Observer) RunFunc(fn func() error) error {
 			return fn() // ignore ctx
 		},
 	}
-	if !task.Config().Concurrent {
-		return o.observe(task)
-	} else {
-		go func() {
-			_ = o.observe(task)
-		}()
-	}
-	return nil
+	return o.observe(task)
 }
 
 // RunTask executes a [Task] implementation and observes its execution.
@@ -142,38 +128,33 @@ func (o *Observer) RunTask(task Task) error {
 		cfg: task.Config(),
 		fn:  task.Execute,
 	}
-	if !task.Config().Concurrent {
-		return o.observe(t)
-	} else {
-		go func() {
-			_ = o.observe(t)
-		}()
-	}
-	return nil
-}
-
-// defaultTaskConfig returns the default task configuration for the Observer.
-func (o *Observer) defaultTaskConfig() TaskConfig {
-	if o.cfg.DefaultTaskConfig != nil {
-		return *o.cfg.DefaultTaskConfig
-	}
-	return defaultTaskConfig()
+	return o.observe(t)
 }
 
 // observe is the internal method that observes task execution.
 // This method manages the InFlight gauge for individual tasks.
+// Task execution and retries are handled by [Observer.executeTask].
 func (o *Observer) observe(task *implTask) (err error) {
 	if o.metrics == nil {
 		return errors.New("observer metrics not configured")
 	}
 	o.metrics.InFlight.Inc()
 	defer o.metrics.InFlight.Dec()
-	return o.executeTask(task)
+
+	if !task.Config().Concurrent {
+		return o.executeTask(task)
+	} else {
+		go func() {
+			_ = o.executeTask(task)
+		}()
+	}
+	return nil
 }
 
 // executeTask performs the task execution logic and handles retries.
 // Retry attempts are call method recursively for synchronous task handling.
 // If panic occurs, the error from task.Execute() is switched for ErrPanicOccurred.
+// This follows the behaviour defined by the [TaskConfig] task.Config() and [Task.Execute].
 func (o *Observer) executeTask(task *implTask) error {
 
 	// Configure timeout
@@ -260,4 +241,12 @@ func (o *Observer) executeTask(task *implTask) error {
 	}
 
 	return err
+}
+
+// defaultTaskConfig returns the default task configuration for the Observer.
+func (o *Observer) defaultTaskConfig() TaskConfig {
+	if o.cfg.DefaultTaskConfig != nil {
+		return *o.cfg.DefaultTaskConfig
+	}
+	return defaultTaskConfig()
 }

@@ -14,11 +14,10 @@ type Task interface {
 
 	// Execute performs the task work. If a [context.DeadlineExceeded] error is returned,
 	// it is recorded as a timeout occurrence by the [Observer]. The [TaskConfig] timeout
-	// is used by the context passed to the method.
+	// is used by the context passed to the method. If a panic occurs, it is recorded by
+	// metrics and the [Observer] returns an ErrPanicOccurred indicating a panic occurred.
 	Execute(ctx context.Context) error
 }
-
-// [Task.Execute] should be executed function.
 
 // TaskConfig defines the configuration options for task execution and monitoring.
 // The [Observer] uses this configuration to determine the execution behavior of a [Task].
