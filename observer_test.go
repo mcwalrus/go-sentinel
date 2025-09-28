@@ -274,9 +274,12 @@ func TestObserve_PanicRecovery(t *testing.T) {
 		// This should not panic due to recovery
 		err := observer.RunTask(task)
 
-		// Should return nil since panic was recovered
-		if err != nil {
-			t.Errorf("Expected no error with panic recovery, got %v", err)
+		// Should return an error indicating panic occurred
+		if err == nil {
+			t.Errorf("Expected error indicating panic occurred, got nil")
+		}
+		if err != nil && err.Error() != "panic occurred for task execution" {
+			t.Errorf("Expected panic error message, got %v", err)
 		}
 
 		// Verify panic was recorded
@@ -690,7 +693,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 					panic("test panic")
 				},
 			},
-			wantErr: false,
+			wantErr: true,
 			validate: func(t *testing.T, observer *Observer) {
 				if got := testutil.ToFloat64(observer.metrics.Panics); got != 1 {
 					t.Errorf("Expected Panics=1, got %f", got)

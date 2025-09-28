@@ -213,7 +213,6 @@ package main
 import (
     "context"
     "fmt"
-    "os"
     
     sentinel "github.com/mcwalrus/go-sentinel"
     "github.com/prometheus/client_golang/prometheus"
@@ -232,15 +231,19 @@ func main() {
         fmt.Println("Oh no, panic...")
         panic("something went wrong!")
     })
+    
+    // An error is returned after recovery showing panic occurred
     if err != nil {
-        panic("unexpected error", err)
+        fmt.Printf("Task completed with recovered panic: %v\n", err)
+    } else {
+        panic("expected error, but got nil")
     }
 
     fmt.Println("continues after panic recovery")
 }
 ```
 
-Note panic occurrences are counted even when `RecoverPanics=false`. Enabling panic recovery should be explicitly set through TaskConfig incase panic propagation should signal specific handling up the stack, or other action to be taken by the application. `RecoverPanics=true` when tasks are observed through the Observer method [RunFunc](https://pkg.go.dev/github.com/mcwalrus/go-sentinel#Observer.RunFunc).
+Note panic occurrences are counted even when `RecoverPanics=false`. Enabling panic recovery should be explicitly set through TaskConfig in case panic propagation should signal specific handling up the stack, or other actions to be taken by the application. `RecoverPanics=true` when tasks are observed through the Observer method [RunFunc](https://pkg.go.dev/github.com/mcwalrus/go-sentinel#Observer.RunFunc).
 
 ### Concurrent Mode
 
