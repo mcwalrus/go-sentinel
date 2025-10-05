@@ -244,6 +244,27 @@ func TestObserve_ErrorHandling(t *testing.T) {
 	})
 }
 
+func TestObserve_RunFunc(t *testing.T) {
+	observer := NewObserver(testConfig(t))
+	registry := prometheus.NewRegistry()
+	observer.MustRegister(registry)
+
+	err := observer.RunFunc(func() error {
+		return errors.New("task failed")
+	})
+	if err == nil {
+		t.Errorf("Expected error, got nil")
+	}
+
+	Verify(t, observer, metricsCounts{
+		Successes:     0,
+		Errors:        1,
+		TimeoutErrors: 0,
+		Panics:        0,
+		Retries:       0,
+	})
+}
+
 func TestObserve_TimeoutHandling(t *testing.T) {
 	observer := NewObserver(testConfig(t))
 	registry := prometheus.NewRegistry()
@@ -711,7 +732,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 					return errors.New("test error")
 				},
 			},
-			wantErr: false,
+			wantErr: true,
 			validate: func(t *testing.T, observer *Observer) {
 				time.Sleep(10 * time.Millisecond)
 				Verify(t, observer, metricsCounts{
@@ -727,6 +748,8 @@ func TestObserve_MetricsRecording(t *testing.T) {
 
 	for i, scenario := range scenarios {
 		t.Run(scenario.name, func(t *testing.T) {
+			t.Logf("Running scenario: %s", scenario.name)
+
 			observer := NewObserver(testConfig(t))
 			registry := prometheus.NewRegistry()
 			observer.MustRegister(registry)
