@@ -261,7 +261,6 @@ func (e *EmailTask) Config() sentinel.TaskConfig {
     return sentinel.TaskConfig{
         Timeout:       30 * time.Second,
         MaxRetries:    3,
-        Concurrent:    true,
         RecoverPanics: true,
         RetryStrategy: sentinel.RetryStrategyExponentialBackoff(1 * time.Second),
     }

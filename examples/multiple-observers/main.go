@@ -70,7 +70,6 @@ type BackgroundTask struct {
 func (task *BackgroundTask) Config() sentinel.TaskConfig {
 	return sentinel.TaskConfig{
 		Timeout:       30 * time.Second,
-		Concurrent:    true,
 		RecoverPanics: true,
 		MaxRetries:    3,
 		RetryStrategy: sentinel.RetryStrategyExponentialBackoff(500 * time.Millisecond),
@@ -112,7 +111,6 @@ type CriticalTask struct {
 func (task *CriticalTask) Config() sentinel.TaskConfig {
 	return sentinel.TaskConfig{
 		Timeout:       5 * time.Second,
-		Concurrent:    false,
 		RecoverPanics: true,
 		MaxRetries:    2,
 		RetryStrategy: sentinel.RetryStrategyImmediate,
@@ -159,7 +157,6 @@ type APITask struct {
 func (task *APITask) Config() sentinel.TaskConfig {
 	return sentinel.TaskConfig{
 		Timeout:       2 * time.Second,
-		Concurrent:    true,
 		RecoverPanics: true,
 	}
 }
@@ -221,7 +218,9 @@ func run() {
 					TaskID: fmt.Sprintf("bg-%04d", taskID),
 				}
 				taskID++
-				backgroundObserver.RunTask(task)
+				go func() {
+					backgroundObserver.RunTask(task)
+				}()
 			}
 
 		case 1:
@@ -233,7 +232,9 @@ func run() {
 					TaskID: fmt.Sprintf("crit-%04d", taskID),
 				}
 				taskID++
-				criticalObserver.RunTask(task)
+				go func() {
+					criticalObserver.RunTask(task)
+				}()
 			}
 
 		case 2:
@@ -245,7 +246,9 @@ func run() {
 					TaskID: fmt.Sprintf("api-%04d", taskID),
 				}
 				taskID++
-				apiObserver.RunTask(task)
+				go func() {
+					apiObserver.RunTask(task)
+				}()
 			}
 
 		case 3:
@@ -261,21 +264,27 @@ func run() {
 			for range bgTasks {
 				task := &BackgroundTask{TaskID: fmt.Sprintf("bg-%04d", taskID)}
 				taskID++
-				backgroundObserver.RunTask(task)
+				go func() {
+					backgroundObserver.RunTask(task)
+				}()
 			}
 
 			// Critical tasks
 			for range critTasks {
 				task := &CriticalTask{TaskID: fmt.Sprintf("crit-%04d", taskID)}
 				taskID++
-				criticalObserver.RunTask(task)
+				go func() {
+					criticalObserver.RunTask(task)
+				}()
 			}
 
 			// API tasks
 			for range apiTasks {
 				task := &APITask{TaskID: fmt.Sprintf("api-%04d", taskID)}
 				taskID++
-				apiObserver.RunTask(task)
+				go func() {
+					apiObserver.RunTask(task)
+				}()
 			}
 		}
 	}

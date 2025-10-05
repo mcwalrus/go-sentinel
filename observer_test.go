@@ -584,7 +584,7 @@ func TestObserve_InFlightMetrics(t *testing.T) {
 	})
 }
 
-func TestObserve_ConcurrentExecution(t *testing.T) {
+func TestObserve_Concurrent(t *testing.T) {
 	observer := NewObserver(testConfig(t))
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
@@ -606,7 +606,7 @@ func TestObserve_ConcurrentExecution(t *testing.T) {
 			},
 		}
 
-		for i := 0; i < numGoroutines; i++ {
+		for range numGoroutines {
 			go func() {
 				_ = observer.RunTask(task)
 			}()
@@ -701,7 +701,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 			},
 		},
 		{
-			name: "concurrent task with retries returning an error",
+			name: "Multiple retries task with error returned",
 			task: &testTask{
 				cfg: TaskConfig{
 					MaxRetries:    3,
