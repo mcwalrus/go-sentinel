@@ -165,7 +165,7 @@ func (o *Observer) executeTask(task *implTask) error {
 			)
 			if r := recover(); r != nil {
 				panicValue = r
-				err = ErrPanicOccurred{panic: r}
+				err = &ErrPanicOccurred{panic: r}
 			}
 		}()
 		err = task.Execute(ctx)

@@ -104,7 +104,7 @@ func TestCircuitBreaker_DefaultCircuitBreaker(t *testing.T) {
 			t.Errorf("Expected panic error, got nil")
 		}
 
-		var panicErr ErrPanicOccurred
+		var panicErr *ErrPanicOccurred
 		if !errors.As(err, &panicErr) {
 			t.Errorf("Expected ErrPanicOccurred, got %v", err)
 		}
@@ -232,7 +232,7 @@ func TestCircuitBreaker_ShortOnPanicCircuitBreaker(t *testing.T) {
 			t.Errorf("Expected panic error, got nil")
 		}
 
-		var panicErr ErrPanicOccurred
+		var panicErr *ErrPanicOccurred
 		if !errors.As(err, &panicErr) {
 			t.Errorf("Expected ErrPanicOccurred, got %v", err)
 		}
@@ -270,7 +270,7 @@ func TestCircuitBreaker_ShortOnPanicCircuitBreaker(t *testing.T) {
 			t.Errorf("Expected panic error, got nil")
 		}
 
-		var panicErr ErrPanicOccurred
+		var panicErr *ErrPanicOccurred
 		if !errors.As(err, &panicErr) {
 			t.Errorf("Expected ErrPanicOccurred, got %v", err)
 		}

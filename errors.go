@@ -6,11 +6,11 @@ type ErrPanicOccurred struct {
 }
 
 // Error implements the error interface.
-func (e ErrPanicOccurred) Error() string {
+func (e *ErrPanicOccurred) Error() string {
 	return "panic occurred for task execution"
 }
 
-// Panic returns the panic value.
-func (e ErrPanicOccurred) Panic() any {
+// PanicValue returns the panic value.
+func (e *ErrPanicOccurred) PanicValue() any {
 	return e.panic
 }

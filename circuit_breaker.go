@@ -18,5 +18,5 @@ var DefaultCircuitBreaker CircuitBreaker = nil
 
 // ShortOnPanicCircuitBreaker is a CircuitBreaker that exits on panic occurrences.
 var ShortOnPanicCircuitBreaker = func(err error) bool {
-	return errors.Is(err, ErrPanicOccurred{})
+	return errors.Is(err, &ErrPanicOccurred{})
 }
