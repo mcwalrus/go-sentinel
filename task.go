@@ -31,14 +31,8 @@ type TaskConfig struct {
 	// MaxRetries specifies the number of retry attempts for failed calls of [Task.Execute].
 	// If set to zero, no retries are performed. Each retry attempt is recorded via metrics.
 	// The [Observer] records the metrics for each attempt to run the [Task] individually.
+	// Errors returned from multiple retries are grouped by [errors.Join] as a single error.
 	MaxRetries int
-
-	// Concurrent determines whether the task should run asynchronously.
-	// When true, tasks run in go routines where [Observer] Run* methods returns nil immediately.
-	// By default tasks run synchronously where [Observer] Run* methods block until all retries
-	// have been attempted and return associated errors. Errors from multiple retries are grouped
-	// by [errors.Join] as a single error.
-	Concurrent bool
 
 	// RecoverPanics determines whether panics should be caught and recover gracefully,
 	// or ignored and propagate up the stack. When true, panics are caught, recorded via metrics,
@@ -63,7 +57,6 @@ func defaultTaskConfig() TaskConfig {
 	return TaskConfig{
 		Timeout:             0,
 		MaxRetries:          0,
-		Concurrent:          false,
 		RecoverPanics:       true,
 		RetryStrategy:       RetryStrategyImmediate,
 		RetryCircuitBreaker: nil,
