@@ -140,15 +140,7 @@ func (o *Observer) observe(task *implTask) (err error) {
 	}
 	o.metrics.InFlight.Inc()
 	defer o.metrics.InFlight.Dec()
-
-	if !task.Config().Concurrent {
-		return o.executeTask(task)
-	} else {
-		go func() {
-			_ = o.executeTask(task)
-		}()
-	}
-	return nil
+	return o.executeTask(task)
 }
 
 // executeTask performs the task execution logic and handles retries.
@@ -156,8 +148,6 @@ func (o *Observer) observe(task *implTask) (err error) {
 // If panic occurs, the error from task.Execute() is switched for ErrPanicOccurred.
 // This follows the behaviour defined by the [TaskConfig] task.Config() and [Task.Execute].
 func (o *Observer) executeTask(task *implTask) error {
-
-	// Configure timeout
 	var ctx = context.Background()
 	if task.Config().Timeout > 0 {
 		var cancel context.CancelFunc
@@ -166,7 +156,7 @@ func (o *Observer) executeTask(task *implTask) error {
 	}
 
 	// Run task in closure to capture the panic
-	var panicValue interface{}
+	var panicValue any
 	err := func() (err error) {
 		start := time.Now()
 		defer func() {
@@ -230,18 +220,11 @@ func (o *Observer) executeTask(task *implTask) error {
 			}
 
 			// Run retry task
-			if !retryTask.Config().Concurrent {
-				err2 := o.observe(retryTask)
-				if err2 != nil {
-					return errors.Join(err, err2)
-				} else {
-					// recursive was successful
-					return nil
-				}
+			err2 := o.observe(retryTask)
+			if err2 != nil {
+				return errors.Join(err, err2)
 			} else {
-				go func() {
-					_ = o.observe(retryTask)
-				}()
+				return nil // successful recursive return
 			}
 		}
 	} else {

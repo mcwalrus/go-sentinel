@@ -52,7 +52,6 @@ func TestCircuitBreaker_DefaultCircuitBreaker(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:             time.Second,
 				MaxRetries:          3,
-				Concurrent:          false,
 				RecoverPanics:       true,
 				RetryStrategy:       RetryStrategyImmediate,
 				RetryCircuitBreaker: DefaultCircuitBreaker, // nil - allows all retries
@@ -90,7 +89,6 @@ func TestCircuitBreaker_DefaultCircuitBreaker(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:             time.Second,
 				MaxRetries:          2,
-				Concurrent:          false,
 				RecoverPanics:       true,
 				RetryStrategy:       RetryStrategyImmediate,
 				RetryCircuitBreaker: DefaultCircuitBreaker, // nil - allows all retries
@@ -136,7 +134,6 @@ func TestCircuitBreaker_DefaultCircuitBreaker(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:             time.Second,
 				MaxRetries:          5,
-				Concurrent:          false,
 				RecoverPanics:       true,
 				RetryStrategy:       RetryStrategyImmediate,
 				RetryCircuitBreaker: DefaultCircuitBreaker, // nil - allows all retries
@@ -177,7 +174,6 @@ func TestCircuitBreaker_ShortOnPanicCircuitBreaker(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:             time.Second,
 				MaxRetries:          3,
-				Concurrent:          false,
 				RecoverPanics:       true,
 				RetryStrategy:       RetryStrategyImmediate,
 				RetryCircuitBreaker: ShortOnPanicCircuitBreaker,
@@ -221,7 +217,6 @@ func TestCircuitBreaker_ShortOnPanicCircuitBreaker(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:             time.Second,
 				MaxRetries:          5, // Would normally retry 5 times
-				Concurrent:          false,
 				RecoverPanics:       true,
 				RetryStrategy:       RetryStrategyImmediate,
 				RetryCircuitBreaker: ShortOnPanicCircuitBreaker,
@@ -260,7 +255,6 @@ func TestCircuitBreaker_ShortOnPanicCircuitBreaker(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:             time.Second,
 				MaxRetries:          5,
-				Concurrent:          false,
 				RecoverPanics:       true,
 				RetryStrategy:       RetryStrategyImmediate,
 				RetryCircuitBreaker: ShortOnPanicCircuitBreaker,
@@ -304,7 +298,6 @@ func TestCircuitBreaker_ShortOnPanicCircuitBreaker(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:             time.Second,
 				MaxRetries:          3,
-				Concurrent:          false,
 				RecoverPanics:       true,
 				RetryStrategy:       RetryStrategyImmediate,
 				RetryCircuitBreaker: ShortOnPanicCircuitBreaker,
@@ -344,7 +337,6 @@ func TestCircuitBreaker_EdgeCases(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:             time.Second,
 				MaxRetries:          2,
-				Concurrent:          false,
 				RecoverPanics:       true,
 				RetryStrategy:       RetryStrategyImmediate,
 				RetryCircuitBreaker: nil, // nil should behave like DeafultCircuitBreaker
@@ -388,7 +380,6 @@ func TestCircuitBreaker_EdgeCases(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:             time.Second,
 				MaxRetries:          2,
-				Concurrent:          false,
 				RecoverPanics:       true,
 				RetryStrategy:       RetryStrategyImmediate,
 				RetryCircuitBreaker: customCircuitBreaker,

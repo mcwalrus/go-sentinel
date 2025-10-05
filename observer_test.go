@@ -12,6 +12,35 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
+// metricsCounts is a helper struct for verifying metrics counts.
+type metricsCounts struct {
+	Successes     float64
+	Errors        float64
+	TimeoutErrors float64
+	Panics        float64
+	Retries       float64
+}
+
+// Verify verifies an observer against it's expected metrics counts.
+func Verify(t *testing.T, observer *Observer, m metricsCounts) {
+	t.Helper()
+	if got := testutil.ToFloat64(observer.metrics.Successes); got != m.Successes {
+		t.Errorf("Expected Successes=%f, got %f", m.Successes, got)
+	}
+	if got := testutil.ToFloat64(observer.metrics.Errors); got != m.Errors {
+		t.Errorf("Expected Errors=%f, got %f", m.Errors, got)
+	}
+	if got := testutil.ToFloat64(observer.metrics.TimeoutErrors); got != m.TimeoutErrors {
+		t.Errorf("Expected TimeoutErrors=%f, got %f", m.TimeoutErrors, got)
+	}
+	if got := testutil.ToFloat64(observer.metrics.Panics); got != m.Panics {
+		t.Errorf("Expected Panics=%f, got %f", m.Panics, got)
+	}
+	if got := testutil.ToFloat64(observer.metrics.Retries); got != m.Retries {
+		t.Errorf("Expected Retries=%f, got %f", m.Retries, got)
+	}
+}
+
 // testTask is a test implementation of the Task interface.
 // It allows for task configuration, retry count, success/failure, and error handling.
 // It can execute either a custom function (fn) or use the built-in test logic.
@@ -137,7 +166,6 @@ func TestObserve_SuccessfulExecution(t *testing.T) {
 		cfg: TaskConfig{
 			Timeout:       time.Second,
 			MaxRetries:    0,
-			Concurrent:    false,
 			RecoverPanics: true,
 		},
 		success: true,
@@ -193,7 +221,6 @@ func TestObserve_ErrorHandling(t *testing.T) {
 		cfg: TaskConfig{
 			Timeout:       time.Second,
 			MaxRetries:    0,
-			Concurrent:    false,
 			RecoverPanics: false,
 		},
 		fn: func(ctx context.Context) error {
@@ -217,6 +244,27 @@ func TestObserve_ErrorHandling(t *testing.T) {
 	})
 }
 
+func TestObserve_RunFunc(t *testing.T) {
+	observer := NewObserver(testConfig(t))
+	registry := prometheus.NewRegistry()
+	observer.MustRegister(registry)
+
+	err := observer.RunFunc(func() error {
+		return errors.New("task failed")
+	})
+	if err == nil {
+		t.Errorf("Expected error, got nil")
+	}
+
+	Verify(t, observer, metricsCounts{
+		Successes:     0,
+		Errors:        1,
+		TimeoutErrors: 0,
+		Panics:        0,
+		Retries:       0,
+	})
+}
+
 func TestObserve_TimeoutHandling(t *testing.T) {
 	observer := NewObserver(testConfig(t))
 	registry := prometheus.NewRegistry()
@@ -226,7 +274,6 @@ func TestObserve_TimeoutHandling(t *testing.T) {
 		cfg: TaskConfig{
 			Timeout:       10 * time.Millisecond, // short timeout
 			MaxRetries:    0,
-			Concurrent:    false,
 			RecoverPanics: false,
 		},
 		fn: func(ctx context.Context) error {
@@ -261,7 +308,6 @@ func TestObserve_PanicRecovery(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:       time.Second,
 				MaxRetries:    0,
-				Concurrent:    false,
 				RecoverPanics: true, // Enable panic recovery
 			},
 			fn: func(ctx context.Context) error {
@@ -299,7 +345,6 @@ func TestObserve_PanicRecovery(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:       time.Second,
 				MaxRetries:    0,
-				Concurrent:    false,
 				RecoverPanics: false, // Disable panic recovery
 			},
 			fn: func(ctx context.Context) error {
@@ -338,7 +383,6 @@ func TestObserve_RetryLogic(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:       time.Second,
 				MaxRetries:    2,
-				Concurrent:    false,
 				RecoverPanics: false,
 				RetryStrategy: RetryStrategyImmediate,
 			},
@@ -381,7 +425,6 @@ func TestObserve_RetryLogic(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:       10 * time.Millisecond,
 				MaxRetries:    2,
-				Concurrent:    false,
 				RecoverPanics: false,
 				RetryStrategy: RetryStrategyImmediate,
 			},
@@ -430,7 +473,6 @@ func TestObserve_RetryLogic(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:       time.Second,
 				MaxRetries:    5,
-				Concurrent:    false,
 				RetryStrategy: RetryStrategyImmediate,
 				RetryCircuitBreaker: func(err error) bool {
 					// Break circuit on specific error
@@ -477,7 +519,6 @@ func TestObserve_RetryStrategy(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:    time.Second,
 				MaxRetries: 2,
-				Concurrent: false,
 				RetryStrategy: func(retryAttempt int) time.Duration {
 					retryStrategyCalls = append(retryStrategyCalls, retryAttempt)
 					return 1 * time.Millisecond
@@ -524,8 +565,7 @@ func TestObserve_InFlightMetrics(t *testing.T) {
 
 				task := &testTask{
 					cfg: TaskConfig{
-						Timeout:    time.Second,
-						Concurrent: false,
+						Timeout: time.Second,
 					},
 					fn: func(ctx context.Context) error {
 						<-startBarrier
@@ -563,43 +603,9 @@ func TestObserve_InFlightMetrics(t *testing.T) {
 			t.Errorf("Expected Successes=%d, got %f", numTasks, got)
 		}
 	})
-
-	t.Run("validate concurrent in-flight metrics", func(t *testing.T) {
-		task := &testTask{
-			cfg: TaskConfig{
-				Timeout:    time.Second,
-				Concurrent: false,
-			},
-			// During execution, we should have 1 task in flight
-			fn: func(ctx context.Context) error {
-				inFlight := testutil.ToFloat64(observer.metrics.InFlight)
-				if inFlight != 1 {
-					t.Errorf("Expected InFlight=1 during task execution, got %f", inFlight)
-				}
-				time.Sleep(10 * time.Millisecond)
-				return nil
-			},
-		}
-
-		// Before execution, should be 0
-		if got := testutil.ToFloat64(observer.metrics.InFlight); got != 0 {
-			t.Errorf("Expected InFlight=0 before execution, got %f", got)
-		}
-
-		// Execute task
-		err := observer.RunTask(task)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-
-		// After execution, should be 0 again
-		if got := testutil.ToFloat64(observer.metrics.InFlight); got != 0 {
-			t.Errorf("Expected InFlight=0 after execution, got %f", got)
-		}
-	})
 }
 
-func TestObserve_ConcurrentExecution(t *testing.T) {
+func TestObserve_Concurrent(t *testing.T) {
 	observer := NewObserver(testConfig(t))
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
@@ -612,8 +618,7 @@ func TestObserve_ConcurrentExecution(t *testing.T) {
 		executed := int32(0)
 		task := &testTask{
 			cfg: TaskConfig{
-				Timeout:    time.Second,
-				Concurrent: true,
+				Timeout: time.Second,
 			},
 			fn: func(ctx context.Context) error {
 				defer wg.Done()
@@ -622,7 +627,7 @@ func TestObserve_ConcurrentExecution(t *testing.T) {
 			},
 		}
 
-		for i := 0; i < numGoroutines; i++ {
+		for range numGoroutines {
 			go func() {
 				_ = observer.RunTask(task)
 			}()
@@ -717,18 +722,17 @@ func TestObserve_MetricsRecording(t *testing.T) {
 			},
 		},
 		{
-			name: "concurrent task with retries returning an error",
+			name: "Multiple retries task with error returned",
 			task: &testTask{
 				cfg: TaskConfig{
 					MaxRetries:    3,
-					Concurrent:    true,
 					RetryStrategy: RetryStrategyImmediate,
 				},
 				fn: func(ctx context.Context) error {
 					return errors.New("test error")
 				},
 			},
-			wantErr: false,
+			wantErr: true,
 			validate: func(t *testing.T, observer *Observer) {
 				time.Sleep(10 * time.Millisecond)
 				Verify(t, observer, metricsCounts{
@@ -744,6 +748,8 @@ func TestObserve_MetricsRecording(t *testing.T) {
 
 	for i, scenario := range scenarios {
 		t.Run(scenario.name, func(t *testing.T) {
+			t.Logf("Running scenario: %s", scenario.name)
+
 			observer := NewObserver(testConfig(t))
 			registry := prometheus.NewRegistry()
 			observer.MustRegister(registry)
@@ -861,62 +867,6 @@ func TestMultipleObservers(t *testing.T) {
 	})
 }
 
-func TestObserver_RunMethods(t *testing.T) {
-	observer := NewObserver(testConfig(t))
-	registry := prometheus.NewRegistry()
-	observer.MustRegister(registry)
-
-	testCases := []struct {
-		name       string
-		concurrent bool
-	}{
-		{"normal", false},
-		{"concurrent", true},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Test Run method
-			err := observer.Run(TaskConfig{Concurrent: tc.concurrent}, func(ctx context.Context) error {
-				return nil
-			})
-			if err != nil {
-				t.Errorf("Run failed: %v", err)
-			}
-
-			// Test RunFunc method
-			if tc.concurrent {
-				observer.cfg.DefaultTaskConfig = &TaskConfig{Concurrent: true}
-			}
-			err = observer.RunFunc(func() error {
-				return nil
-			})
-			if err != nil {
-				t.Errorf("RunFunc failed: %v", err)
-			}
-
-			// Test RunTask method
-			task := &testTask{
-				cfg:     TaskConfig{Concurrent: tc.concurrent},
-				success: true,
-			}
-			err = observer.RunTask(task)
-			if err != nil {
-				t.Errorf("RunTask failed: %v", err)
-			}
-
-			if tc.concurrent {
-				time.Sleep(10 * time.Millisecond)
-			}
-		})
-	}
-
-	// Verify metrics were recorded (at least 6 successful executions)
-	if got := testutil.ToFloat64(observer.metrics.Successes); got < 6 {
-		t.Errorf("Expected at least 6 successes, got %f", got)
-	}
-}
-
 func Benchmark_ObserverRun(b *testing.B) {
 
 	cfg := ObserverConfig{
@@ -931,7 +881,7 @@ func Benchmark_ObserverRun(b *testing.B) {
 	observer.MustRegister(registry)
 
 	b.Run("simple function", func(b *testing.B) {
-		cfg := TaskConfig{Concurrent: false}
+		cfg := TaskConfig{}
 		for i := 0; i < b.N; i++ {
 			_ = observer.Run(cfg, func(ctx context.Context) error {
 				return nil
@@ -940,31 +890,10 @@ func Benchmark_ObserverRun(b *testing.B) {
 	})
 
 	b.Run("function with work", func(b *testing.B) {
-		cfg := TaskConfig{Concurrent: false}
+		cfg := TaskConfig{}
 		for i := 0; i < b.N; i++ {
 			_ = observer.Run(cfg, func(ctx context.Context) error {
 				time.Sleep(time.Microsecond)
-				return nil
-			})
-		}
-	})
-
-	b.Run("concurrent functions", func(b *testing.B) {
-		cfg := TaskConfig{Concurrent: true}
-		for i := 0; i < b.N; i++ {
-			_ = observer.Run(cfg, func(ctx context.Context) error {
-				return nil
-			})
-		}
-	})
-
-	b.Run("with timeout", func(b *testing.B) {
-		cfg := TaskConfig{
-			Timeout:    time.Second,
-			Concurrent: false,
-		}
-		for i := 0; i < b.N; i++ {
-			_ = observer.Run(cfg, func(ctx context.Context) error {
 				return nil
 			})
 		}
@@ -978,8 +907,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 		observer.MustRegister(registry)
 		task := &testTask{
 			cfg: TaskConfig{
-				MaxRetries:    0, // No retries to avoid multiple panic attempts
-				Concurrent:    false,
+				MaxRetries:    0,
 				RecoverPanics: true,
 			},
 			fn: func(ctx context.Context) error {
@@ -1012,7 +940,6 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 		task := &testTask{
 			cfg: TaskConfig{
 				MaxRetries:    0, // No retries to avoid multiple panic attempts
-				Concurrent:    false,
 				RecoverPanics: false,
 			},
 			fn: func(ctx context.Context) error {
@@ -1038,31 +965,4 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 
 		_ = observer.RunTask(task)
 	})
-}
-
-type metricsCounts struct {
-	Successes     float64
-	Errors        float64
-	TimeoutErrors float64
-	Panics        float64
-	Retries       float64
-}
-
-func Verify(t *testing.T, observer *Observer, m metricsCounts) {
-	t.Helper()
-	if got := testutil.ToFloat64(observer.metrics.Successes); got != m.Successes {
-		t.Errorf("Expected Successes=%f, got %f", m.Successes, got)
-	}
-	if got := testutil.ToFloat64(observer.metrics.Errors); got != m.Errors {
-		t.Errorf("Expected Errors=%f, got %f", m.Errors, got)
-	}
-	if got := testutil.ToFloat64(observer.metrics.TimeoutErrors); got != m.TimeoutErrors {
-		t.Errorf("Expected TimeoutErrors=%f, got %f", m.TimeoutErrors, got)
-	}
-	if got := testutil.ToFloat64(observer.metrics.Panics); got != m.Panics {
-		t.Errorf("Expected Panics=%f, got %f", m.Panics, got)
-	}
-	if got := testutil.ToFloat64(observer.metrics.Retries); got != m.Retries {
-		t.Errorf("Expected Retries=%f, got %f", m.Retries, got)
-	}
 }
