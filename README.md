@@ -244,44 +244,6 @@ func main() {
 
 Note panic occurrences are counted even when `RecoverPanics=false`. Enabling panic recovery should be explicitly set through TaskConfig in case panic propagation should signal specific handling up the stack, or other actions to be taken by the application. `RecoverPanics=true` when tasks are observed through the Observer method [RunFunc](https://pkg.go.dev/github.com/mcwalrus/go-sentinel#Observer.RunFunc).
 
-### Concurrent Mode
-
-Concurrent tasks can be executed and observed through the observer:
-
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-    "os"
-    
-    sentinel "github.com/mcwalrus/go-sentinel"
-    "github.com/prometheus/client_golang/prometheus"
-)
-
-func main() {
-    observer := sentinel.NewObserver(sentinel.DefaultConfig())
-    registry := prometheus.NewRegistry()
-    observer.MustRegister(registry)
-    
-    // Concurrency task perform through go-routinue
-    config := sentinel.TaskConfig{
-        Concurrent:    true,
-    }
-    // Errors from concurrent tasks are not returned
-    err := observer.Run(config, func(ctx context.Context) error {
-        return fmt.Errorf("error occurred")
-    })
-    if err != nil {
-        // It would be ok to ignore the error instead
-        panic("no error expected, got", err)
-    }
-}
-```
-
-Note the error will be counted through the `errors_total` counters.
-
 ### Task Implementation
 
 An alternative means to describe tasks through `sentinel.Task` interface:
