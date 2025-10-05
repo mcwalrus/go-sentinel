@@ -199,12 +199,13 @@ func (o *Observer) executeTask(task *implTask) error {
 
 		// Handle retries
 		if task.Config().MaxRetries > 0 {
-			o.metrics.Retries.Inc()
 			cfg := task.Config()
 
 			// Maximum retries reached
 			if task.retryCount >= cfg.MaxRetries {
 				return err
+			} else {
+				o.metrics.Retries.Inc()
 			}
 
 			// Try circuit break
