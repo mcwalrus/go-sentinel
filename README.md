@@ -10,12 +10,11 @@ Sentinel provides reliability handling and observability monitoring in Go applic
 
 ## Features
 
-- **Prometheus Metrics**: Observability of tasks from pre-defined metrics
+- **Prometheus Metrics**: Observe tasks from pre-defined metrics
 - **Composable Pattern**: Multiple observers can be employed at once
-- **Retry Logic**: Configure retry strategies with circuit breaking support
-- **Context Timeout**: Timeout support for handling task deadlines
+- **Retry Logic**: Enables retry strategies with circuit breaking support
 - **Panic Recovery**: Panic recovery safety or standard panic propagation
-- **Concurrent Mode**: Synchronous or asynchronous task execution
+- **Context Timeout**: Timeout support for handling task deadlines
 
 ## Metrics
 
