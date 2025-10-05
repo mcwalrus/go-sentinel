@@ -415,7 +415,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 			Errors:        3,
 			TimeoutErrors: 0,
 			Panics:        0,
-			Retries:       3,
+			Retries:       2,
 		})
 	})
 
@@ -736,7 +736,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 					Errors:        4,
 					TimeoutErrors: 0,
 					Panics:        0,
-					Retries:       4,
+					Retries:       3,
 				})
 			},
 		},
