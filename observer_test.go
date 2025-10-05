@@ -150,12 +150,14 @@ func TestObserve_SuccessfulExecution(t *testing.T) {
 	}
 
 	// Verify metrics
-	if got := testutil.ToFloat64(observer.metrics.Successes); got != 1 {
-		t.Errorf("Expected Successes=1, got %f", got)
-	}
-	if got := testutil.ToFloat64(observer.metrics.Errors); got != 0 {
-		t.Errorf("Expected Errors=0, got %f", got)
-	}
+	Verify(t, observer, metricsCounts{
+		Successes:     1,
+		Errors:        0,
+		TimeoutErrors: 0,
+		Panics:        0,
+		Retries:       0,
+	})
+
 	if got := testutil.ToFloat64(observer.metrics.InFlight); got != 0 {
 		t.Errorf("Expected InFlight=0 after completion, got %f", got)
 	}
@@ -206,15 +208,13 @@ func TestObserve_ErrorHandling(t *testing.T) {
 	}
 
 	// Verify metrics
-	if got := testutil.ToFloat64(observer.metrics.Successes); got != 0 {
-		t.Errorf("Expected Successes=0, got %f", got)
-	}
-	if got := testutil.ToFloat64(observer.metrics.Errors); got != 1 {
-		t.Errorf("Expected Errors=1, got %f", got)
-	}
-	if got := testutil.ToFloat64(observer.metrics.TimeoutErrors); got != 0 {
-		t.Errorf("Expected TimeoutErrors=0, got %f", got)
-	}
+	Verify(t, observer, metricsCounts{
+		Successes:     0,
+		Errors:        1,
+		TimeoutErrors: 0,
+		Panics:        0,
+		Retries:       0,
+	})
 }
 
 func TestObserve_TimeoutHandling(t *testing.T) {
@@ -242,15 +242,13 @@ func TestObserve_TimeoutHandling(t *testing.T) {
 	}
 
 	// Verify metrics
-	if got := testutil.ToFloat64(observer.metrics.Successes); got != 0 {
-		t.Errorf("Expected Successes=0, got %f", got)
-	}
-	if got := testutil.ToFloat64(observer.metrics.Errors); got != 1 {
-		t.Errorf("Expected Errors=1, got %f", got)
-	}
-	if got := testutil.ToFloat64(observer.metrics.TimeoutErrors); got != 1 {
-		t.Errorf("Expected TimeoutErrors=1, got %f", got)
-	}
+	Verify(t, observer, metricsCounts{
+		Successes:     0,
+		Errors:        1,
+		TimeoutErrors: 1,
+		Panics:        0,
+		Retries:       0,
+	})
 }
 
 func TestObserve_PanicRecovery(t *testing.T) {
@@ -283,9 +281,13 @@ func TestObserve_PanicRecovery(t *testing.T) {
 		}
 
 		// Verify panic was recorded
-		if got := testutil.ToFloat64(observer.metrics.Panics); got != 1 {
-			t.Errorf("Expected Panics=1, got %f", got)
-		}
+		Verify(t, observer, metricsCounts{
+			Successes:     0,
+			Errors:        1,
+			TimeoutErrors: 0,
+			Panics:        1,
+			Retries:       0,
+		})
 	})
 
 	t.Run("with panic recovery disabled", func(t *testing.T) {
@@ -311,9 +313,13 @@ func TestObserve_PanicRecovery(t *testing.T) {
 				t.Error("Expected panic to propagate when RecoverPanics=false")
 			} else {
 				// Verify panic was still recorded even though it propagated
-				if got := testutil.ToFloat64(observer.metrics.Panics); got != 1 {
-					t.Errorf("Expected Panics=1, got %f", got)
-				}
+				Verify(t, observer, metricsCounts{
+					Successes:     0,
+					Errors:        1,
+					TimeoutErrors: 0,
+					Panics:        1,
+					Retries:       0,
+				})
 			}
 		}()
 
@@ -355,15 +361,13 @@ func TestObserve_RetryLogic(t *testing.T) {
 		}
 
 		// Verify metrics: one retry attempt was made
-		if got := testutil.ToFloat64(observer.metrics.Errors); got != 1 {
-			t.Errorf("Expected Errors=1, got %f", got)
-		}
-		if got := testutil.ToFloat64(observer.metrics.Retries); got != 1 {
-			t.Errorf("Expected Retries=1, got %f", got)
-		}
-		if got := testutil.ToFloat64(observer.metrics.Successes); got != 1 {
-			t.Errorf("Expected Successes=1, got %f", got)
-		}
+		Verify(t, observer, metricsCounts{
+			Successes:     1,
+			Errors:        1,
+			TimeoutErrors: 0,
+			Panics:        0,
+			Retries:       1,
+		})
 	})
 
 	t.Run("exhausted retries", func(t *testing.T) {
@@ -406,15 +410,13 @@ func TestObserve_RetryLogic(t *testing.T) {
 			t.Errorf("Expected error to contain %v, got %v", expectedErr, err)
 		}
 
-		if got := testutil.ToFloat64(observer.metrics.Errors); got != 3 {
-			t.Errorf("Expected Errors=3, got %f", got)
-		}
-		if got := testutil.ToFloat64(observer.metrics.Retries); got != 3 {
-			t.Errorf("Expected Retries=3, got %f", got)
-		}
-		if got := testutil.ToFloat64(observer.metrics.Successes); got != 0 {
-			t.Errorf("Expected Successes=0, got %f", got)
-		}
+		Verify(t, observer, metricsCounts{
+			Successes:     0,
+			Errors:        3,
+			TimeoutErrors: 0,
+			Panics:        0,
+			Retries:       3,
+		})
 	})
 
 	t.Run("circuit breaker stops retries", func(t *testing.T) {
@@ -454,15 +456,13 @@ func TestObserve_RetryLogic(t *testing.T) {
 		}
 
 		// Verify three retries were attempted due to circuit breaker
-		if got := testutil.ToFloat64(observer.metrics.Retries); got != 3 {
-			t.Errorf("Expected Retries=3 due to circuit breaker, got %f", got)
-		}
-		if got := testutil.ToFloat64(observer.metrics.Errors); got != 3 {
-			t.Errorf("Expected Errors=3 due to circuit breaker, got %f", got)
-		}
-		if got := testutil.ToFloat64(observer.metrics.Successes); got != 0 {
-			t.Errorf("Expected Successes=0 due to circuit breaker, got %f", got)
-		}
+		Verify(t, observer, metricsCounts{
+			Successes:     0,
+			Errors:        3,
+			TimeoutErrors: 0,
+			Panics:        0,
+			Retries:       3,
+		})
 	})
 }
 
@@ -635,9 +635,13 @@ func TestObserve_ConcurrentExecution(t *testing.T) {
 		}
 
 		// Verify all tasks were recorded as successes
-		if got := testutil.ToFloat64(observer.metrics.Successes); got != float64(numGoroutines) {
-			t.Errorf("Expected Successes=%d, got %f", numGoroutines, got)
-		}
+		Verify(t, observer, metricsCounts{
+			Successes:     float64(numGoroutines),
+			Errors:        0,
+			TimeoutErrors: 0,
+			Panics:        0,
+			Retries:       0,
+		})
 	})
 }
 
@@ -663,9 +667,13 @@ func TestObserve_MetricsRecording(t *testing.T) {
 			},
 			wantErr: false,
 			validate: func(t *testing.T, observer *Observer) {
-				if got := testutil.ToFloat64(observer.metrics.Successes); got != 1 {
-					t.Errorf("Expected Successes=1, got %f", got)
-				}
+				Verify(t, observer, metricsCounts{
+					Successes:     1,
+					Errors:        0,
+					TimeoutErrors: 0,
+					Panics:        0,
+					Retries:       0,
+				})
 			},
 		},
 		{
@@ -678,9 +686,13 @@ func TestObserve_MetricsRecording(t *testing.T) {
 			},
 			wantErr: true,
 			validate: func(t *testing.T, observer *Observer) {
-				if got := testutil.ToFloat64(observer.metrics.Errors); got != 1 {
-					t.Errorf("Expected Errors=1, got %f", got)
-				}
+				Verify(t, observer, metricsCounts{
+					Successes:     0,
+					Errors:        1,
+					TimeoutErrors: 0,
+					Panics:        0,
+					Retries:       0,
+				})
 			},
 		},
 		{
@@ -695,9 +707,13 @@ func TestObserve_MetricsRecording(t *testing.T) {
 			},
 			wantErr: true,
 			validate: func(t *testing.T, observer *Observer) {
-				if got := testutil.ToFloat64(observer.metrics.Panics); got != 1 {
-					t.Errorf("Expected Panics=1, got %f", got)
-				}
+				Verify(t, observer, metricsCounts{
+					Successes:     0,
+					Errors:        1,
+					TimeoutErrors: 0,
+					Panics:        1,
+					Retries:       0,
+				})
 			},
 		},
 		{
@@ -715,9 +731,13 @@ func TestObserve_MetricsRecording(t *testing.T) {
 			wantErr: false,
 			validate: func(t *testing.T, observer *Observer) {
 				time.Sleep(10 * time.Millisecond)
-				if got := testutil.ToFloat64(observer.metrics.Errors); got != 4 {
-					t.Errorf("Expected Errors=4, got %f", got)
-				}
+				Verify(t, observer, metricsCounts{
+					Successes:     0,
+					Errors:        4,
+					TimeoutErrors: 0,
+					Panics:        0,
+					Retries:       4,
+				})
 			},
 		},
 	}
@@ -796,15 +816,13 @@ func TestObserve_ContextTimeout(t *testing.T) {
 	}
 
 	// Verify timeout was recorded
-	if got := testutil.ToFloat64(observer.metrics.TimeoutErrors); got != 1 {
-		t.Errorf("Expected TimeoutErrors=1, got %f", got)
-	}
-	if got := testutil.ToFloat64(observer.metrics.Errors); got != 1 {
-		t.Errorf("Expected Errors=1, got %f", got)
-	}
-	if got := testutil.ToFloat64(observer.metrics.Successes); got != 0 {
-		t.Errorf("Expected Successes=0, got %f", got)
-	}
+	Verify(t, observer, metricsCounts{
+		Successes:     0,
+		Errors:        1,
+		TimeoutErrors: 1,
+		Panics:        0,
+		Retries:       0,
+	})
 }
 
 func TestMultipleObservers(t *testing.T) {
@@ -827,12 +845,20 @@ func TestMultipleObservers(t *testing.T) {
 		return nil
 	})
 
-	if got := testutil.ToFloat64(observer.metrics.Successes); got != 1 {
-		t.Errorf("Expected Successes=1, got %f", got)
-	}
-	if got := testutil.ToFloat64(observer2.metrics.Successes); got != 1 {
-		t.Errorf("Expected Successes=1, got %f", got)
-	}
+	Verify(t, observer, metricsCounts{
+		Successes:     1,
+		Errors:        0,
+		TimeoutErrors: 0,
+		Panics:        0,
+		Retries:       0,
+	})
+	Verify(t, observer2, metricsCounts{
+		Successes:     1,
+		Errors:        0,
+		TimeoutErrors: 0,
+		Panics:        0,
+		Retries:       0,
+	})
 }
 
 func TestObserver_RunMethods(t *testing.T) {
@@ -943,4 +969,100 @@ func Benchmark_ObserverRun(b *testing.B) {
 			})
 		}
 	})
+}
+
+func TestObserver_TestPanicHandling(t *testing.T) {
+	t.Run("with panic recovery enabled", func(t *testing.T) {
+		observer := NewObserver(testConfig(t))
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
+		task := &testTask{
+			cfg: TaskConfig{
+				MaxRetries:    0, // No retries to avoid multiple panic attempts
+				Concurrent:    false,
+				RecoverPanics: true,
+			},
+			fn: func(ctx context.Context) error {
+				panic("test panic")
+			},
+		}
+
+		err := observer.RunTask(task)
+		if err == nil {
+			t.Errorf("Expected error indicating panic occurred, got nil")
+		}
+		if err != nil && err.Error() != "panic occurred for task execution" {
+			t.Errorf("Expected panic error message, got %v", err)
+		}
+
+		Verify(t, observer, metricsCounts{
+			Successes:     0,
+			Errors:        1,
+			TimeoutErrors: 0,
+			Panics:        1,
+			Retries:       0,
+		})
+	})
+
+	t.Run("with panic recovery disabled", func(t *testing.T) {
+		observer := NewObserver(testConfig(t))
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
+
+		task := &testTask{
+			cfg: TaskConfig{
+				MaxRetries:    0, // No retries to avoid multiple panic attempts
+				Concurrent:    false,
+				RecoverPanics: false,
+			},
+			fn: func(ctx context.Context) error {
+				panic("test panic")
+			},
+		}
+
+		// This should panic and be caught by our test
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("Expected panic to propagate when RecoverPanics=false")
+			} else {
+				// Verify panic was still recorded even though it propagated
+				Verify(t, observer, metricsCounts{
+					Successes:     0,
+					Errors:        1,
+					TimeoutErrors: 0,
+					Panics:        1,
+					Retries:       0,
+				})
+			}
+		}()
+
+		_ = observer.RunTask(task)
+	})
+}
+
+type metricsCounts struct {
+	Successes     float64
+	Errors        float64
+	TimeoutErrors float64
+	Panics        float64
+	Retries       float64
+}
+
+func Verify(t *testing.T, observer *Observer, m metricsCounts) {
+	t.Helper()
+	if got := testutil.ToFloat64(observer.metrics.Successes); got != m.Successes {
+		t.Errorf("Expected Successes=%f, got %f", m.Successes, got)
+	}
+	if got := testutil.ToFloat64(observer.metrics.Errors); got != m.Errors {
+		t.Errorf("Expected Errors=%f, got %f", m.Errors, got)
+	}
+	if got := testutil.ToFloat64(observer.metrics.TimeoutErrors); got != m.TimeoutErrors {
+		t.Errorf("Expected TimeoutErrors=%f, got %f", m.TimeoutErrors, got)
+	}
+	if got := testutil.ToFloat64(observer.metrics.Panics); got != m.Panics {
+		t.Errorf("Expected Panics=%f, got %f", m.Panics, got)
+	}
+	if got := testutil.ToFloat64(observer.metrics.Retries); got != m.Retries {
+		t.Errorf("Expected Retries=%f, got %f", m.Retries, got)
+	}
 }

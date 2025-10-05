@@ -165,7 +165,8 @@ func (o *Observer) executeTask(task *implTask) error {
 		defer cancel()
 	}
 
-	// Run task
+	// Run task in closure to capture the panic
+	var panicValue interface{}
 	err := func() (err error) {
 		start := time.Now()
 		defer func() {
@@ -173,15 +174,12 @@ func (o *Observer) executeTask(task *implTask) error {
 				time.Since(start).Seconds(),
 			)
 			if r := recover(); r != nil {
-				o.metrics.Panics.Inc()
-				if task.Config().RecoverPanics {
-					err = ErrPanicOccurred
-				} else {
-					panic(r) // throw panic
-				}
+				panicValue = r
+				err = ErrPanicOccurred{panic: r}
 			}
 		}()
-		return task.Execute(ctx)
+		err = task.Execute(ctx)
+		return err
 	}()
 
 	// Handle errors
@@ -189,6 +187,14 @@ func (o *Observer) executeTask(task *implTask) error {
 		o.metrics.Errors.Inc()
 		if errors.Is(err, context.DeadlineExceeded) {
 			o.metrics.TimeoutErrors.Inc()
+		}
+
+		// Handle panics
+		if panicValue != nil {
+			o.metrics.Panics.Inc()
+			if !task.Config().RecoverPanics {
+				panic(panicValue) // re-throw panic
+			}
 		}
 
 		// Handle retries
@@ -222,6 +228,7 @@ func (o *Observer) executeTask(task *implTask) error {
 				retryCount: task.retryCount + 1,
 			}
 
+			// Run retry task
 			if !retryTask.Config().Concurrent {
 				err2 := o.observe(retryTask)
 				if err2 != nil {
