@@ -384,7 +384,6 @@ func TestObserve_RetryLogic(t *testing.T) {
 				Timeout:       time.Second,
 				MaxRetries:    2,
 				RecoverPanics: false,
-				RetryStrategy: RetryStrategyImmediate,
 			},
 			fn: func(ctx context.Context) error {
 				attemptCount++
@@ -426,7 +425,6 @@ func TestObserve_RetryLogic(t *testing.T) {
 				Timeout:       10 * time.Millisecond,
 				MaxRetries:    2,
 				RecoverPanics: false,
-				RetryStrategy: RetryStrategyImmediate,
 			},
 			fn: func(ctx context.Context) error {
 				attemptCount++
@@ -471,9 +469,8 @@ func TestObserve_RetryLogic(t *testing.T) {
 		expectedErr := errors.New("circuit breaker error")
 		task := &testTask{
 			cfg: TaskConfig{
-				Timeout:       time.Second,
-				MaxRetries:    5,
-				RetryStrategy: RetryStrategyImmediate,
+				Timeout:    time.Second,
+				MaxRetries: 5,
 				RetryCircuitBreaker: func(err error) bool {
 					// Break circuit on specific error
 					return errors.Is(err, expectedErr)
@@ -665,7 +662,6 @@ func TestObserve_MetricsRecording(t *testing.T) {
 		{
 			name: "successful task",
 			task: &testTask{
-				cfg: defaultTaskConfig(),
 				fn: func(ctx context.Context) error {
 					return nil
 				},
@@ -684,7 +680,6 @@ func TestObserve_MetricsRecording(t *testing.T) {
 		{
 			name: "failed task",
 			task: &testTask{
-				cfg: defaultTaskConfig(),
 				fn: func(ctx context.Context) error {
 					return errors.New("task failed")
 				},
@@ -725,8 +720,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 			name: "Multiple retries task with error returned",
 			task: &testTask{
 				cfg: TaskConfig{
-					MaxRetries:    3,
-					RetryStrategy: RetryStrategyImmediate,
+					MaxRetries: 3,
 				},
 				fn: func(ctx context.Context) error {
 					return errors.New("test error")

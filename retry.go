@@ -8,15 +8,9 @@ import "time"
 type RetryStrategy func(int) time.Duration
 
 var (
-	_ RetryStrategy = RetryStrategyImmediate
 	_ RetryStrategy = RetryStrategyLinearBackoff(0)
 	_ RetryStrategy = RetryStrategyExponentialBackoff(0)
 )
-
-// RetryStrategyImmediate is a retry strategy that performs immediately with no delay.
-func RetryStrategyImmediate(retries int) time.Duration {
-	return 0
-}
 
 // RetryStrategyLinearBackoff returns a retry strategy that implements linear backoff.
 func RetryStrategyLinearBackoff(wait time.Duration) RetryStrategy {

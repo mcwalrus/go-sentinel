@@ -8,13 +8,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
-func testConfig(t *testing.T) ObserverConfig {
+func testConfig(t *testing.T) observerConfig {
 	t.Helper()
-	return ObserverConfig{
-		Namespace:       "test",
-		Subsystem:       "metrics",
-		Description:     "test operations",
-		BucketDurations: []float64{0.01, 0.1, 1, 10, 100},
+	return observerConfig{
+		namespace:       "test",
+		subsystem:       "metrics",
+		description:     "test operations",
+		bucketDurations: []float64{0.01, 0.1, 1, 10, 100},
 	}
 }
 
@@ -173,16 +173,16 @@ func TestMetricUpdates(t *testing.T) {
 func TestMetricLabels(t *testing.T) {
 	tests := []struct {
 		name     string
-		cfg      ObserverConfig
+		cfg      observerConfig
 		expected map[string]string
 	}{
 		{
 			name: "no namespace or subsystem",
-			cfg: ObserverConfig{
-				Namespace:       "",
-				Subsystem:       "",
-				Description:     "tasks",
-				BucketDurations: []float64{0.1, 1},
+			cfg: observerConfig{
+				namespace:       "",
+				subsystem:       "",
+				description:     "tasks",
+				bucketDurations: []float64{0.1, 1},
 			},
 			expected: map[string]string{
 				"in_flight":         "in_flight",
@@ -196,11 +196,11 @@ func TestMetricLabels(t *testing.T) {
 		},
 		{
 			name: "with namespace and subsystem",
-			cfg: ObserverConfig{
-				Namespace:       "myapp",
-				Subsystem:       "workers",
-				Description:     "background tasks",
-				BucketDurations: []float64{0.1, 1},
+			cfg: observerConfig{
+				namespace:       "myapp",
+				subsystem:       "workers",
+				description:     "background tasks",
+				bucketDurations: []float64{0.1, 1},
 			},
 			expected: map[string]string{
 				"in_flight":         "myapp_workers_in_flight",
@@ -214,11 +214,11 @@ func TestMetricLabels(t *testing.T) {
 		},
 		{
 			name: "subsystem only",
-			cfg: ObserverConfig{
-				Namespace:       "",
-				Subsystem:       "api",
-				Description:     "API calls",
-				BucketDurations: []float64{0.1, 1},
+			cfg: observerConfig{
+				namespace:       "",
+				subsystem:       "api",
+				description:     "API calls",
+				bucketDurations: []float64{0.1, 1},
 			},
 			expected: map[string]string{
 				"in_flight":         "api_in_flight",
@@ -258,11 +258,11 @@ func TestMetricLabels(t *testing.T) {
 }
 
 func TestMetricHelpText(t *testing.T) {
-	cfg := ObserverConfig{
-		Namespace:       "",
-		Subsystem:       "",
-		Description:     "test operations",
-		BucketDurations: []float64{0.1, 1},
+	cfg := observerConfig{
+		namespace:       "",
+		subsystem:       "",
+		description:     "test operations",
+		bucketDurations: []float64{0.1, 1},
 	}
 
 	m := newMetrics(cfg)

@@ -78,7 +78,7 @@ func (task *BackgroundTask) Config() sentinel.TaskConfig {
 
 // Execute background tasks:
 // - Simulate background processing (2-10 seconds)
-// - Fail occasionally to show retry behavior
+// - Fail occasionally to show retry behaviour
 // - Complete the task successfully
 func (task *BackgroundTask) Execute(ctx context.Context) error {
 	limitChan <- struct{}{}
@@ -113,7 +113,6 @@ func (task *CriticalTask) Config() sentinel.TaskConfig {
 		Timeout:       5 * time.Second,
 		RecoverPanics: true,
 		MaxRetries:    2,
-		RetryStrategy: sentinel.RetryStrategyImmediate,
 	}
 }
 

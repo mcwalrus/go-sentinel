@@ -46,7 +46,7 @@ func (task *ProcessingTask) Config() sentinel.TaskConfig {
 		Timeout:       5 * time.Second,
 		RecoverPanics: true,
 		MaxRetries:    2,
-		RetryStrategy: sentinel.RetryStrategyImmediate,
+		RetryStrategy: sentinel.RetryStrategyLinearBackoff(1 * time.Second),
 	}
 }
 

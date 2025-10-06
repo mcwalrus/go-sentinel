@@ -53,7 +53,6 @@ func TestCircuitBreaker_DefaultCircuitBreaker(t *testing.T) {
 				Timeout:             time.Second,
 				MaxRetries:          3,
 				RecoverPanics:       true,
-				RetryStrategy:       RetryStrategyImmediate,
 				RetryCircuitBreaker: DefaultCircuitBreaker, // nil - allows all retries
 			},
 			shouldSucceed: true, // succeed after 3 attempts
@@ -90,7 +89,6 @@ func TestCircuitBreaker_DefaultCircuitBreaker(t *testing.T) {
 				Timeout:             time.Second,
 				MaxRetries:          2,
 				RecoverPanics:       true,
-				RetryStrategy:       RetryStrategyImmediate,
 				RetryCircuitBreaker: DefaultCircuitBreaker, // nil - allows all retries
 			},
 			shouldPanic:    true,
@@ -135,7 +133,6 @@ func TestCircuitBreaker_DefaultCircuitBreaker(t *testing.T) {
 				Timeout:             time.Second,
 				MaxRetries:          5,
 				RecoverPanics:       true,
-				RetryStrategy:       RetryStrategyImmediate,
 				RetryCircuitBreaker: DefaultCircuitBreaker, // nil - allows all retries
 			},
 			shouldSucceed: false, // never succeed
@@ -175,7 +172,6 @@ func TestCircuitBreaker_ShortOnPanicCircuitBreaker(t *testing.T) {
 				Timeout:             time.Second,
 				MaxRetries:          3,
 				RecoverPanics:       true,
-				RetryStrategy:       RetryStrategyImmediate,
 				RetryCircuitBreaker: ShortOnPanicCircuitBreaker,
 			},
 			shouldSucceed: true, // succeed after 3 attempts
@@ -218,7 +214,6 @@ func TestCircuitBreaker_ShortOnPanicCircuitBreaker(t *testing.T) {
 				Timeout:             time.Second,
 				MaxRetries:          5, // Would normally retry 5 times
 				RecoverPanics:       true,
-				RetryStrategy:       RetryStrategyImmediate,
 				RetryCircuitBreaker: ShortOnPanicCircuitBreaker,
 			},
 			shouldPanic:    true,
@@ -256,7 +251,6 @@ func TestCircuitBreaker_ShortOnPanicCircuitBreaker(t *testing.T) {
 				Timeout:             time.Second,
 				MaxRetries:          5,
 				RecoverPanics:       true,
-				RetryStrategy:       RetryStrategyImmediate,
 				RetryCircuitBreaker: ShortOnPanicCircuitBreaker,
 			},
 			shouldPanic:    true,
@@ -299,7 +293,6 @@ func TestCircuitBreaker_ShortOnPanicCircuitBreaker(t *testing.T) {
 				Timeout:             time.Second,
 				MaxRetries:          3,
 				RecoverPanics:       true,
-				RetryStrategy:       RetryStrategyImmediate,
 				RetryCircuitBreaker: ShortOnPanicCircuitBreaker,
 			},
 			shouldSucceed: false, // never succeed, but no panics
@@ -338,7 +331,6 @@ func TestCircuitBreaker_EdgeCases(t *testing.T) {
 				Timeout:             time.Second,
 				MaxRetries:          2,
 				RecoverPanics:       true,
-				RetryStrategy:       RetryStrategyImmediate,
 				RetryCircuitBreaker: nil, // nil should behave like DeafultCircuitBreaker
 			},
 			shouldPanic:    true,
@@ -381,7 +373,6 @@ func TestCircuitBreaker_EdgeCases(t *testing.T) {
 				Timeout:             time.Second,
 				MaxRetries:          2,
 				RecoverPanics:       true,
-				RetryStrategy:       RetryStrategyImmediate,
 				RetryCircuitBreaker: customCircuitBreaker,
 			},
 			shouldPanic:    true,

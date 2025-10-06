@@ -61,7 +61,7 @@ import (
 
 func main() {
     // Observer with default configuration
-    observer := sentinel.NewObserver(sentinel.DefaultConfig())
+    observer := sentinel.NewObserver()
 
     // Register observer to a registry
     registry := prometheus.NewRegistry()
@@ -96,7 +96,7 @@ import (
 )
 
 func main() {
-    observer := sentinel.NewObserver(sentinel.DefaultConfig())
+    observer := sentinel.NewObserver()
     registry := prometheus.NewRegistry()
     observer.MustRegister(registry)
     
@@ -133,7 +133,7 @@ import (
 )
 
 func main() {
-    observer := sentinel.NewObserver(sentinel.DefaultConfig())
+    observer := sentinel.NewObserver()
     registry := prometheus.NewRegistry()
     observer.MustRegister(registry)
     
@@ -172,7 +172,7 @@ import (
 )
 
 func main() {
-    observer := sentinel.NewObserver(sentinel.DefaultConfig())
+    observer := sentinel.NewObserver()
     registry := prometheus.NewRegistry()
     observer.MustRegister(registry)
     
@@ -218,7 +218,7 @@ import (
 )
 
 func main() {
-    observer := sentinel.NewObserver(sentinel.DefaultConfig())
+    observer := sentinel.NewObserver()
     registry := prometheus.NewRegistry()
     observer.MustRegister(registry)
     
@@ -233,7 +233,7 @@ func main() {
     
     // An error is returned after recovery showing panic occurred
     if err != nil {
-        fmt.Printf("Task completed with recovered panic: %v\n", err)
+        fmt.Printf("task completed with recovered panic: %v\n", err)
     } else {
         panic("expected error, but got nil")
     }
@@ -293,11 +293,7 @@ import (
 )
 
 func main() {
-    observer := sentinel.NewObserver(sentinel.ObserverConfig{
-        Namespace: "myapp",
-        Subsystem: "workers",
-    })
-    
+    observer := sentinel.NewObserver()
     registry := prometheus.NewRegistry()
     observer.MustRegister(registry)
     
@@ -310,7 +306,10 @@ func main() {
         }
     }()
     
-    // Your application code...
+    // Your application code ...
+    for range time.NewTicker(3 * time.Second).C {
+        _ = observer.RunFunc(doRun())
+    }
 }
 ```
 

@@ -5,30 +5,6 @@ import (
 	"time"
 )
 
-func TestRetryStrategyImmediate(t *testing.T) {
-	tests := []struct {
-		retries  int
-		expected time.Duration
-	}{
-		{0, 0},
-		{1, 0},
-		{5, 0},
-		{100, 0},
-	}
-
-	for _, tt := range tests {
-		t.Run("", func(t *testing.T) {
-			result := RetryStrategyImmediate(tt.retries)
-			if result != tt.expected {
-				t.Errorf(
-					"RetryStrategyImmediate(%d) = %v, expected %v",
-					tt.retries, result, tt.expected,
-				)
-			}
-		})
-	}
-}
-
 func TestRetryStrategyLinearBackoff(t *testing.T) {
 	wait := 100 * time.Millisecond
 	strategy := RetryStrategyLinearBackoff(wait)

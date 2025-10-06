@@ -28,59 +28,64 @@ type metrics struct {
 }
 
 // newMetrics creates a new metrics instance with the given configuration.
-func newMetrics(cfg ObserverConfig) *metrics {
-	return &metrics{
+func newMetrics(cfg observerConfig) *metrics {
+	m := &metrics{
 		InFlight: prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace:   cfg.Namespace,
-			Subsystem:   cfg.Subsystem,
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
 			Name:        "in_flight",
-			Help:        fmt.Sprintf("Number of observed %s in flight", cfg.Description),
-			ConstLabels: cfg.ConstLabels,
+			Help:        fmt.Sprintf("Number of observed %s in flight", cfg.description),
+			ConstLabels: cfg.constLabels,
 		}),
 		Successes: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace:   cfg.Namespace,
-			Subsystem:   cfg.Subsystem,
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
 			Name:        "successes_total",
-			Help:        fmt.Sprintf("Number of successes from observed %s", cfg.Description),
-			ConstLabels: cfg.ConstLabels,
+			Help:        fmt.Sprintf("Number of successes from observed %s", cfg.description),
+			ConstLabels: cfg.constLabels,
 		}),
 		Errors: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace:   cfg.Namespace,
-			Subsystem:   cfg.Subsystem,
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
 			Name:        "errors_total",
-			Help:        fmt.Sprintf("Number of errors from observed %s", cfg.Description),
-			ConstLabels: cfg.ConstLabels,
+			Help:        fmt.Sprintf("Number of errors from observed %s", cfg.description),
+			ConstLabels: cfg.constLabels,
 		}),
 		TimeoutErrors: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace:   cfg.Namespace,
-			Subsystem:   cfg.Subsystem,
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
 			Name:        "timeouts_total",
-			Help:        fmt.Sprintf("Number of timeout errors from observed %s", cfg.Description),
-			ConstLabels: cfg.ConstLabels,
+			Help:        fmt.Sprintf("Number of timeout errors from observed %s", cfg.description),
+			ConstLabels: cfg.constLabels,
 		}),
 		Panics: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace:   cfg.Namespace,
-			Subsystem:   cfg.Subsystem,
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
 			Name:        "panics_total",
-			Help:        fmt.Sprintf("Number of panic occurances from observed %s", cfg.Description),
-			ConstLabels: cfg.ConstLabels,
-		}),
-		ObservedRuntimes: prometheus.NewHistogram(prometheus.HistogramOpts{
-			Namespace:   cfg.Namespace,
-			Subsystem:   cfg.Subsystem,
-			Name:        "durations_seconds",
-			Help:        fmt.Sprintf("Histogram of the observed durations of %s", cfg.Description),
-			Buckets:     cfg.BucketDurations,
-			ConstLabels: cfg.ConstLabels,
+			Help:        fmt.Sprintf("Number of panic occurances from observed %s", cfg.description),
+			ConstLabels: cfg.constLabels,
 		}),
 		Retries: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace:   cfg.Namespace,
-			Subsystem:   cfg.Subsystem,
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
 			Name:        "retries_total",
-			Help:        fmt.Sprintf("Number of retry attempts from observed %s", cfg.Description),
-			ConstLabels: cfg.ConstLabels,
+			Help:        fmt.Sprintf("Number of retry attempts from observed %s", cfg.description),
+			ConstLabels: cfg.constLabels,
 		}),
 	}
+
+	if len(cfg.bucketDurations) > 0 {
+		m.ObservedRuntimes = prometheus.NewHistogram(prometheus.HistogramOpts{
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
+			Name:        "durations_seconds",
+			Help:        fmt.Sprintf("Histogram of the observed durations of %s", cfg.description),
+			Buckets:     cfg.bucketDurations,
+			ConstLabels: cfg.constLabels,
+		})
+	}
+
+	return m
 }
 
 // MustRegister registers all metrics with the given registry.
