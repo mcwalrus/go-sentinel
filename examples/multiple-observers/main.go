@@ -30,28 +30,28 @@ var (
 
 func init() {
 	// Background tasks observer
-	backgroundObserver = sentinel.NewObserver(sentinel.ObserverConfig{
-		Namespace:       "app",
-		Subsystem:       "background_tasks",
-		Description:     "Background processing tasks",
-		BucketDurations: []float64{0.1, 0.5, 1, 2, 5, 10, 30, 60},
-	})
+	backgroundObserver = sentinel.NewObserver(
+		sentinel.WithNamespace("app"),
+		sentinel.WithSubsystem("background_tasks"),
+		sentinel.WithDescription("Background processing tasks"),
+		sentinel.WithBucketDurations([]float64{0.1, 0.5, 1, 2, 5, 10, 30, 60}),
+	)
 
 	// Critical tasks observer
-	criticalObserver = sentinel.NewObserver(sentinel.ObserverConfig{
-		Namespace:       "app",
-		Subsystem:       "critical_tasks",
-		Description:     "Critical business operations",
-		BucketDurations: []float64{0.01, 0.1, 0.5, 1, 5, 10, 30},
-	})
+	criticalObserver = sentinel.NewObserver(
+		sentinel.WithNamespace("app"),
+		sentinel.WithSubsystem("critical_tasks"),
+		sentinel.WithDescription("Critical business operations"),
+		sentinel.WithBucketDurations([]float64{0.01, 0.1, 0.5, 1, 5, 10, 30}),
+	)
 
 	// API tasks observer
-	apiObserver = sentinel.NewObserver(sentinel.ObserverConfig{
-		Namespace:       "app",
-		Subsystem:       "api_requests",
-		Description:     "API request processing",
-		BucketDurations: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
-	})
+	apiObserver = sentinel.NewObserver(
+		sentinel.WithNamespace("app"),
+		sentinel.WithSubsystem("api_requests"),
+		sentinel.WithDescription("API request processing"),
+		sentinel.WithBucketDurations([]float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}),
+	)
 
 	limitChan = make(chan struct{}, 15)
 	registry = prometheus.NewRegistry()

@@ -44,7 +44,7 @@ func (t *circuitBreakerTestTask) Execute(ctx context.Context) error {
 
 func TestCircuitBreaker_DefaultCircuitBreaker(t *testing.T) {
 	t.Run("allows retries on regular errors", func(t *testing.T) {
-		observer := NewObserver(testConfig(t))
+		observer := testObserver(t)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -81,7 +81,7 @@ func TestCircuitBreaker_DefaultCircuitBreaker(t *testing.T) {
 	})
 
 	t.Run("allows retries on panic errors", func(t *testing.T) {
-		observer := NewObserver(testConfig(t))
+		observer := testObserver(t)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -124,7 +124,7 @@ func TestCircuitBreaker_DefaultCircuitBreaker(t *testing.T) {
 	})
 
 	t.Run("continues retrying until max retries reached", func(t *testing.T) {
-		observer := NewObserver(testConfig(t))
+		observer := testObserver(t)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -166,7 +166,7 @@ func TestCircuitBreaker_DefaultCircuitBreaker(t *testing.T) {
 
 func TestCircuitBreaker_ShortOnPanicCircuitBreaker(t *testing.T) {
 	t.Run("allows retries on regular errors", func(t *testing.T) {
-		observer := NewObserver(testConfig(t))
+		observer := testObserver(t)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -209,7 +209,7 @@ func TestCircuitBreaker_ShortOnPanicCircuitBreaker(t *testing.T) {
 	})
 
 	t.Run("stops retries immediately on panic", func(t *testing.T) {
-		observer := NewObserver(testConfig(t))
+		observer := testObserver(t)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -247,7 +247,7 @@ func TestCircuitBreaker_ShortOnPanicCircuitBreaker(t *testing.T) {
 	})
 
 	t.Run("stops retries on panic during retry attempt", func(t *testing.T) {
-		observer := NewObserver(testConfig(t))
+		observer := testObserver(t)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -290,7 +290,7 @@ func TestCircuitBreaker_ShortOnPanicCircuitBreaker(t *testing.T) {
 	})
 
 	t.Run("continues retrying regular errors until max retries", func(t *testing.T) {
-		observer := NewObserver(testConfig(t))
+		observer := testObserver(t)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -329,7 +329,7 @@ func TestCircuitBreaker_ShortOnPanicCircuitBreaker(t *testing.T) {
 
 func TestCircuitBreaker_EdgeCases(t *testing.T) {
 	t.Run("nil circuit breaker behaves like DefaultCircuitBreaker", func(t *testing.T) {
-		observer := NewObserver(testConfig(t))
+		observer := testObserver(t)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -367,7 +367,7 @@ func TestCircuitBreaker_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("circuit breaker with custom error type", func(t *testing.T) {
-		observer := NewObserver(testConfig(t))
+		observer := testObserver(t)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 

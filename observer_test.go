@@ -78,7 +78,7 @@ func (t *testTask) Execute(ctx context.Context) error {
 }
 
 func TestObserver_DefaultConfig(t *testing.T) {
-	observer := NewObserver(DefaultConfig())
+	observer := NewObserver()
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
@@ -110,7 +110,7 @@ func TestObserver_DefaultConfig(t *testing.T) {
 }
 
 func TestObserver_ZeroConfig(t *testing.T) {
-	observer := NewObserver(ObserverConfig{})
+	observer := NewObserver()
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
@@ -142,7 +142,7 @@ func TestObserver_ZeroConfig(t *testing.T) {
 }
 
 func TestObserve_Register(t *testing.T) {
-	observer := NewObserver(DefaultConfig())
+	observer := NewObserver()
 	registry := prometheus.NewRegistry()
 
 	// First registration should succeed
@@ -158,7 +158,7 @@ func TestObserve_Register(t *testing.T) {
 }
 
 func TestObserve_SuccessfulExecution(t *testing.T) {
-	observer := NewObserver(testConfig(t))
+	observer := testObserver(t)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
@@ -212,7 +212,7 @@ func TestObserve_SuccessfulExecution(t *testing.T) {
 }
 
 func TestObserve_ErrorHandling(t *testing.T) {
-	observer := NewObserver(testConfig(t))
+	observer := testObserver(t)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
@@ -245,7 +245,7 @@ func TestObserve_ErrorHandling(t *testing.T) {
 }
 
 func TestObserve_RunFunc(t *testing.T) {
-	observer := NewObserver(testConfig(t))
+	observer := testObserver(t)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
@@ -266,7 +266,7 @@ func TestObserve_RunFunc(t *testing.T) {
 }
 
 func TestObserve_TimeoutHandling(t *testing.T) {
-	observer := NewObserver(testConfig(t))
+	observer := testObserver(t)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
@@ -300,7 +300,7 @@ func TestObserve_TimeoutHandling(t *testing.T) {
 
 func TestObserve_PanicRecovery(t *testing.T) {
 	t.Run("with panic recovery enabled", func(t *testing.T) {
-		observer := NewObserver(testConfig(t))
+		observer := testObserver(t)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -337,7 +337,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 	})
 
 	t.Run("with panic recovery disabled", func(t *testing.T) {
-		observer := NewObserver(testConfig(t))
+		observer := testObserver(t)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -374,7 +374,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 
 func TestObserve_RetryLogic(t *testing.T) {
 	t.Run("successful retry", func(t *testing.T) {
-		observer := NewObserver(testConfig(t))
+		observer := testObserver(t)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -415,7 +415,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 	})
 
 	t.Run("exhausted retries", func(t *testing.T) {
-		observer := NewObserver(testConfig(t))
+		observer := testObserver(t)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -463,7 +463,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 	})
 
 	t.Run("circuit breaker stops retries", func(t *testing.T) {
-		observer := NewObserver(testConfig(t))
+		observer := testObserver(t)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -509,7 +509,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 }
 
 func TestObserve_RetryStrategy(t *testing.T) {
-	observer := NewObserver(testConfig(t))
+	observer := testObserver(t)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
@@ -546,7 +546,7 @@ func TestObserve_RetryStrategy(t *testing.T) {
 }
 
 func TestObserve_InFlightMetrics(t *testing.T) {
-	observer := NewObserver(testConfig(t))
+	observer := testObserver(t)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
@@ -606,7 +606,7 @@ func TestObserve_InFlightMetrics(t *testing.T) {
 }
 
 func TestObserve_Concurrent(t *testing.T) {
-	observer := NewObserver(testConfig(t))
+	observer := testObserver(t)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
@@ -651,7 +651,7 @@ func TestObserve_Concurrent(t *testing.T) {
 }
 
 func TestObserve_MetricsRecording(t *testing.T) {
-	observer := NewObserver(testConfig(t))
+	observer := testObserver(t)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
@@ -750,7 +750,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 		t.Run(scenario.name, func(t *testing.T) {
 			t.Logf("Running scenario: %s", scenario.name)
 
-			observer := NewObserver(testConfig(t))
+			observer := testObserver(t)
 			registry := prometheus.NewRegistry()
 			observer.MustRegister(registry)
 
@@ -789,7 +789,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 }
 
 func TestObserve_ContextTimeout(t *testing.T) {
-	observer := NewObserver(testConfig(t))
+	observer := testObserver(t)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
@@ -832,14 +832,21 @@ func TestObserve_ContextTimeout(t *testing.T) {
 }
 
 func TestMultipleObservers(t *testing.T) {
-	cfg := testConfig(t)
-	cfg.Subsystem = "observer1"
-	observer := NewObserver(cfg)
+	observer := NewObserver(
+		WithNamespace("test"),
+		WithSubsystem("observer1"),
+		WithDescription("test operations"),
+		WithBucketDurations([]float64{0.01, 0.1, 1, 10, 100}),
+	)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
-	cfg.Subsystem = "observer2"
-	observer2 := NewObserver(cfg)
+	observer2 := NewObserver(
+		WithNamespace("test"),
+		WithSubsystem("observer2"),
+		WithDescription("test operations"),
+		WithBucketDurations([]float64{0.01, 0.1, 1, 10, 100}),
+	)
 	registry2 := prometheus.NewRegistry()
 	observer2.MustRegister(registry2)
 
@@ -869,14 +876,12 @@ func TestMultipleObservers(t *testing.T) {
 
 func Benchmark_ObserverRun(b *testing.B) {
 
-	cfg := ObserverConfig{
-		Namespace:       "test",
-		Subsystem:       "metrics",
-		Description:     "test operations",
-		BucketDurations: []float64{0.01, 0.1, 1, 10, 100},
-	}
-
-	observer := NewObserver(cfg)
+	observer := NewObserver(
+		WithNamespace("test"),
+		WithSubsystem("metrics"),
+		WithDescription("test operations"),
+		WithBucketDurations([]float64{0.01, 0.1, 1, 10, 100}),
+	)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
@@ -902,7 +907,7 @@ func Benchmark_ObserverRun(b *testing.B) {
 
 func TestObserver_TestPanicHandling(t *testing.T) {
 	t.Run("with panic recovery enabled", func(t *testing.T) {
-		observer := NewObserver(testConfig(t))
+		observer := testObserver(t)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 		task := &testTask{
@@ -933,7 +938,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 	})
 
 	t.Run("with panic recovery disabled", func(t *testing.T) {
-		observer := NewObserver(testConfig(t))
+		observer := testObserver(t)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 

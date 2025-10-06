@@ -18,6 +18,17 @@ func testConfig(t *testing.T) ObserverConfig {
 	}
 }
 
+// testObserver creates an observer with test configuration using functional options
+func testObserver(t *testing.T) *Observer {
+	t.Helper()
+	return NewObserver(
+		WithNamespace("test"),
+		WithSubsystem("metrics"),
+		WithDescription("test operations"),
+		WithBucketDurations([]float64{0.01, 0.1, 1, 10, 100}),
+	)
+}
+
 func TestMetricsMustRegister(t *testing.T) {
 	cfg := testConfig(t)
 	m := newMetrics(cfg)
