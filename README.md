@@ -45,7 +45,7 @@ go get github.com/mcwalrus/go-sentinel
 
 ### Basic Usage
 
-Simple task execution with default configuration:
+Configure the Observer with various options:
 
 ```go
 package main
@@ -60,8 +60,11 @@ import (
 )
 
 func main() {
-    // Observer with default configuration
-    observer := sentinel.NewObserver()
+    // Observer with 
+    observer := sentinel.NewObserver(
+        sentinel.WithNamespace("myapp"),
+        sentinel.WithSubsystem("workers"),
+    )
 
     // Register observer to a registry
     registry := prometheus.NewRegistry()
@@ -100,14 +103,11 @@ func main() {
     registry := prometheus.NewRegistry()
     observer.MustRegister(registry)
     
-    // Run many times
-    for i := 0; i < 1000; i++ {
-        
-        // Observer records task errors
+    // Observer records task errors
+    for range 1000 {    
         err := observer.RunFunc(func() error {
             return errors.New("your task failed")
         })
-        // Provide custom error handling per error
         if err != nil {
             log.Printf("Task failed: %v", err)
         }
@@ -117,7 +117,7 @@ func main() {
 
 ### Timeout Handling
 
-Observer registers timeout errors for both `timeouts_total` and `errors_total` counters:
+Observer registers timeout errors by `timeouts_total` and `errors_total` counters:
 
 ```go
 package main
@@ -137,12 +137,12 @@ func main() {
     registry := prometheus.NewRegistry()
     observer.MustRegister(registry)
     
-    // TaskConfig provides configurable Timeout
+    // Task config
     config := sentinel.TaskConfig{
         Timeout: 3 * time.Second,
     }
 
-    // Task waits timeout duration respects context timeout
+    // Task respects context timeout
     err := observer.Run(config, func(ctx context.Context) error {
         <-ctx.Done()
         return ctx.Err()
@@ -155,7 +155,7 @@ func main() {
 
 ### Retry Handling
 
-Configure retry strategies for resilient task execution:
+Configure retry with wait strategies for resilient task execution:
 
 ```go
 package main
@@ -183,35 +183,40 @@ func main() {
         RetryStrategy: sentinel.RetryStrategyExponentialBackoff(100 * time.Millisecond),
     }
 
-    // Retry failures, succeed after two attempts
+    // Retry on failure, succeed after two attempts
     var i int
     err := observer.Run(config, func(ctx context.Context) error {
-        if i < 2 {
-            i++
-            fmt.Println("failed :( will retry...")
+        if i == 0 {
             return errors.New("no good, try again")
+        } else if i == 1 {
+            return errors.New("no good, again. :(")
+        } else {
+            fmt.Println("it works!")
         }
-        fmt.Println("it works!")
         return nil
     })
-
-    // Expect run to succeed on final retry attempt
     if err != nil {
         panic("unexpected error", err)
     }
 }
 ```
 
-### Panic Recovery
+Panics are always counted by `panics_total` and `errors_total` metrics.
 
-Handle panics gracefully with recovery options:
+
+### Panic Occurances
+
+Panic occurances are just returned as errors:
 
 ```go
 package main
 
 import (
     "context"
+    "errors"
     "fmt"
+    "math/rand"
+    "time"
     
     sentinel "github.com/mcwalrus/go-sentinel"
     "github.com/prometheus/client_golang/prometheus"
@@ -222,29 +227,25 @@ func main() {
     registry := prometheus.NewRegistry()
     observer.MustRegister(registry)
     
-    // Panic recovery will be recovered and counted in metrics
-    config := sentinel.TaskConfig{
-        RecoverPanics: true,
-    }
+    // Retry three times
+    config := sentinel.TaskConfig{MaxRetries: 3}
     err := observer.Run(config, func(ctx context.Context) error {
-        fmt.Println("Oh no, panic...")
-        panic("something went wrong!")
+        panic("panic stations!")
     })
     
-    // An error is returned after recovery showing panic occurred
-    if err != nil {
-        fmt.Printf("task completed with recovered panic: %v\n", err)
-    } else {
-        panic("expected error, but got nil")
+    errUnwrap, ok := (err).(interface {Unwrap() []error})
+    if !ok {
+        panic("not unwrap")
     }
 
-    fmt.Println("continues after panic recovery")
+    errs := errUnwrap.Unwrap()
+    for _, err := range errs {
+        fmt.Printf("error: %v\n", err)
+    }
 }
 ```
 
-Panics are always counted as `panics_total` and `errors_total` via metrics.
-
-Note panic occurrences are counted even when `RecoverPanics=false`. Enabling panic recovery should be explicitly set through TaskConfig in case panic propagation should signal specific handling up the stack, or other actions to be taken by the application. `RecoverPanics=true` when tasks are observed through the Observer method [RunFunc](https://pkg.go.dev/github.com/mcwalrus/go-sentinel#Observer.RunFunc).
+Panics are always counted by `panics_total` and `errors_total` metrics.
 
 ### Task Implementation
 
@@ -263,7 +264,6 @@ func (e *EmailTask) Config() sentinel.TaskConfig {
     return sentinel.TaskConfig{
         Timeout:       30 * time.Second,
         MaxRetries:    3,
-        RecoverPanics: true,
         RetryStrategy: sentinel.RetryStrategyExponentialBackoff(1 * time.Second),
     }
 }

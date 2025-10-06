@@ -70,7 +70,6 @@ type BackgroundTask struct {
 func (task *BackgroundTask) Config() sentinel.TaskConfig {
 	return sentinel.TaskConfig{
 		Timeout:       30 * time.Second,
-		RecoverPanics: true,
 		MaxRetries:    3,
 		RetryStrategy: sentinel.RetryStrategyExponentialBackoff(500 * time.Millisecond),
 	}
@@ -110,9 +109,8 @@ type CriticalTask struct {
 
 func (task *CriticalTask) Config() sentinel.TaskConfig {
 	return sentinel.TaskConfig{
-		Timeout:       5 * time.Second,
-		RecoverPanics: true,
-		MaxRetries:    2,
+		Timeout:    5 * time.Second,
+		MaxRetries: 2,
 	}
 }
 
@@ -155,8 +153,7 @@ type APITask struct {
 
 func (task *APITask) Config() sentinel.TaskConfig {
 	return sentinel.TaskConfig{
-		Timeout:       2 * time.Second,
-		RecoverPanics: true,
+		Timeout: 2 * time.Second,
 	}
 }
 

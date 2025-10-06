@@ -18,6 +18,7 @@ type observerConfig struct {
 	bucketDurations []float64
 	constLabels     prometheus.Labels
 	taskConfig      *TaskConfig
+	recoverPanics   bool
 }
 
 // ObserverOption defines an configuration option for an Observer.
@@ -72,11 +73,19 @@ func WithConstLabels(labels prometheus.Labels) ObserverOption {
 }
 
 // WithDefaultTaskConfig sets the default [TaskConfig] for calls to [Observer.RunFunc].
-// If not specified, a basic task configuration of panic recovery without retry attempts
-// will be used.
+// If not specified, a basic task configuration without retry attempts will be used.
 func WithDefaultTaskConfig(taskConfig *TaskConfig) ObserverOption {
 	return func(cfg *observerConfig) {
 		cfg.taskConfig = taskConfig
+	}
+}
+
+// WithPanicRecovery sets whether panics should be recovered and returned as errors.
+// By default, when true panics are recovered and returned as [ErrPanicOccurred].
+// Panic occurrences are always recorded in metrics regardless of this setting.
+func WithPanicRecovery(recover bool) ObserverOption {
+	return func(cfg *observerConfig) {
+		cfg.recoverPanics = recover
 	}
 }
 
@@ -102,9 +111,10 @@ type Observer struct {
 //	)
 func NewObserver(opts ...ObserverOption) *Observer {
 	cfg := observerConfig{
-		namespace:   "",
-		subsystem:   "",
-		description: "tasks",
+		namespace:     "",
+		subsystem:     "",
+		description:   "tasks",
+		recoverPanics: true,
 	}
 
 	// Apply options
@@ -120,9 +130,7 @@ func NewObserver(opts ...ObserverOption) *Observer {
 		cfg.description = "tasks"
 	}
 	if cfg.taskConfig == nil {
-		cfg.taskConfig = &TaskConfig{
-			RecoverPanics: true,
-		}
+		cfg.taskConfig = &TaskConfig{}
 	}
 
 	return &Observer{
@@ -147,7 +155,6 @@ func (o *Observer) MustRegister(registry prometheus.Registerer) {
 // Run executes a function with the specified task configuration and observes its execution.
 // All execution metrics (duration, success/failure, retries, etc) will be automatically recorded.
 // If a [context.DeadlineExceeded] error is returne by fn(), it is recorded as a timeout error.
-// When cfg.RecoverPanics is true, returns ErrPanicOccurred if a panic occurs and is recovered.
 func (o *Observer) Run(cfg TaskConfig, fn func(ctx context.Context) error) error {
 	if o == nil || o.metrics == nil {
 		panic("observer: not configured")
@@ -162,7 +169,6 @@ func (o *Observer) Run(cfg TaskConfig, fn func(ctx context.Context) error) error
 // RunFunc executes a function with the DefaultTaskConfig and observes its execution.
 // All execution metrics (duration, success/failure, panic, etc) will be automatically recorded.
 // If a [context.DeadlineExceeded] error is returned, it is recorded as a timeout error.
-// When RecoverPanics is true, returns ErrPanicOccurred if a panic occurs and is recovered.
 func (o *Observer) RunFunc(fn func() error) error {
 	if o == nil || o.metrics == nil {
 		panic("observer: not configured")
@@ -179,7 +185,6 @@ func (o *Observer) RunFunc(fn func() error) error {
 // RunTask executes a [Task] implementation and observes its execution.
 // All execution metrics (duration, success/failure, retries, etc) will be automatically recorded.
 // The task.Config() method determines the execution behaviour (timeout, retries, concurrency, etc).
-// When RecoverPanics is true, returns ErrPanicOccurred if a panic occurs and is recovered.
 func (o *Observer) RunTask(task Task) error {
 	if o == nil || o.metrics == nil {
 		panic("observer: not configured")
@@ -236,7 +241,7 @@ func (o *Observer) executeTask(task *implTask) error {
 		// Handle panics
 		if panicValue != nil {
 			o.metrics.Panics.Inc()
-			if !task.Config().RecoverPanics {
+			if !o.cfg.recoverPanics {
 				panic(panicValue) // re-throw panic
 			}
 		}

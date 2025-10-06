@@ -52,7 +52,6 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:             time.Second,
 				MaxRetries:          3,
-				RecoverPanics:       true,
 				RetryCircuitBreaker: ShortOnPanicCircuitBreaker,
 			},
 			shouldSucceed: true, // succeed after 3 attempts
@@ -94,7 +93,6 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:             time.Second,
 				MaxRetries:          5, // Would normally retry 5 times
-				RecoverPanics:       true,
 				RetryCircuitBreaker: ShortOnPanicCircuitBreaker,
 			},
 			shouldPanic:    true,
@@ -131,7 +129,6 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:             time.Second,
 				MaxRetries:          5,
-				RecoverPanics:       true,
 				RetryCircuitBreaker: ShortOnPanicCircuitBreaker,
 			},
 			shouldPanic:    true,
@@ -173,7 +170,6 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:             time.Second,
 				MaxRetries:          3,
-				RecoverPanics:       true,
 				RetryCircuitBreaker: ShortOnPanicCircuitBreaker,
 			},
 			shouldSucceed: false, // never succeed, but no panics
@@ -211,7 +207,6 @@ func TestCircuitBreaker_EdgeCases(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:             time.Second,
 				MaxRetries:          2,
-				RecoverPanics:       true,
 				RetryCircuitBreaker: nil, // nil should behave like DeafultCircuitBreaker
 			},
 			shouldPanic:    true,
@@ -253,7 +248,6 @@ func TestCircuitBreaker_EdgeCases(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:             time.Second,
 				MaxRetries:          2,
-				RecoverPanics:       true,
 				RetryCircuitBreaker: customCircuitBreaker,
 			},
 			shouldPanic:    true,

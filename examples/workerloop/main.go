@@ -44,7 +44,6 @@ type ProcessingTask struct {
 func (task *ProcessingTask) Config() sentinel.TaskConfig {
 	return sentinel.TaskConfig{
 		Timeout:       5 * time.Second,
-		RecoverPanics: true,
 		MaxRetries:    2,
 		RetryStrategy: sentinel.RetryStrategyLinearBackoff(1 * time.Second),
 	}

@@ -164,9 +164,8 @@ func TestObserve_SuccessfulExecution(t *testing.T) {
 
 	task := &testTask{
 		cfg: TaskConfig{
-			Timeout:       time.Second,
-			MaxRetries:    0,
-			RecoverPanics: true,
+			Timeout:    time.Second,
+			MaxRetries: 0,
 		},
 		success: true,
 	}
@@ -219,9 +218,8 @@ func TestObserve_ErrorHandling(t *testing.T) {
 	expectedErr := errors.New("task failed")
 	task := &testTask{
 		cfg: TaskConfig{
-			Timeout:       time.Second,
-			MaxRetries:    0,
-			RecoverPanics: false,
+			Timeout:    time.Second,
+			MaxRetries: 0,
 		},
 		fn: func(ctx context.Context) error {
 			return expectedErr
@@ -272,9 +270,8 @@ func TestObserve_TimeoutHandling(t *testing.T) {
 
 	task := &testTask{
 		cfg: TaskConfig{
-			Timeout:       10 * time.Millisecond, // short timeout
-			MaxRetries:    0,
-			RecoverPanics: false,
+			Timeout:    10 * time.Millisecond, // short timeout
+			MaxRetries: 0,
 		},
 		fn: func(ctx context.Context) error {
 			time.Sleep(20 * time.Millisecond)
@@ -299,23 +296,22 @@ func TestObserve_TimeoutHandling(t *testing.T) {
 }
 
 func TestObserve_PanicRecovery(t *testing.T) {
-	t.Run("with panic recovery enabled", func(t *testing.T) {
+	t.Run("with panic recovery enabled (default)", func(t *testing.T) {
 		observer := testObserver(t)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
 		task := &testTask{
 			cfg: TaskConfig{
-				Timeout:       time.Second,
-				MaxRetries:    0,
-				RecoverPanics: true, // Enable panic recovery
+				Timeout:    time.Second,
+				MaxRetries: 0,
 			},
 			fn: func(ctx context.Context) error {
 				panic("test panic")
 			},
 		}
 
-		// This should not panic due to recovery
+		// This should not panic due to recovery (default behavior)
 		err := observer.RunTask(task)
 
 		// Should return an error indicating panic occurred
@@ -336,16 +332,15 @@ func TestObserve_PanicRecovery(t *testing.T) {
 		})
 	})
 
-	t.Run("with panic recovery disabled", func(t *testing.T) {
-		observer := testObserver(t)
+	t.Run("with panic recovery disabled via ObserverOption", func(t *testing.T) {
+		observer := NewObserver(WithPanicRecovery(false))
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
 		task := &testTask{
 			cfg: TaskConfig{
-				Timeout:       time.Second,
-				MaxRetries:    0,
-				RecoverPanics: false, // Disable panic recovery
+				Timeout:    time.Second,
+				MaxRetries: 0,
 			},
 			fn: func(ctx context.Context) error {
 				panic("test panic")
@@ -355,7 +350,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 		// This should panic and be caught by our test
 		defer func() {
 			if r := recover(); r == nil {
-				t.Error("Expected panic to propagate when RecoverPanics=false")
+				t.Error("Expected panic to propagate when WithPanicRecovery(false)")
 			} else {
 				// Verify panic was still recorded even though it propagated
 				Verify(t, observer, metricsCounts{
@@ -381,9 +376,8 @@ func TestObserve_RetryLogic(t *testing.T) {
 		attemptCount := 0
 		task := &testTask{
 			cfg: TaskConfig{
-				Timeout:       time.Second,
-				MaxRetries:    2,
-				RecoverPanics: false,
+				Timeout:    time.Second,
+				MaxRetries: 2,
 			},
 			fn: func(ctx context.Context) error {
 				attemptCount++
@@ -422,9 +416,8 @@ func TestObserve_RetryLogic(t *testing.T) {
 		expectedErr := errors.New("persistent failure")
 		task := &testTask{
 			cfg: TaskConfig{
-				Timeout:       10 * time.Millisecond,
-				MaxRetries:    2,
-				RecoverPanics: false,
+				Timeout:    10 * time.Millisecond,
+				MaxRetries: 2,
 			},
 			fn: func(ctx context.Context) error {
 				attemptCount++
@@ -698,9 +691,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 		{
 			name: "task with panic (recovered)",
 			task: &testTask{
-				cfg: TaskConfig{
-					RecoverPanics: true,
-				},
+				cfg: TaskConfig{},
 				fn: func(ctx context.Context) error {
 					panic("test panic")
 				},
@@ -900,14 +891,13 @@ func Benchmark_ObserverRun(b *testing.B) {
 }
 
 func TestObserver_TestPanicHandling(t *testing.T) {
-	t.Run("with panic recovery enabled", func(t *testing.T) {
+	t.Run("with panic recovery enabled (default)", func(t *testing.T) {
 		observer := testObserver(t)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 		task := &testTask{
 			cfg: TaskConfig{
-				MaxRetries:    0,
-				RecoverPanics: true,
+				MaxRetries: 0,
 			},
 			fn: func(ctx context.Context) error {
 				panic("test panic")
@@ -931,15 +921,14 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 		})
 	})
 
-	t.Run("with panic recovery disabled", func(t *testing.T) {
-		observer := testObserver(t)
+	t.Run("with panic recovery disabled via ObserverOption", func(t *testing.T) {
+		observer := NewObserver(WithPanicRecovery(false))
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
 		task := &testTask{
 			cfg: TaskConfig{
-				MaxRetries:    0, // No retries to avoid multiple panic attempts
-				RecoverPanics: false,
+				MaxRetries: 0, // No retries to avoid multiple panic attempts
 			},
 			fn: func(ctx context.Context) error {
 				panic("test panic")
@@ -949,7 +938,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 		// This should panic and be caught by our test
 		defer func() {
 			if r := recover(); r == nil {
-				t.Error("Expected panic to propagate when RecoverPanics=false")
+				t.Error("Expected panic to propagate when WithPanicRecovery(false)")
 			} else {
 				// Verify panic was still recorded even though it propagated
 				Verify(t, observer, metricsCounts{

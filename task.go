@@ -32,11 +32,6 @@ type TaskConfig struct {
 	// Errors returned from multiple retries are grouped by [errors.Join] as a single error.
 	MaxRetries int
 
-	// RecoverPanics when true will recover panics and return an [ErrPanicOccurred] from
-	// [Task.Execute]. When false, panics will propagate for the program to handle.
-	// The [Observer] always records panic occurrences via metrics.
-	RecoverPanics bool
-
 	// RetryStrategy is a handler to return wait durations between retry attempts. The first
 	// wait duration requested by the handler will provide retryCount at 0. Subsequent retries
 	// will increment retryCount. By default, no retry strategy is applied by the [Observer].
