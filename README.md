@@ -242,6 +242,8 @@ func main() {
 }
 ```
 
+Panics are always counted as `panics_total` and `errors_total` via metrics.
+
 Note panic occurrences are counted even when `RecoverPanics=false`. Enabling panic recovery should be explicitly set through TaskConfig in case panic propagation should signal specific handling up the stack, or other actions to be taken by the application. `RecoverPanics=true` when tasks are observed through the Observer method [RunFunc](https://pkg.go.dev/github.com/mcwalrus/go-sentinel#Observer.RunFunc).
 
 ### Task Implementation

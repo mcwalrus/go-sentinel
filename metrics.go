@@ -28,6 +28,7 @@ type metrics struct {
 }
 
 // newMetrics creates a new metrics instance with the given configuration.
+// If bucketDurations is provided, the ObservedRuntimes histogram will be created.
 func newMetrics(cfg observerConfig) *metrics {
 	m := &metrics{
 		InFlight: prometheus.NewGauge(prometheus.GaugeOpts{

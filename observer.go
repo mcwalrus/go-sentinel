@@ -193,7 +193,6 @@ func (o *Observer) RunTask(task Task) error {
 
 // observe is the internal method that observes task execution.
 // This method manages the InFlight gauge for individual tasks.
-// Task execution and retries are handled by [Observer.executeTask].
 func (o *Observer) observe(task *implTask) (err error) {
 	o.metrics.InFlight.Inc()
 	defer o.metrics.InFlight.Dec()
@@ -203,7 +202,7 @@ func (o *Observer) observe(task *implTask) (err error) {
 // executeTask performs the task execution logic and handles retries.
 // Retry attempts are call method recursively for synchronous task handling.
 // If panic occurs, the error from task.Execute() is switched for ErrPanicOccurred.
-// This follows the behaviour defined by the [TaskConfig] task.Config() and [Task.Execute].
+// This follows the behaviour defined by the [Task], [TaskConfig], and [Observer].
 func (o *Observer) executeTask(task *implTask) error {
 	var ctx = context.Background()
 	if task.Config().Timeout > 0 {
