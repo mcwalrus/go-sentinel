@@ -821,7 +821,7 @@ func TestMultipleObservers(t *testing.T) {
 		WithNamespace("test"),
 		WithSubsystem("observer1"),
 		WithDescription("test operations"),
-		WithBucketDurations([]float64{0.01, 0.1, 1, 10, 100}),
+		WithHistogramBuckets([]float64{0.01, 0.1, 1, 10, 100}),
 	)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
@@ -830,7 +830,7 @@ func TestMultipleObservers(t *testing.T) {
 		WithNamespace("test"),
 		WithSubsystem("observer2"),
 		WithDescription("test operations"),
-		WithBucketDurations([]float64{0.01, 0.1, 1, 10, 100}),
+		WithHistogramBuckets([]float64{0.01, 0.1, 1, 10, 100}),
 	)
 	registry2 := prometheus.NewRegistry()
 	observer2.MustRegister(registry2)
@@ -865,7 +865,7 @@ func Benchmark_ObserverRun(b *testing.B) {
 		WithNamespace("test"),
 		WithSubsystem("metrics"),
 		WithDescription("test operations"),
-		WithBucketDurations([]float64{0.01, 0.1, 1, 10, 100}),
+		WithHistogramBuckets([]float64{0.01, 0.1, 1, 10, 100}),
 	)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)

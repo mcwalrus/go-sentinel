@@ -53,11 +53,17 @@ func WithDescription(description string) ObserverOption {
 	}
 }
 
-// WithBucketDurations sets histogram bucket durations for the Observer.
-// Each recorded task duration is assigned within one of the specified buckets.
-// If not specified, no histogram metrics will be recorded or presented with the Observer.
+// WithHistogramBuckets sets histogram bucket durations for the Observer.
+// If not specified, no histogram metrics will be recorded or exported by the Observer.
+// Each bucket duration is a float64 representing seconds where final buckets between 0 and math.Inf
+// will be included after. Each recorded task duration is assigned within one of the specified buckets.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(sentinel.WithHistogramBuckets([]float64{0.05, 1, 5, 30, 600}))
+//
 // Please refer to [prometheus.HistogramOpts].Buckets for more information.
-func WithBucketDurations(buckets []float64) ObserverOption {
+func WithHistogramBuckets(buckets []float64) ObserverOption {
 	return func(cfg *observerConfig) {
 		cfg.bucketDurations = buckets
 	}
@@ -108,6 +114,7 @@ type Observer struct {
 //	observer := sentinel.NewObserver(
 //	    sentinel.WithNamespace("myapp"),
 //	    sentinel.WithSubsystem("workers"),
+//	    sentinel.WithHistogramBuckets([]float64{0.05, 1, 5, 30, 600}),
 //	)
 func NewObserver(opts ...ObserverOption) *Observer {
 	cfg := observerConfig{
@@ -153,9 +160,23 @@ func (o *Observer) MustRegister(registry prometheus.Registerer) {
 }
 
 // Run executes a function with the specified task configuration and observes its execution.
-// All execution metrics (duration, success/failure, retries, etc) will be automatically recorded.
-// If a [context.DeadlineExceeded] error is returne by fn(), it is recorded as a timeout error.
-func (o *Observer) Run(cfg TaskConfig, fn func(ctx context.Context) error) error {
+// Any timeout specified through the task configuration will be ignored by the function.
+func (o *Observer) Run(cfg TaskConfig, fn func() error) error {
+	if o == nil || o.metrics == nil {
+		panic("observer: not configured")
+	}
+	task := &implTask{
+		cfg: cfg,
+		fn: func(ctx context.Context) error {
+			return fn() // ignore ctx
+		},
+	}
+	return o.observe(task)
+}
+
+// Run executes a function with the specified task configuration and observes its execution.
+// Any timeout specified through the task configuration will be set by the context passed to fn.
+func (o *Observer) RunCtx(cfg TaskConfig, fn func(ctx context.Context) error) error {
 	if o == nil || o.metrics == nil {
 		panic("observer: not configured")
 	}
@@ -167,8 +188,7 @@ func (o *Observer) Run(cfg TaskConfig, fn func(ctx context.Context) error) error
 }
 
 // RunFunc executes a function with the DefaultTaskConfig and observes its execution.
-// All execution metrics (duration, success/failure, panic, etc) will be automatically recorded.
-// If a [context.DeadlineExceeded] error is returned, it is recorded as a timeout error.
+// Any timeout specified through the task configuration will be ignored by the function.
 func (o *Observer) RunFunc(fn func() error) error {
 	if o == nil || o.metrics == nil {
 		panic("observer: not configured")
@@ -182,9 +202,21 @@ func (o *Observer) RunFunc(fn func() error) error {
 	return o.observe(task)
 }
 
+// RunFuncCtx executes a function with the DefaultTaskConfig and observes its execution.
+// Any timeout specified through the task configuration will be set by the context passed to fn.
+func (o *Observer) RunFuncCtx(fn func(ctx context.Context) error) error {
+	if o == nil || o.metrics == nil {
+		panic("observer: not configured")
+	}
+	task := &implTask{
+		cfg: *o.cfg.taskConfig,
+		fn:  fn,
+	}
+	return o.observe(task)
+}
+
 // RunTask executes a [Task] implementation and observes its execution.
-// All execution metrics (duration, success/failure, retries, etc) will be automatically recorded.
-// The task.Config() method determines the execution behaviour (timeout, retries, concurrency, etc).
+// Any timeout specified through the task configuration will be set by the context passed to task.Execute.
 func (o *Observer) RunTask(task Task) error {
 	if o == nil || o.metrics == nil {
 		panic("observer: not configured")

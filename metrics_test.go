@@ -25,7 +25,7 @@ func testObserver(t *testing.T) *Observer {
 		WithNamespace("test"),
 		WithSubsystem("metrics"),
 		WithDescription("test operations"),
-		WithBucketDurations([]float64{0.01, 0.1, 1, 10, 100}),
+		WithHistogramBuckets([]float64{0.01, 0.1, 1, 10, 100}),
 	)
 }
 
