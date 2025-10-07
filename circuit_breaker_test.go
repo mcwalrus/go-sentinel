@@ -107,9 +107,9 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 			t.Errorf("Expected panic error, got nil")
 		}
 
-		var panicErr *ErrPanicOccurred
+		var panicErr *ErrRecoveredPanic
 		if !errors.As(err, &panicErr) {
-			t.Errorf("Expected ErrPanicOccurred, got %v", err)
+			t.Errorf("Expected ErrRecoveredPanic, got %v", err)
 		}
 
 		Verify(t, observer, metricsCounts{
@@ -143,9 +143,9 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 			t.Errorf("Expected panic error, got nil")
 		}
 
-		var panicErr *ErrPanicOccurred
+		var panicErr *ErrRecoveredPanic
 		if !errors.As(err, &panicErr) {
-			t.Errorf("Expected ErrPanicOccurred, got %v", err)
+			t.Errorf("Expected ErrRecoveredPanic, got %v", err)
 		}
 
 		// Should have made only 6 attempts (1 initial + 5 retries)
@@ -242,7 +242,7 @@ func TestCircuitBreaker_EdgeCases(t *testing.T) {
 
 		// Custom circuit breaker that breaks on specific error type
 		customCircuitBreaker := func(err error) bool {
-			return errors.Is(err, &ErrPanicOccurred{})
+			return errors.Is(err, &ErrRecoveredPanic{})
 		}
 
 		task := &circuitBreakerTestTask{

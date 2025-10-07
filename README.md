@@ -282,7 +282,7 @@ func main() {
     // Panic multiple times
     config := sentinel.TaskConfig{MaxRetries: 3}
     err := observer.Run(config, func() error {
-        panic("panic stations!")
+        panic("panic stations :0")
     })
     
     // Unwrap errors
@@ -294,10 +294,8 @@ func main() {
     // Panics are errors
     errs := errUnwrap.Unwrap()
     for _, err := range errs {
-        // View panic recovery values
-        var errPanic = &sentinel.ErrPanicOccurred{}
-        if errors.As(err, &errPanic) {
-            fmt.Printf("panic value: %v\n", errPanic.PanicValue())
+        if rPanic, ok := sentinel.IsPanicError(err)
+            fmt.Printf("panic value: %v\n", rPanic)
         }
     }
 }

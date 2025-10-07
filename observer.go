@@ -154,7 +154,7 @@ func (o *Observer) observe(task *implTask) (err error) {
 
 // executeTask performs the task execution logic and handles retries.
 // Retry attempts are call method recursively for synchronous task handling.
-// If panic occurs, the error from task.Execute() is switched for ErrPanicOccurred.
+// If panic occurs, the error from task.Execute() is switched for ErrRecoveredPanic.
 // This follows the behaviour defined by the [Task], [TaskConfig], and [Observer].
 func (o *Observer) executeTask(task *implTask) error {
 	var ctx = context.Background()
@@ -172,7 +172,7 @@ func (o *Observer) executeTask(task *implTask) error {
 			o.observeRuntime(start)
 			if r := recover(); r != nil {
 				panicValue = r
-				err = &ErrPanicOccurred{panic: r}
+				err = &ErrRecoveredPanic{panic: r}
 			}
 		}()
 		err = task.Execute(ctx)

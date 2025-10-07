@@ -7,11 +7,11 @@ import (
 	"time"
 )
 
-// stubPanicErr simulates sentinel.ErrPanicOccurred (error + PanicValue())
+// stubPanicErr simulates sentinel.ErrRecoveredPanic (error + RecoveredPanic())
 type stubPanicErr struct{ v any }
 
-func (e *stubPanicErr) Error() string   { return "panic occurred" }
-func (e *stubPanicErr) PanicValue() any { return e.v }
+func (e *stubPanicErr) Error() string       { return "panic occurred" }
+func (e *stubPanicErr) RecoveredPanic() any { return e.v }
 
 func TestOnPanic(t *testing.T) {
 	b := OnPanic()

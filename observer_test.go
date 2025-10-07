@@ -318,7 +318,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 		if err == nil {
 			t.Errorf("Expected error indicating panic occurred, got nil")
 		}
-		if err != nil && err.Error() != "panic occurred for task execution" {
+		if err != nil && err.Error() != "panic recovered during task execution" {
 			t.Errorf("Expected panic error message, got %v", err)
 		}
 
@@ -908,7 +908,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 		if err == nil {
 			t.Errorf("Expected error indicating panic occurred, got nil")
 		}
-		if err != nil && err.Error() != "panic occurred for task execution" {
+		if err != nil && err.Error() != "panic recovered during task execution" {
 			t.Errorf("Expected panic error message, got %v", err)
 		}
 

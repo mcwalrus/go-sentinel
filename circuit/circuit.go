@@ -11,12 +11,12 @@ import (
 type Breaker func(err error) bool
 
 // OnPanic stops retries when the last error originated from a panic recovery.
-// It detects sentinel.ErrPanicOccurred without importing the sentinel package
+// It detects sentinel.ErrRecoveredPanic without importing the sentinel package
 // by matching a type that satisfies the same method set.
 func OnPanic() Breaker {
 	type panicError interface {
 		error
-		PanicValue() any
+		RecoveredPanic() any
 	}
 	return func(err error) bool {
 		var target panicError
