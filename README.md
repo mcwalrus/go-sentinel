@@ -171,6 +171,7 @@ import (
     "time"
     
     sentinel "github.com/mcwalrus/go-sentinel"
+    "github.com/mcwalrus/go-sentinel/retry"
     "github.com/prometheus/client_golang/prometheus"
 )
 
@@ -180,14 +181,17 @@ func main() {
     registry := prometheus.NewRegistry()
     observer.MustRegister(registry)
     
-    // Exponential backoff retry strategy
+    // Retries exponential backoff with jitter
     config := sentinel.TaskConfig{
         MaxRetries:    3,
         Timeout:       10 * time.Second,
-        RetryStrategy: sentinel.RetryStrategyExponentialBackoff(100*time.Millisecond),
+        RetryStrategy: retry.WithJitter(
+            retry.Exponential(100*time.Millisecond),
+            time.Second,
+        )
     }
 
-    // Fail for two, pass next attempt
+    // Fail for two then pass next attempt
     var i int
     err := observer.Run(config, func() error {
         if i < 2 {
@@ -206,11 +210,11 @@ func main() {
 }
 ```
 
-Note a Task called with `MaxRetries=3` may be called up to four times total.
+Note, a task called with `MaxRetries=3` may be called up to _four times_ total.
 
 ### Observe Durations
 
-Histogram buckets need to be set by the Observer config to export `durations_seconds` metrics:
+Set histogram buckets with the Observer to export `durations_seconds` metrics:
 
 ```go
 package main
@@ -237,7 +241,7 @@ func main() {
     
     // Wait random intervals of time
     for range 1000 { 
-        err := observer.Run(config, func() error {
+        err := observer.RunFunc(func() error {
             sleep := time.Duration(rand.Intn(20)+1) * time.Second
             fmt.Printf("Sleeping for %v...\n", sleep)
             time.Sleep(sleep)
@@ -250,6 +254,8 @@ func main() {
     }
 }
 ```
+
+Note, histogram metrics will not be exported if `WithHistogramBuckets` is not set.
 
 ### Panic Occurances
 
@@ -318,7 +324,7 @@ func (e *EmailTask) Config() sentinel.TaskConfig {
     return sentinel.TaskConfig{
         Timeout:       30 * time.Second,
         MaxRetries:    3,
-        RetryStrategy: sentinel.RetryStrategyExponentialBackoff(1 * time.Second),
+        RetryStrategy: retry.Exponential(1 * time.Second),
     }
 }
 

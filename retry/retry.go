@@ -44,7 +44,8 @@ func Exponential(factor time.Duration) Strategy {
 // the limit is returned instead.
 func WithLimit(strategy Strategy, limit time.Duration) Strategy {
 	return func(retries int) time.Duration {
-		if wait := strategy(retries); wait >= limit {
+		wait := strategy(retries)
+		if wait >= limit {
 			return limit
 		}
 		return wait
@@ -67,7 +68,6 @@ func WithJitter(strategy Strategy, maxJitter time.Duration) Strategy {
 			return base
 		}
 
-		// rand.Int upper bound is exclusive; add 1 to include maxNs
 		n, err := rand.Int(rand.Reader, big.NewInt(maxNs+1))
 		if err != nil {
 			return base

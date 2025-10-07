@@ -13,6 +13,7 @@ import (
 	"time"
 
 	sentinel "github.com/mcwalrus/go-sentinel"
+	"github.com/mcwalrus/go-sentinel/retry"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -45,7 +46,7 @@ func (task *ProcessingTask) Config() sentinel.TaskConfig {
 	return sentinel.TaskConfig{
 		Timeout:       5 * time.Second,
 		MaxRetries:    2,
-		RetryStrategy: sentinel.RetryStrategyLinearBackoff(1 * time.Second),
+		RetryStrategy: retry.Linear(1 * time.Second),
 	}
 }
 

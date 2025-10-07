@@ -35,6 +35,7 @@ type TaskConfig struct {
 	// RetryStrategy is a handler to return wait durations between retry attempts. The first
 	// wait duration requested by the handler will provide retryCount at 0. Subsequent retries
 	// will increment retryCount. By default, no wait strategy is applied by the [Observer].
+	// Use the retry package for common strategies like retry.Exponential, retry.Linear, etc.
 	RetryStrategy func(retryCount int) time.Duration
 
 	// CircuitBreaker is a handler that when will avoid all following retry attempts when

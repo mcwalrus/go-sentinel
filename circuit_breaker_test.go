@@ -52,7 +52,7 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:        time.Second,
 				MaxRetries:     3,
-				CircuitBreaker: ShortOnPanicCircuitBreaker,
+				CircuitBreaker: NewPanicCircuitBreaker(),
 			},
 			shouldSucceed: true, // succeed after 3 attempts
 		}
