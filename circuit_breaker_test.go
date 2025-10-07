@@ -93,7 +93,7 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:        time.Second,
 				MaxRetries:     5, // Would normally retry 5 times
-				CircuitBreaker: ShortOnPanicCircuitBreaker,
+				CircuitBreaker: NewPanicCircuitBreaker(),
 			},
 			shouldPanic:    true,
 			panicOnAttempt: 1, // panic on first attempt
@@ -129,7 +129,7 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:        time.Second,
 				MaxRetries:     5,
-				CircuitBreaker: ShortOnPanicCircuitBreaker,
+				CircuitBreaker: NewPanicCircuitBreaker(),
 			},
 			shouldPanic:    true,
 			panicOnAttempt: 1, // panic on first retry attempt
@@ -170,7 +170,7 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:        time.Second,
 				MaxRetries:     3,
-				CircuitBreaker: ShortOnPanicCircuitBreaker,
+				CircuitBreaker: NewPanicCircuitBreaker(),
 			},
 			shouldSucceed: false, // never succeed, but no panics
 		}

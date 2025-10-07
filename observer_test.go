@@ -873,7 +873,7 @@ func Benchmark_ObserverRun(b *testing.B) {
 	b.Run("simple function", func(b *testing.B) {
 		cfg := TaskConfig{}
 		for i := 0; i < b.N; i++ {
-			_ = observer.Run(cfg, func(ctx context.Context) error {
+			_ = observer.Run(cfg, func() error {
 				return nil
 			})
 		}
@@ -882,7 +882,7 @@ func Benchmark_ObserverRun(b *testing.B) {
 	b.Run("function with work", func(b *testing.B) {
 		cfg := TaskConfig{}
 		for i := 0; i < b.N; i++ {
-			_ = observer.Run(cfg, func(ctx context.Context) error {
+			_ = observer.Run(cfg, func() error {
 				time.Sleep(time.Microsecond)
 				return nil
 			})

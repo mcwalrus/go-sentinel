@@ -5,9 +5,9 @@ import (
 	"time"
 )
 
-func TestRetryStrategyLinearBackoff(t *testing.T) {
+func TestRetryStrategyLinear(t *testing.T) {
 	wait := 100 * time.Millisecond
-	strategy := RetryStrategyLinearBackoff(wait)
+	strategy := NewRetryStrategyLinear(wait)
 
 	tests := []struct {
 		retries  int
@@ -24,15 +24,15 @@ func TestRetryStrategyLinearBackoff(t *testing.T) {
 		t.Run("", func(t *testing.T) {
 			result := strategy(tt.retries)
 			if result != tt.expected {
-				t.Errorf("RetryS	trategyLinearBackoff(%d) = %v, expected %v", tt.retries, result, tt.expected)
+				t.Errorf("RetryStrategy: LinearBackoff(%d) = %v, expected %v", tt.retries, result, tt.expected)
 			}
 		})
 	}
 }
 
-func TestRetryStrategyExponentialBackoff(t *testing.T) {
+func TestRetryStrategyExponential(t *testing.T) {
 	factor := 50 * time.Millisecond
-	strategy := RetryStrategyExponentialBackoff(factor)
+	strategy := NewRetryStrategyExponential(factor)
 
 	tests := []struct {
 		retries  int
@@ -51,7 +51,7 @@ func TestRetryStrategyExponentialBackoff(t *testing.T) {
 			result := strategy(tt.retries)
 			if result != tt.expected {
 				t.Errorf(
-					"RetryStrategyExponentialBackoff(%d) = %v, expected %v",
+					"RetryStrategy: ExponentialBackoff(%d) = %v, expected %v",
 					tt.retries,
 					result,
 					tt.expected,
