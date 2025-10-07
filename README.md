@@ -60,10 +60,8 @@ import (
 )
 
 func main() {
-    // Create an observer
+    // Create and register observer
     observer := sentinel.NewObserver()
-
-    // Register the observer
     registry := prometheus.NewRegistry()
     observer.MustRegister(registry)
     
@@ -136,14 +134,13 @@ func main() {
     registry := prometheus.NewRegistry()
     observer.MustRegister(registry)
     
-    // Task config with timeout
+    // TaskConfig with timeout
     config := sentinel.TaskConfig{
         Timeout: 3 * time.Second,
     }
 
-    // Respect context timeout
-    err := observer.RunCtx(config, 
-        func(ctx context.Context) error {
+    // Respects context timeout
+    err := observer.RunCtx(config, func(ctx context.Context) error {
             <-ctx.Done()
             return ctx.Err()
         },
@@ -231,10 +228,11 @@ import (
 )
 
 func main() {
-    // Create observer with histogram metrics:
+    // Oserver with histogram buckets
     observer := sentinel.NewObserver(
         sentinel.WithHistogramBuckets([]float64{1, 5, 8, 12, 15}),
     )
+
     // Configure observer with registry
     registry := prometheus.NewRegistry()
     observer.MustRegister(registry)
