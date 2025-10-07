@@ -333,7 +333,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 	})
 
 	t.Run("with panic recovery disabled via ObserverOption", func(t *testing.T) {
-		observer := NewObserver(SetPanicRecovery(false))
+		observer := NewObserver(DisablePanicRecovery())
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -350,7 +350,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 		// This should panic and be caught by our test
 		defer func() {
 			if r := recover(); r == nil {
-				t.Error("Expected panic to propagate when SetPanicRecovery(false)")
+				t.Error("Expected panic to propagate when DisablePanicRecovery()")
 			} else {
 				// Verify panic was still recorded even though it propagated
 				Verify(t, observer, metricsCounts{
@@ -922,7 +922,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 	})
 
 	t.Run("with panic recovery disabled via ObserverOption", func(t *testing.T) {
-		observer := NewObserver(SetPanicRecovery(false))
+		observer := NewObserver(DisablePanicRecovery())
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -938,7 +938,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 		// This should panic and be caught by our test
 		defer func() {
 			if r := recover(); r == nil {
-				t.Error("Expected panic to propagate when SetPanicRecovery(false)")
+				t.Error("Expected panic to propagate when DisablePanicRecovery()")
 			} else {
 				// Verify panic was still recorded even though it propagated
 				Verify(t, observer, metricsCounts{

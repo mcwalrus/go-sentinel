@@ -79,11 +79,11 @@ func WithDefaultTaskConfig(taskConfig *TaskConfig) ObserverOption {
 	}
 }
 
-// SetPanicRecovery sets whether panics should be recovered and returned as errors.
-// By default, when true panics are recovered and returned as [ErrRecoveredPanic].
-// Panic occurrences are always recorded in metrics regardless of this setting.
-func SetPanicRecovery(recover bool) ObserverOption {
+// DisablePanicRecovery disables automatic panic recovery.
+// By default, panics are recovered and returned as [ErrRecoveredPanic] errors.
+// Panic occurrences are always recorded in metrics regardless of this observer option.
+func DisablePanicRecovery() ObserverOption {
 	return func(cfg *observerConfig) {
-		cfg.recoverPanics = recover
+		cfg.recoverPanics = false
 	}
 }
