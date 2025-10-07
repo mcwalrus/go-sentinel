@@ -34,13 +34,14 @@ type TaskConfig struct {
 
 	// RetryStrategy is a handler to return wait durations between retry attempts. The first
 	// wait duration requested by the handler will provide retryCount at 0. Subsequent retries
-	// will increment retryCount. By default, no retry strategy is applied by the [Observer].
+	// will increment retryCount. By default, no wait strategy is applied by the [Observer].
 	RetryStrategy func(retryCount int) time.Duration
 
-	// RetryCircuitBreaker when returning true will avoid all following retry attempts. The
-	// handler is provided the error from the previous attempt. By default, the [Observer] will
-	// always attempt the next retry. This is useful to stop retries after a certain error occurs.
-	RetryCircuitBreaker func(err error) bool
+	// CircuitBreaker is a handler that when will avoid all following retry attempts when
+	// true is returned. The handler will be provided the error from the previous attempt.
+	// When nil, the [Observer] will always attempt the next retry. This is useful to stop
+	// retries when certain errors or conditions have occurred.
+	CircuitBreaker func(err error) bool
 }
 
 type implTask struct {

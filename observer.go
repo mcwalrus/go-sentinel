@@ -206,8 +206,8 @@ func (o *Observer) executeTask(task *implTask) error {
 			}
 
 			// Try circuit break
-			if cfg.RetryCircuitBreaker != nil {
-				if cfg.RetryCircuitBreaker(err) {
+			if cfg.CircuitBreaker != nil {
+				if cfg.CircuitBreaker(err) {
 					return err
 				}
 			}

@@ -50,9 +50,9 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 
 		task := &circuitBreakerTestTask{
 			cfg: TaskConfig{
-				Timeout:             time.Second,
-				MaxRetries:          3,
-				RetryCircuitBreaker: ShortOnPanicCircuitBreaker,
+				Timeout:        time.Second,
+				MaxRetries:     3,
+				CircuitBreaker: ShortOnPanicCircuitBreaker,
 			},
 			shouldSucceed: true, // succeed after 3 attempts
 		}
@@ -91,9 +91,9 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 
 		task := &circuitBreakerTestTask{
 			cfg: TaskConfig{
-				Timeout:             time.Second,
-				MaxRetries:          5, // Would normally retry 5 times
-				RetryCircuitBreaker: ShortOnPanicCircuitBreaker,
+				Timeout:        time.Second,
+				MaxRetries:     5, // Would normally retry 5 times
+				CircuitBreaker: ShortOnPanicCircuitBreaker,
 			},
 			shouldPanic:    true,
 			panicOnAttempt: 1, // panic on first attempt
@@ -127,9 +127,9 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 
 		task := &circuitBreakerTestTask{
 			cfg: TaskConfig{
-				Timeout:             time.Second,
-				MaxRetries:          5,
-				RetryCircuitBreaker: ShortOnPanicCircuitBreaker,
+				Timeout:        time.Second,
+				MaxRetries:     5,
+				CircuitBreaker: ShortOnPanicCircuitBreaker,
 			},
 			shouldPanic:    true,
 			panicOnAttempt: 1, // panic on first retry attempt
@@ -168,9 +168,9 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 
 		task := &circuitBreakerTestTask{
 			cfg: TaskConfig{
-				Timeout:             time.Second,
-				MaxRetries:          3,
-				RetryCircuitBreaker: ShortOnPanicCircuitBreaker,
+				Timeout:        time.Second,
+				MaxRetries:     3,
+				CircuitBreaker: ShortOnPanicCircuitBreaker,
 			},
 			shouldSucceed: false, // never succeed, but no panics
 		}
@@ -205,9 +205,9 @@ func TestCircuitBreaker_EdgeCases(t *testing.T) {
 
 		task := &circuitBreakerTestTask{
 			cfg: TaskConfig{
-				Timeout:             time.Second,
-				MaxRetries:          2,
-				RetryCircuitBreaker: nil, // nil should behave like DeafultCircuitBreaker
+				Timeout:        time.Second,
+				MaxRetries:     2,
+				CircuitBreaker: nil, // nil should behave like DeafultCircuitBreaker
 			},
 			shouldPanic:    true,
 			panicOnAttempt: 1, // panic on first attempt
@@ -246,9 +246,9 @@ func TestCircuitBreaker_EdgeCases(t *testing.T) {
 
 		task := &circuitBreakerTestTask{
 			cfg: TaskConfig{
-				Timeout:             time.Second,
-				MaxRetries:          2,
-				RetryCircuitBreaker: customCircuitBreaker,
+				Timeout:        time.Second,
+				MaxRetries:     2,
+				CircuitBreaker: customCircuitBreaker,
 			},
 			shouldPanic:    true,
 			panicOnAttempt: 1, // panic on first attempt

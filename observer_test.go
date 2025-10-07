@@ -464,7 +464,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:    time.Second,
 				MaxRetries: 5,
-				RetryCircuitBreaker: func(err error) bool {
+				CircuitBreaker: func(err error) bool {
 					// Break circuit on specific error
 					return errors.Is(err, expectedErr)
 				},

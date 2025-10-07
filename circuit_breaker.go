@@ -1,11 +1,25 @@
 package sentinel
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
-// ShortOnPanicCircuitBreaker is a handler that returns true when the error
-// is an [ErrPanicOccurred] indicating a panic occurred. This is useful to
-// stop retries after a panic occurs.
-var ShortOnPanicCircuitBreaker = func(err error) bool {
-	var panicErr *ErrPanicOccurred
-	return errors.As(err, &panicErr)
+// NewPanicCircuitBreaker returns a handler with the CircuitBreaker signature
+// that returns true when a [ErrPanicOccurred] error is encountered. This is
+// useful to stop retries after a panic occurs.
+func NewPanicCircuitBreaker() func(err error) bool {
+	return func(err error) bool {
+		var panicErr *ErrPanicOccurred
+		return errors.As(err, &panicErr)
+	}
+}
+
+// NewTimeoutCircuitBreaker returns a handler with the CircuitBreaker signature
+// that returns true when processing has taken longer than the timeout duration.
+func NewTimeoutCircuitBreaker(timeout time.Duration) func(err error) bool {
+	var start = time.Now()
+	return func(err error) bool {
+		return time.Since(start) > timeout
+	}
 }
