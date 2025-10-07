@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mcwalrus/go-sentinel/circuit"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )
@@ -52,7 +53,7 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:        time.Second,
 				MaxRetries:     3,
-				CircuitBreaker: NewPanicCircuitBreaker(),
+				CircuitBreaker: circuit.OnPanic(),
 			},
 			shouldSucceed: true, // succeed after 3 attempts
 		}
@@ -93,7 +94,7 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:        time.Second,
 				MaxRetries:     5, // Would normally retry 5 times
-				CircuitBreaker: NewPanicCircuitBreaker(),
+				CircuitBreaker: circuit.OnPanic(),
 			},
 			shouldPanic:    true,
 			panicOnAttempt: 1, // panic on first attempt
@@ -129,7 +130,7 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:        time.Second,
 				MaxRetries:     5,
-				CircuitBreaker: NewPanicCircuitBreaker(),
+				CircuitBreaker: circuit.OnPanic(),
 			},
 			shouldPanic:    true,
 			panicOnAttempt: 1, // panic on first retry attempt
@@ -170,7 +171,7 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 			cfg: TaskConfig{
 				Timeout:        time.Second,
 				MaxRetries:     3,
-				CircuitBreaker: NewPanicCircuitBreaker(),
+				CircuitBreaker: circuit.OnPanic(),
 			},
 			shouldSucceed: false, // never succeed, but no panics
 		}
