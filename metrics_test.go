@@ -18,18 +18,9 @@ func testConfig(t *testing.T) observerConfig {
 	}
 }
 
-// testObserver creates an observer with test configuration using functional options
-func testObserver(t *testing.T) *Observer {
-	t.Helper()
-	return NewObserver(
-		WithNamespace("test"),
-		WithSubsystem("metrics"),
-		WithDescription("test operations"),
-		WithHistogramBuckets([]float64{0.01, 0.1, 1, 10, 100}),
-	)
-}
-
 func TestMetricsMustRegister(t *testing.T) {
+	t.Parallel()
+
 	cfg := testConfig(t)
 	m := newMetrics(cfg)
 	registry := prometheus.NewRegistry()
@@ -67,6 +58,8 @@ func TestMetricsMustRegister(t *testing.T) {
 }
 
 func TestMetricsMustRegisterPanic(t *testing.T) {
+	t.Parallel()
+
 	cfg := testConfig(t)
 	m := newMetrics(cfg)
 	registry := prometheus.NewRegistry()
@@ -85,6 +78,8 @@ func TestMetricsMustRegisterPanic(t *testing.T) {
 }
 
 func TestMetricsRegister(t *testing.T) {
+	t.Parallel()
+
 	cfg := testConfig(t)
 	m := newMetrics(cfg)
 	registry := prometheus.NewRegistry()
@@ -109,6 +104,8 @@ func TestMetricsRegister(t *testing.T) {
 }
 
 func TestMetricUpdates(t *testing.T) {
+	t.Parallel()
+
 	cfg := testConfig(t)
 	m := newMetrics(cfg)
 	registry := prometheus.NewRegistry()
@@ -171,6 +168,8 @@ func TestMetricUpdates(t *testing.T) {
 }
 
 func TestMetricLabels(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		cfg      observerConfig
@@ -234,6 +233,8 @@ func TestMetricLabels(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			m := newMetrics(tt.cfg)
 			registry := prometheus.NewRegistry()
 			m.MustRegister(registry)
@@ -258,6 +259,8 @@ func TestMetricLabels(t *testing.T) {
 }
 
 func TestMetricHelpText(t *testing.T) {
+	t.Parallel()
+
 	cfg := observerConfig{
 		namespace:       "",
 		subsystem:       "",

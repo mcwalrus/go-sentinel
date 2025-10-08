@@ -89,34 +89,33 @@ func newMetrics(cfg observerConfig) *metrics {
 	return m
 }
 
-// MustRegister registers all metrics with the given registry.
-// It panics if any metric fails to register.
-func (m *metrics) MustRegister(registry prometheus.Registerer) {
-	registry.MustRegister(
+// collectors returns all collectors for the metrics.
+func (m *metrics) collectors() []prometheus.Collector {
+	c := []prometheus.Collector{
 		m.InFlight,
 		m.Successes,
 		m.Errors,
 		m.TimeoutErrors,
 		m.Panics,
-		m.ObservedRuntimes,
 		m.Retries,
-	)
+	}
+	if m.ObservedRuntimes != nil {
+		c = append(c, m.ObservedRuntimes)
+	}
+	return c
+}
+
+// MustRegister registers all metrics with the given registry.
+// It panics if any metric fails to register.
+func (m *metrics) MustRegister(registry prometheus.Registerer) {
+	registry.MustRegister(m.collectors()...)
 }
 
 // Register registers all metrics with the given registry.
 // It returns an error if any metric fails to register.
 func (m *metrics) Register(registry prometheus.Registerer) error {
-	collectors := []prometheus.Collector{
-		m.InFlight,
-		m.Successes,
-		m.Errors,
-		m.TimeoutErrors,
-		m.Panics,
-		m.ObservedRuntimes,
-		m.Retries,
-	}
 	var errs []error
-	for _, col := range collectors {
+	for _, col := range m.collectors() {
 		err := registry.Register(col)
 		if err != nil {
 			errs = append(errs, err)

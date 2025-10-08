@@ -42,7 +42,9 @@ func NewObserver(opts ...ObserverOption) *Observer {
 
 	// Apply options
 	for _, opt := range opts {
-		opt(&cfg)
+		if opt != nil {
+			opt(&cfg)
+		}
 	}
 
 	// Apply defaults if not set
@@ -201,8 +203,6 @@ func (o *Observer) executeTask(task *implTask) error {
 			// Maximum retries reached
 			if task.retryCount >= cfg.MaxRetries {
 				return err
-			} else {
-				o.metrics.Retries.Inc()
 			}
 
 			// Try circuit break
@@ -211,7 +211,9 @@ func (o *Observer) executeTask(task *implTask) error {
 					return err
 				}
 			}
+
 			// Wait retry duration
+			o.metrics.Retries.Inc()
 			if cfg.RetryStrategy != nil {
 				wait := cfg.RetryStrategy(task.retryCount)
 				if wait > 0 {

@@ -6,6 +6,8 @@ import (
 )
 
 func TestImmediate(t *testing.T) {
+	t.Parallel()
+
 	strategy := Immediate()
 
 	tests := []struct {
@@ -20,6 +22,8 @@ func TestImmediate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
+			t.Parallel()
+
 			result := strategy(tt.retries)
 			if result != tt.expected {
 				t.Errorf("Immediate(%d) = %v, expected %v", tt.retries, result, tt.expected)
@@ -29,6 +33,8 @@ func TestImmediate(t *testing.T) {
 }
 
 func TestLinear(t *testing.T) {
+	t.Parallel()
+
 	wait := 100 * time.Millisecond
 	strategy := Linear(wait)
 
@@ -45,6 +51,8 @@ func TestLinear(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
+			t.Parallel()
+
 			result := strategy(tt.retries)
 			if result != tt.expected {
 				t.Errorf("Linear(%d) = %v, expected %v", tt.retries, result, tt.expected)
@@ -54,6 +62,8 @@ func TestLinear(t *testing.T) {
 }
 
 func TestExponential(t *testing.T) {
+	t.Parallel()
+
 	factor := 50 * time.Millisecond
 	strategy := Exponential(factor)
 
@@ -71,6 +81,8 @@ func TestExponential(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
+			t.Parallel()
+
 			result := strategy(tt.retries)
 			if result != tt.expected {
 				t.Errorf("Exponential(%d) = %v, expected %v", tt.retries, result, tt.expected)
@@ -80,6 +92,8 @@ func TestExponential(t *testing.T) {
 }
 
 func TestWithLimit(t *testing.T) {
+	t.Parallel()
+
 	baseStrategy := Linear(100 * time.Millisecond)
 	limit := 300 * time.Millisecond
 	strategy := WithLimit(baseStrategy, limit)
@@ -97,6 +111,8 @@ func TestWithLimit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
+			t.Parallel()
+
 			result := strategy(tt.retries)
 			if result != tt.expected {
 				t.Errorf("WithLimit(%d) = %v, expected %v", tt.retries, result, tt.expected)
@@ -106,6 +122,8 @@ func TestWithLimit(t *testing.T) {
 }
 
 func TestWithJitter(t *testing.T) {
+	t.Parallel()
+
 	baseStrategy := Linear(100 * time.Millisecond)
 	maxJitter := 50 * time.Millisecond
 	strategy := WithJitter(baseStrategy, maxJitter)
@@ -144,6 +162,8 @@ func TestWithJitter(t *testing.T) {
 }
 
 func TestComposition(t *testing.T) {
+	t.Parallel()
+
 	// Test composing multiple strategies: Linear -> WithLimit -> WithJitter
 	baseStrategy := Linear(100 * time.Millisecond)
 	limitedStrategy := WithLimit(baseStrategy, 300*time.Millisecond)
