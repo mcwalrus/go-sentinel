@@ -20,19 +20,19 @@ Sentinel provides retry handling and observability monitoring for Go application
 
 Standard configuration will automatically export the following observer metrics:
 
-| Metric | Type | Description | Default |
-|--------|------|-------------|---------|
-| `sentinel_in_flight` | Gauge | Active number of running tasks | Yes |
-| `sentinel_success_total` | Counter | Total successful task completions | Yes |
-| `sentinel_errors_total` | Counter | Total task executions failures | Yes |
-| `sentinel_timeouts_total` | Counter | Total timeout based failures | Yes |
-| `sentinel_panics_total` | Counter | Total task panic occurrences | Yes |
-| `sentinel_durations_seconds` | Histogram | Distribution of task executions | No |
-| `sentinel_retries_total` | Counter | Total retry attempts after failures | No |
-| `sentinel_failures_total` | Counter | Total failures after all retry attempts | No |
+| Metric | Type | Description | Default | Option |
+|--------|------|-------------|---------|----------|
+| `sentinel_in_flight` | Gauge | Active number of running tasks | Yes | - |
+| `sentinel_success_total` | Counter | Total successful task completions | Yes | - |
+| `sentinel_errors_total` | Counter | Total task executions failures | Yes | - |
+| `sentinel_timeouts_total` | Counter | Total timeout based failures | Yes | - |
+| `sentinel_panics_total` | Counter | Total task panic occurrences | Yes | - |
+| `sentinel_durations_seconds` | Histogram | Distribution of task executions | No | _WithHistogramBuckets_ |
+| `sentinel_failures_total` | Counter | Total failures after all retry attempts | No | Hmmm  |
+| `sentinel_retries_total` | Counter | Total retry attempts after failures | No |  Hmmm |
 
 
-Note failed _retry attempts_ and _panic occurances_ are both counted as __errors_total__ counter.
+Note failed _retry attempts_ and _panic occurances_ are both counted by __errors_total__ counter.
 
 ## Installation
 
@@ -186,18 +186,12 @@ func main() {
     // Fail for two then pass next attempt
     var i int
     err := observer.Run(config, func() error {
-        if i < 2 {
-            i++
+        if i++; i < 2 {
             return errors.New("no good, try again")
         } else {
             fmt.Println("it works!")
             return nil
         }
-    })
-
-    // Increments both errors_total and failures_total metrics
-    err := observer.Run(config, func() error {
-        return errors.New("persistent failure")
     })
     
     if err != nil {
@@ -206,7 +200,7 @@ func main() {
 }
 ```
 
-Note, a task called with `MaxRetries=3` may be called up to _four times_ total.
+Note a task called with `MaxRetries=3` may be called up to _four times_ total.
 
 ### Observe Durations
 
@@ -377,7 +371,7 @@ func main() {
 }
 ```
 
-Exposed metrics will be presented with fully qualified names `myapp_workers_...` on host: _localhost:8080/metrics_.
+Prometheus metrics will be exposed with names `myapp_workers_...` on host: _localhost:8080/metrics_.
 
 ## Contributing
 
