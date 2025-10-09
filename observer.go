@@ -11,9 +11,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// executeTask performs the task execution logic and handles retries.
+// Retry attempts are call method recursively for synchronous task handling.
+// If panic occurs, the error from task.Execute() is switched for ErrRecoveredPanic.
+// This follows the behaviour defined by the [Task], [TaskConfig], and [Observer].
+
 // Observer monitors and measures task executions, collecting Prometheus metrics
-// for successes, failures, timeouts, panics, retries, and execution durations.
-// It provides methods to execute tasks with various configuration options.
+// for successes, failures, timeouts, panics, retries, and observed runtimes.
+// It provides methods to execute tasks with various TaskConfig options.
 type Observer struct {
 	cfg     observerConfig
 	metrics *metrics
@@ -25,12 +30,17 @@ type Observer struct {
 //
 // Example usage:
 //
-//	observer := sentinel.NewObserver() // Default configuration
-//	observer := sentinel.NewObserver(sentinel.WithNamespace("myapp"))
+//	// Uses default configuration
+//	observer := sentinel.NewObserver()
+//
+//	// Replaces default "sentinel"
+//	observer := sentinel.NewObserver(sentinel.WithSubsystem("workers"))
+//
+//	// With fully qualified name and records runtime durations
 //	observer := sentinel.NewObserver(
-//	    sentinel.WithNamespace("myapp"),
-//	    sentinel.WithSubsystem("workers"),
-//	    sentinel.WithHistogramBuckets([]float64{0.05, 1, 5, 30, 600}),
+//	  sentinel.WithNamespace("myapp"),
+//	  sentinel.WithSubsystem("workers"),
+//	  sentinel.WithHistogramBuckets([]float64{0.05, 1, 5, 30, 600}),
 //	)
 func NewObserver(opts ...ObserverOption) *Observer {
 	cfg := observerConfig{
@@ -79,6 +89,13 @@ func (o *Observer) MustRegister(registry prometheus.Registerer) {
 
 // Run executes a function with the specified task configuration and observes its execution.
 // Any timeout specified through the task configuration will be ignored by the function.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver()
+//	observer.Run(sentinel.TaskConfig{}, func() error {
+//		return nil
+//	})
 func (o *Observer) Run(cfg TaskConfig, fn func() error) error {
 	if o == nil || o.metrics == nil {
 		panic("observer: not configured")
@@ -94,6 +111,13 @@ func (o *Observer) Run(cfg TaskConfig, fn func() error) error {
 
 // Run executes a function with the specified task configuration and observes its execution.
 // Any timeout specified through the task configuration will be set by the context passed to fn.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver()
+//	observer.RunCtx(sentinel.TaskConfig{}, func(ctx context.Context) error {
+//		return nil
+//	})
 func (o *Observer) RunCtx(cfg TaskConfig, fn func(ctx context.Context) error) error {
 	if o == nil || o.metrics == nil {
 		panic("observer: not configured")
@@ -107,6 +131,13 @@ func (o *Observer) RunCtx(cfg TaskConfig, fn func(ctx context.Context) error) er
 
 // RunFunc executes a function with the DefaultTaskConfig and observes its execution.
 // Any timeout specified through the task configuration will be ignored by the function.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver()
+//	observer.RunFunc(func() error {
+//		return nil
+//	})
 func (o *Observer) RunFunc(fn func() error) error {
 	if o == nil || o.metrics == nil {
 		panic("observer: not configured")
@@ -122,6 +153,13 @@ func (o *Observer) RunFunc(fn func() error) error {
 
 // RunFuncCtx executes a function with the DefaultTaskConfig and observes its execution.
 // Any timeout specified through the task configuration will be set by the context passed to fn.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver()
+//	observer.RunFuncCtx(func(ctx context.Context) error {
+//		return nil
+//	})
 func (o *Observer) RunFuncCtx(fn func(ctx context.Context) error) error {
 	if o == nil || o.metrics == nil {
 		panic("observer: not configured")
@@ -135,6 +173,15 @@ func (o *Observer) RunFuncCtx(fn func(ctx context.Context) error) error {
 
 // RunTask executes a [Task] implementation and observes its execution.
 // Any timeout specified through the task configuration will be set by the context passed to task.Execute.
+//
+// Example usage:
+//
+//	type CustomTask struct {}
+//	func (t *CustomTask) Config() sentinel.TaskConfig { /* ... */ }
+//	func (t *CustomTask) Execute(ctx context.Context) error { /* ... */ }
+//
+//	observer := sentinel.NewObserver()
+//	observer.RunTask(&CustomTask{})
 func (o *Observer) RunTask(task Task) error {
 	if o == nil || o.metrics == nil {
 		panic("observer: not configured")
@@ -146,18 +193,18 @@ func (o *Observer) RunTask(task Task) error {
 	return o.observe(t)
 }
 
-// observe is the internal method that observes task execution.
-// This method manages the InFlight gauge for individual tasks.
 func (o *Observer) observe(task *implTask) (err error) {
 	o.metrics.InFlight.Inc()
 	defer o.metrics.InFlight.Dec()
 	return o.executeTask(task)
 }
 
-// executeTask performs the task execution logic and handles retries.
-// Retry attempts are call method recursively for synchronous task handling.
-// If panic occurs, the error from task.Execute() is switched for ErrRecoveredPanic.
-// This follows the behaviour defined by the [Task], [TaskConfig], and [Observer].
+func (o *Observer) observeRuntime(start time.Time) {
+	if o.metrics.ObservedRuntimes != nil {
+		o.metrics.ObservedRuntimes.Observe(time.Since(start).Seconds())
+	}
+}
+
 func (o *Observer) executeTask(task *implTask) error {
 	var ctx = context.Background()
 	if task.Config().Timeout > 0 {
@@ -241,11 +288,4 @@ func (o *Observer) executeTask(task *implTask) error {
 	}
 
 	return err
-}
-
-// observeRuntime observes the runtime duration of the task execution.
-func (o *Observer) observeRuntime(start time.Time) {
-	if o.metrics.ObservedRuntimes != nil {
-		o.metrics.ObservedRuntimes.Observe(time.Since(start).Seconds())
-	}
 }
