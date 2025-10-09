@@ -24,7 +24,8 @@ type Task interface {
 type TaskConfig struct {
 	// Timeout is a context deadline for [Task.Execute]. By default, no timeout is applied.
 	// It is the responsibility of the [Task] to handle the deadline error whenever exceeded.
-	// The [Observer] records the timeout occurrences via metrics.
+	// The [Observer] records the timeout occurrences via metrics. The timeout will not be
+	// respected if the observer Run* func does not pass a context.
 	Timeout time.Duration
 
 	// MaxRetries specifies the number of retry attempts for failed calls of [Task.Execute].
