@@ -249,12 +249,18 @@ func (o *Observer) executeTask(task *implTask) error {
 
 			// Maximum retries reached
 			if task.retryCount >= cfg.MaxRetries {
+				if o.metrics.FinalFailures != nil {
+					o.metrics.FinalFailures.Inc()
+				}
 				return err
 			}
 
 			// Try circuit break
 			if cfg.CircuitBreaker != nil {
 				if cfg.CircuitBreaker(err) {
+					if o.metrics.FinalFailures != nil {
+						o.metrics.FinalFailures.Inc()
+					}
 					return err
 				}
 			}
@@ -281,6 +287,11 @@ func (o *Observer) executeTask(task *implTask) error {
 				return errors.Join(err, err2)
 			} else {
 				return nil // successful recursive return
+			}
+		} else {
+			// No retries configured
+			if o.metrics.FinalFailures != nil {
+				o.metrics.FinalFailures.Inc()
 			}
 		}
 	} else {

@@ -12,6 +12,7 @@ type observerConfig struct {
 	constLabels     prometheus.Labels
 	taskConfig      *TaskConfig
 	recoverPanics   bool
+	trackFailures   bool
 }
 
 // ObserverOption defines a configuration option for an Observer.
@@ -126,5 +127,21 @@ func WithDefaultTaskConfig(taskConfig *TaskConfig) ObserverOption {
 func DisablePanicRecovery() ObserverOption {
 	return func(cfg *observerConfig) {
 		cfg.recoverPanics = false
+	}
+}
+
+// WithFailuresTracking enables tracking of persistent failures after all retry attempts.
+// When enabled, a separate "failures_total" metric which increments when tasks fail
+// persistently. This differs from the "errors_total" metric which increments whenever
+// tasks fail or when panics occur.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(
+//	    sentinel.WithFailuresTracking(),
+//	)
+func WithFailuresTracking() ObserverOption {
+	return func(cfg *observerConfig) {
+		cfg.trackFailures = true
 	}
 }

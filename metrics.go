@@ -25,6 +25,7 @@ type metrics struct {
 	Panics           prometheus.Counter
 	ObservedRuntimes prometheus.Histogram
 	Retries          prometheus.Counter
+	FinalFailures    prometheus.Counter
 }
 
 // newMetrics creates a new metrics instance with the given configuration.
@@ -86,6 +87,16 @@ func newMetrics(cfg observerConfig) *metrics {
 		})
 	}
 
+	if cfg.trackFailures {
+		m.FinalFailures = prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
+			Name:        "failures_total",
+			Help:        fmt.Sprintf("Number of final failures from observed %s after all retry attempts", cfg.description),
+			ConstLabels: cfg.constLabels,
+		})
+	}
+
 	return m
 }
 
@@ -101,6 +112,9 @@ func (m *metrics) collectors() []prometheus.Collector {
 	}
 	if m.ObservedRuntimes != nil {
 		c = append(c, m.ObservedRuntimes)
+	}
+	if m.FinalFailures != nil {
+		c = append(c, m.FinalFailures)
 	}
 	return c
 }

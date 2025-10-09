@@ -20,15 +20,16 @@ Sentinel provides retry handling and observability monitoring for Go application
 
 Standard configuration will automatically export the following observer metrics:
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `sentinel_in_flight` | Gauge | Active number of running tasks |
-| `sentinel_success_total` | Counter | Total successful task completions |
-| `sentinel_errors_total` | Counter | Total task executions failures |
-| `sentinel_timeouts_total` | Counter | Total timeout based failures |
-| `sentinel_panics_total` | Counter | Total task panic occurrences |
-| `sentinel_durations_seconds` | Histogram | Distribution of task executions |
-| `sentinel_retries_total` | Counter | Total retry attempts after failures |
+| Metric | Type | Description | Default |
+|--------|------|-------------|---------|
+| `sentinel_in_flight` | Gauge | Active number of running tasks | Yes |
+| `sentinel_success_total` | Counter | Total successful task completions | Yes |
+| `sentinel_errors_total` | Counter | Total task executions failures | Yes |
+| `sentinel_timeouts_total` | Counter | Total timeout based failures | Yes |
+| `sentinel_panics_total` | Counter | Total task panic occurrences | Yes |
+| `sentinel_durations_seconds` | Histogram | Distribution of task executions | No |
+| `sentinel_retries_total` | Counter | Total retry attempts after failures | No |
+| `sentinel_failures_total` | Counter | Total failures after all retry attempts | No |
 
 
 Note failed _retry attempts_ and _panic occurances_ are both counted as __errors_total__ counter.
@@ -60,10 +61,8 @@ import (
 )
 
 func main() {
-    // Create and register observer
+    // Create new observer
     observer := sentinel.NewObserver()
-    registry := prometheus.NewRegistry()
-    observer.MustRegister(registry)
     
     // Execute a simple task
     err := observer.RunFunc(func() error {
@@ -94,19 +93,17 @@ import (
 )
 
 func main() {
-    // Create and register observer
+    // Create new observer
     observer := sentinel.NewObserver()
-    registry := prometheus.NewRegistry()
-    observer.MustRegister(registry)
     
-    // Observer records task errors
-    for range 1000 {    
-        err := observer.RunFunc(func() error {
-            return errors.New("task failed")
-        })
-        if err != nil {
-            log.Printf("Task failed: %v", err)
-        }
+    // Records task errors
+    err := observer.RunFunc(func() error {
+        fmt.Println("Uh oh...")
+        return errors.New("task failed")
+    })    
+    // Handle your task error
+    if err != nil {
+        log.Printf("Task failed: %v", err)
     }
 }
 ```
@@ -129,10 +126,8 @@ import (
 )
 
 func main() {
-    // Create and register observer
+    // Create new observer
     observer := sentinel.NewObserver()
-    registry := prometheus.NewRegistry()
-    observer.MustRegister(registry)
     
     // TaskConfig with timeout
     config := sentinel.TaskConfig{
@@ -173,10 +168,10 @@ import (
 )
 
 func main() {
-    // Create and register observer
-    observer := sentinel.NewObserver()
-    registry := prometheus.NewRegistry()
-    observer.MustRegister(registry)
+    // Observer with failure
+    observer := sentinel.NewObserver(
+        sentinel.WithFailuresTracking(),
+    )
     
     // Retries exponential backoff with jitter
     config := sentinel.TaskConfig{
@@ -200,9 +195,13 @@ func main() {
         }
     })
 
-    // Expect success on third attempt
+    // Increments both errors_total and failures_total metrics
+    err := observer.Run(config, func() error {
+        return errors.New("persistent failure")
+    })
+    
     if err != nil {
-        panic("unexpected error", err)
+        fmt.Printf("Task failed after all retries: %v\n", err)
     }
 }
 ```
@@ -253,7 +252,7 @@ func main() {
 }
 ```
 
-Note, histogram metrics will not be exported if `WithHistogramBuckets` is not set.
+Note, duration metrics will not be exported unless `WithHistogramBuckets()` is set.
 
 ### Panic Occurances
 
@@ -274,10 +273,8 @@ import (
 )
 
 func main() {
-    // Create and register observer
+    // Create new observer
     observer := sentinel.NewObserver()
-    registry := prometheus.NewRegistry()
-    observer.MustRegister(registry)
     
     // Panic multiple times
     config := sentinel.TaskConfig{MaxRetries: 3}
@@ -352,15 +349,14 @@ import (
 )
 
 func main() {
-    // Create observer
+    // Create new observer
     observer := sentinel.NewObserver(
 	    sentinel.WithNamespace("myapp"),
 	    sentinel.WithSubsystem("workers"),
     )
-
-    // Register observer
-    registry := prometheus.NewRegistry()
-    observer.MustRegister(registry)
+    // Register with registry
+    registry = prometheus.NewRegistry()
+	observer.MustRegister(registry)
     
     // Expose metrics endpoint
     http.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
@@ -371,7 +367,7 @@ func main() {
         }
     }()
     
-    // Your application code ...
+    // Your application code...
     for range time.NewTicker(3 * time.Second).C {
         err := observer.RunFunc(doFunc)
         if err != nil {
