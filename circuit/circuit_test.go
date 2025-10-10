@@ -108,13 +108,17 @@ func TestOnErrorAs(t *testing.T) {
 func TestOnSignalAndDone(t *testing.T) {
 	t.Parallel()
 
-	sig := make(chan struct{}, 1)
-	bSig := OnSignal(sig)
-	bDone := OnDone(sig)
+	sig1 := make(chan struct{}, 1)
+	bSig := OnSignal(sig1)
+	sig2 := make(chan struct{}, 1)
+	bDone := OnDone(sig2)
+
 	if bSig(errors.New("x")) || bDone(errors.New("x")) {
 		t.Fatalf("should not trip before signal")
 	}
-	sig <- struct{}{}
+
+	sig1 <- struct{}{}
+	close(sig2)
 	if !bSig(errors.New("x")) || !bDone(errors.New("x")) {
 		t.Fatalf("should trip after signal")
 	}
