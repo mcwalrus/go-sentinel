@@ -29,7 +29,7 @@ type metrics struct {
 }
 
 // newMetrics creates a new metrics instance with the given configuration.
-// If bucketDurations is provided, the Durations histogram will be created.
+// If buckets is provided, the Durations histogram will be created.
 func newMetrics(cfg observerConfig) *metrics {
 	m := &metrics{
 		InFlight: prometheus.NewGauge(prometheus.GaugeOpts{
@@ -69,13 +69,13 @@ func newMetrics(cfg observerConfig) *metrics {
 		}),
 	}
 
-	if len(cfg.bucketDurations) > 0 {
+	if len(cfg.buckets) > 0 {
 		m.Durations = prometheus.NewHistogram(prometheus.HistogramOpts{
 			Namespace:   cfg.namespace,
 			Subsystem:   cfg.subsystem,
 			Name:        "durations_seconds",
 			Help:        fmt.Sprintf("Histogram of the observed durations of %s", cfg.description),
-			Buckets:     cfg.bucketDurations,
+			Buckets:     cfg.buckets,
 			ConstLabels: cfg.constLabels,
 		})
 	}

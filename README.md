@@ -168,24 +168,21 @@ import (
 )
 
 func main() {
-    // Observer with retry observability
+    // Create Observer with retry handling
     observer := sentinel.NewObserver(
-        sentinel.WithRetryMetrics(),
+        sentinel.WithRetryMetrics(sentinel.RetryConfig{
+            MaxRetries:    3,
+            Timeout:       10 * time.Second,
+            RetryStrategy: retry.WithJitter(
+                retry.Exponential(100*time.Millisecond),
+                time.Second,
+            ),
+        }),            
     )
-    
-    // Retries have wait between attempts
-    config := sentinel.TaskConfig{
-        MaxRetries:    3,
-        Timeout:       10 * time.Second,
-        RetryStrategy: retry.WithJitter(
-            retry.Exponential(100*time.Millisecond),
-            time.Second,
-        )
-    }
 
     // Fail twice, pass on third attempt
     var i int
-    err := observer.Run(config, func() error {
+    err := observer.Run(func() error {
         if i++; i < 2 {
             return errors.New("no good, try again")
         } else {

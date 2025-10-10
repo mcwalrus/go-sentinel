@@ -11,12 +11,12 @@ import (
 func testConfig(t *testing.T) observerConfig {
 	t.Helper()
 	return observerConfig{
-		namespace:       "test",
-		subsystem:       "metrics",
-		description:     "test operations",
-		bucketDurations: []float64{0.01, 0.1, 1, 10, 100},
-		trackTimeouts:   true,
-		trackRetries:    true,
+		namespace:     "test",
+		subsystem:     "metrics",
+		description:   "test operations",
+		buckets:       []float64{0.01, 0.1, 1, 10, 100},
+		trackTimeouts: true,
+		trackRetries:  true,
 	}
 }
 
@@ -180,10 +180,10 @@ func TestMetricLabels(t *testing.T) {
 		{
 			name: "no namespace or subsystem",
 			cfg: observerConfig{
-				namespace:       "",
-				subsystem:       "",
-				description:     "tasks",
-				bucketDurations: []float64{0.1, 1},
+				namespace:   "",
+				subsystem:   "",
+				description: "tasks",
+				buckets:     []float64{0.1, 1},
 			},
 			expected: map[string]string{
 				"in_flight":     "in_flight",
@@ -198,10 +198,10 @@ func TestMetricLabels(t *testing.T) {
 		{
 			name: "with namespace and subsystem",
 			cfg: observerConfig{
-				namespace:       "myapp",
-				subsystem:       "workers",
-				description:     "background tasks",
-				bucketDurations: []float64{0.1, 1},
+				namespace:   "myapp",
+				subsystem:   "workers",
+				description: "background tasks",
+				buckets:     []float64{0.1, 1},
 			},
 			expected: map[string]string{
 				"in_flight":     "myapp_workers_in_flight",
@@ -216,10 +216,10 @@ func TestMetricLabels(t *testing.T) {
 		{
 			name: "subsystem only",
 			cfg: observerConfig{
-				namespace:       "",
-				subsystem:       "api",
-				description:     "API calls",
-				bucketDurations: []float64{0.1, 1},
+				namespace:   "",
+				subsystem:   "api",
+				description: "API calls",
+				buckets:     []float64{0.1, 1},
 			},
 			expected: map[string]string{
 				"in_flight":     "api_in_flight",
@@ -264,10 +264,10 @@ func TestMetricHelpText(t *testing.T) {
 	t.Parallel()
 
 	cfg := observerConfig{
-		namespace:       "",
-		subsystem:       "",
-		description:     "test operations",
-		bucketDurations: []float64{0.1, 1},
+		namespace:   "",
+		subsystem:   "",
+		description: "test operations",
+		buckets:     []float64{0.1, 1},
 	}
 
 	m := newMetrics(cfg)

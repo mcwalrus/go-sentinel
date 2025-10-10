@@ -64,9 +64,6 @@ func NewObserver(opts ...ObserverOption) *Observer {
 	if cfg.description == "" {
 		cfg.description = "tasks"
 	}
-	if cfg.taskConfig == nil {
-		cfg.taskConfig = &TaskConfig{}
-	}
 
 	return &Observer{
 		cfg:     cfg,
@@ -88,57 +85,15 @@ func (o *Observer) MustRegister(registry prometheus.Registerer) {
 }
 
 // Run executes a function with the specified task configuration and observes its execution.
-// Any timeout specified through the task configuration will be ignored by the function.
+// Any timeout specified through the observer configuration will be ignored by the function.
 //
 // Example usage:
 //
 //	observer := sentinel.NewObserver()
-//	observer.Run(sentinel.TaskConfig{}, func() error {
+//	observer.Run(func() error {
 //		return nil
 //	})
-func (o *Observer) Run(cfg TaskConfig, fn func() error) error {
-	if o == nil || o.metrics == nil {
-		panic("observer: not configured")
-	}
-	task := &implTask{
-		cfg: cfg,
-		fn: func(ctx context.Context) error {
-			return fn() // ignore ctx
-		},
-	}
-	return o.observe(task)
-}
-
-// Run executes a function with the specified task configuration and observes its execution.
-// Any timeout specified through the task configuration will be set by the context passed to fn.
-//
-// Example usage:
-//
-//	observer := sentinel.NewObserver()
-//	observer.RunCtx(sentinel.TaskConfig{}, func(ctx context.Context) error {
-//		return nil
-//	})
-func (o *Observer) RunCtx(cfg TaskConfig, fn func(ctx context.Context) error) error {
-	if o == nil || o.metrics == nil {
-		panic("observer: not configured")
-	}
-	task := &implTask{
-		cfg: cfg,
-		fn:  fn,
-	}
-	return o.observe(task)
-}
-
-// RunFunc executes a function with the DefaultTaskConfig and observes its execution.
-// Any timeout specified through the task configuration will be ignored by the function.
-//
-// Example usage:
-//
-//	observer := sentinel.NewObserver()
-//	observer.RunFunc(func() error {
-//		return nil
-//	})
-func (o *Observer) RunFunc(fn func() error) error {
+func (o *Observer) Run(fn func() error) error {
 	if o == nil || o.metrics == nil {
 		panic("observer: not configured")
 	}
@@ -151,16 +106,16 @@ func (o *Observer) RunFunc(fn func() error) error {
 	return o.observe(task)
 }
 
-// RunFuncCtx executes a function with the DefaultTaskConfig and observes its execution.
-// Any timeout specified through the task configuration will be set by the context passed to fn.
+// RunFunc executes a function with the specified task configuration and observes its execution.
+// Any timeout specified through the observer configuration will be set by the context passed to fn.
 //
 // Example usage:
 //
 //	observer := sentinel.NewObserver()
-//	observer.RunFuncCtx(func(ctx context.Context) error {
+//	observer.RunFunc(func(ctx context.Context) error {
 //		return nil
 //	})
-func (o *Observer) RunFuncCtx(fn func(ctx context.Context) error) error {
+func (o *Observer) RunFunc(fn func(ctx context.Context) error) error {
 	if o == nil || o.metrics == nil {
 		panic("observer: not configured")
 	}
@@ -169,40 +124,12 @@ func (o *Observer) RunFuncCtx(fn func(ctx context.Context) error) error {
 		fn:  fn,
 	}
 	return o.observe(task)
-}
-
-// RunTask executes a [Task] implementation and observes its execution.
-// Any timeout specified through the task configuration will be set by the context passed to task.Execute.
-//
-// Example usage:
-//
-//	type CustomTask struct {}
-//	func (t *CustomTask) Config() sentinel.TaskConfig { /* ... */ }
-//	func (t *CustomTask) Execute(ctx context.Context) error { /* ... */ }
-//
-//	observer := sentinel.NewObserver()
-//	observer.RunTask(&CustomTask{})
-func (o *Observer) RunTask(task Task) error {
-	if o == nil || o.metrics == nil {
-		panic("observer: not configured")
-	}
-	t := &implTask{
-		cfg: task.Config(),
-		fn:  task.Execute,
-	}
-	return o.observe(t)
 }
 
 func (o *Observer) observe(task *implTask) (err error) {
 	o.metrics.InFlight.Inc()
 	defer o.metrics.InFlight.Dec()
 	return o.executeTask(task)
-}
-
-func (o *Observer) observeRuntime(start time.Time) {
-	if o.metrics.Durations != nil {
-		o.metrics.Durations.Observe(time.Since(start).Seconds())
-	}
 }
 
 func (o *Observer) executeTask(task *implTask) error {
@@ -218,7 +145,9 @@ func (o *Observer) executeTask(task *implTask) error {
 	err := func() (err error) {
 		start := time.Now()
 		defer func() {
-			o.observeRuntime(start)
+			if o.metrics.Durations != nil {
+				o.metrics.Durations.Observe(time.Since(start).Seconds())
+			}
 			if r := recover(); r != nil {
 				panicValue = r
 				err = &ErrRecoveredPanic{panic: r}
@@ -239,7 +168,7 @@ func (o *Observer) executeTask(task *implTask) error {
 		if panicValue != nil {
 			o.metrics.Panics.Inc()
 			if !o.cfg.recoverPanics {
-				panic(panicValue) // re-throw panic
+				panic(panicValue) // re-throw
 			}
 		}
 

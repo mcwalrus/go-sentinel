@@ -52,7 +52,7 @@ func Verify(t *testing.T, observer *Observer, m metricsCounts) {
 // It can execute either a custom function (fn) or use the built-in test logic.
 // See testTask.Execute for how the task is executed.
 type testTask struct {
-	cfg      TaskConfig
+	cfg      taskConfig
 	nRetries int
 	success  bool
 	err      error
@@ -60,9 +60,7 @@ type testTask struct {
 	fn       func(ctx context.Context) error
 }
 
-var _ Task = (*testTask)(nil)
-
-func (t *testTask) Config() TaskConfig {
+func (t *testTask) Config() taskConfig {
 	return t.cfg
 }
 
@@ -215,7 +213,7 @@ func TestObserve_SuccessfulExecution(t *testing.T) {
 		success: true,
 	}
 
-	err := observer.RunTask(task)
+	err := observer.observe(task)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
@@ -380,7 +378,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 	t.Run("with panic recovery disabled via ObserverOption", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(DisablePanicRecovery())
+		observer := NewObserver(PanicRecovery(recover bool))
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -397,7 +395,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 		// This should panic and be caught by our test
 		defer func() {
 			if r := recover(); r == nil {
-				t.Error("Expected panic to propagate when DisablePanicRecovery()")
+				t.Error("Expected panic to propagate when PanicRecovery(recover bool)")
 			} else {
 				// Verify panic was still recorded even though it propagated
 				Verify(t, observer, metricsCounts{
@@ -1015,7 +1013,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 	t.Run("with panic recovery disabled via ObserverOption", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(DisablePanicRecovery())
+		observer := NewObserver(PanicRecovery(recover bool))
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -1031,7 +1029,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 		// This should panic and be caught by our test
 		defer func() {
 			if r := recover(); r == nil {
-				t.Error("Expected panic to propagate when DisablePanicRecovery()")
+				t.Error("Expected panic to propagate when PanicRecovery(recover bool)")
 			} else {
 				// Verify panic was still recorded even though it propagated
 				Verify(t, observer, metricsCounts{

@@ -1,19 +1,23 @@
 package sentinel
 
 import (
+	"time"
+
+	"github.com/mcwalrus/go-sentinel/circuit"
+	"github.com/mcwalrus/go-sentinel/retry"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 type observerConfig struct {
-	namespace       string
-	subsystem       string
-	description     string
-	bucketDurations []float64
-	constLabels     prometheus.Labels
-	taskConfig      *TaskConfig
-	recoverPanics   bool
-	trackRetries    bool
-	trackTimeouts   bool
+	namespace     string
+	subsystem     string
+	description   string
+	buckets       []float64
+	trackRetries  bool
+	trackTimeouts bool
+	recoverPanics bool
+	taskConfig    *TaskConfig
+	constLabels   prometheus.Labels
 }
 
 // ObserverOption defines a configuration option for an Observer.
@@ -74,28 +78,11 @@ func WithDescription(description string) ObserverOption {
 // Example usage:
 //
 //	observer := sentinel.NewObserver(
-//	    sentinel.DisablePanicRecovery(),
+//	    sentinel.PanicRecovery(false),
 //	)
-func DisablePanicRecovery() ObserverOption {
+func PanicRecovery(recover bool) ObserverOption {
 	return func(cfg *observerConfig) {
-		cfg.recoverPanics = false
-	}
-}
-
-// WithTimeoutMetrics enables timeout-specific metrics tracking.
-// When enabled, a separate "timeouts_total" metric is created to track tasks that
-// failed due to context deadline exceeded. This provides visibility into timeout
-// occurrences separate from general errors, allowing for better monitoring of
-// timeout-related issues.
-//
-// Example usage:
-//
-//	observer := sentinel.NewObserver(
-//	    sentinel.WithTimeoutMetrics(),
-//	)
-func WithTimeoutMetrics() ObserverOption {
-	return func(cfg *observerConfig) {
-		cfg.trackTimeouts = true
+		cfg.recoverPanics = recover
 	}
 }
 
@@ -111,8 +98,36 @@ func WithTimeoutMetrics() ObserverOption {
 //	)
 func WithHistogramMetrics(buckets []float64) ObserverOption {
 	return func(cfg *observerConfig) {
-		cfg.bucketDurations = buckets
+		cfg.buckets = buckets
 	}
+}
+
+// WithTimeoutMetrics enables timeout-specific metrics tracking.
+// When enabled, a separate "timeouts_total" metric is created to track tasks that
+// failed due to context deadline exceeded. This provides visibility into timeout
+// occurrences separate from general errors, allowing for better monitoring of
+// timeout-related issues.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(
+//	    sentinel.WithTimeoutMetrics(),
+//	)
+func WithTimeoutMetrics(config *TimeoutConfig) ObserverOption {
+	return func(cfg *observerConfig) {
+		if config != nil {
+			cfg.trackTimeouts = true
+			cfg.taskConfig.Timeout = config.Timeout
+		}
+	}
+}
+
+type TimeoutConfig struct {
+	// Timeout is a context deadline for [Task.Execute]. By default, no timeout is applied.
+	// It is the responsibility of the [Task] to handle the deadline error whenever exceeded.
+	// The [Observer] records the timeout occurrences via metrics. The timeout will not be
+	// respected if the observer Run* func does not pass a context.
+	Timeout time.Duration
 }
 
 // WithRetryMetrics enables comprehensive retry observability metrics.
@@ -127,28 +142,34 @@ func WithHistogramMetrics(buckets []float64) ObserverOption {
 //	observer := sentinel.NewObserver(
 //	    sentinel.WithRetryMetrics(),
 //	)
-func WithRetryMetrics() ObserverOption {
+func WithRetryMetrics(config *RetryConfig) ObserverOption {
 	return func(cfg *observerConfig) {
-		cfg.trackRetries = true
+		if config != nil {
+			cfg.trackRetries = true
+			cfg.taskConfig.MaxRetries = config.MaxRetries
+			cfg.taskConfig.RetryStrategy = config.RetryStrategy
+			cfg.taskConfig.CircuitBreaker = config.CircuitBreaker
+		}
 	}
 }
 
-// WithDefaultTaskConfig sets the default [TaskConfig] for calls to [Observer.RunFunc]
-// and [Observer.RunFuncCtx] where task configuration is not specified through method
-// calls. By default, a basic task configuration without retry attempts will be used.
-//
-// Example usage:
-//
-//	observer := sentinel.NewObserver(
-//	    sentinel.WithDefaultTaskConfig(&sentinel.TaskConfig{
-//	        Timeout: 10 * time.Second,
-//	        MaxRetries: 3,
-//	    }),
-//	)
-func WithDefaultTaskConfig(taskConfig *TaskConfig) ObserverOption {
-	return func(cfg *observerConfig) {
-		cfg.taskConfig = taskConfig
-	}
+type RetryConfig struct {
+	// MaxRetries specifies the number of retry attempts for failed calls of [Task.Execute].
+	// If set to zero, no retries are performed. Each retry attempt is recorded via metrics.
+	// Errors returned from multiple retries are grouped by [errors.Join] as a single error.
+	MaxRetries int
+
+	// RetryStrategy is a handler to return wait durations between retry attempts. The first
+	// wait duration requested by the handler will provide retryCount at 0. Subsequent retries
+	// will increment retryCount. By default, no wait strategy is applied by the [Observer].
+	// Use the retry package for common strategies like retry.Exponential, retry.Linear, etc.
+	RetryStrategy retry.Strategy
+
+	// CircuitBreaker is a handler that when will avoid all following retry attempts when
+	// true is returned. The handler will be provided the error from the previous attempt.
+	// When nil, the [Observer] will always attempt the next retry. This is useful to stop
+	// retries when certain errors or conditions have occurred.
+	CircuitBreaker circuit.Breaker
 }
 
 // WithConstLabels sets constant labels to exported metrics from the Observer.
