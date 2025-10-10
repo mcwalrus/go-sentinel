@@ -13,6 +13,7 @@ import (
 	"time"
 
 	sentinel "github.com/mcwalrus/go-sentinel"
+	"github.com/mcwalrus/go-sentinel/retry"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -30,28 +31,28 @@ var (
 
 func init() {
 	// Background tasks observer
-	backgroundObserver = sentinel.NewObserver(sentinel.ObserverConfig{
-		Namespace:       "app",
-		Subsystem:       "background_tasks",
-		Description:     "Background processing tasks",
-		BucketDurations: []float64{0.1, 0.5, 1, 2, 5, 10, 30, 60},
-	})
+	backgroundObserver = sentinel.NewObserver(
+		sentinel.WithNamespace("app"),
+		sentinel.WithSubsystem("background_tasks"),
+		sentinel.WithDescription("Background processing tasks"),
+		sentinel.WithHistogramMetrics([]float64{0.1, 0.5, 1, 2, 5, 10, 30, 60}),
+	)
 
 	// Critical tasks observer
-	criticalObserver = sentinel.NewObserver(sentinel.ObserverConfig{
-		Namespace:       "app",
-		Subsystem:       "critical_tasks",
-		Description:     "Critical business operations",
-		BucketDurations: []float64{0.01, 0.1, 0.5, 1, 5, 10, 30},
-	})
+	criticalObserver = sentinel.NewObserver(
+		sentinel.WithNamespace("app"),
+		sentinel.WithSubsystem("critical_tasks"),
+		sentinel.WithDescription("Critical business operations"),
+		sentinel.WithHistogramMetrics([]float64{0.01, 0.1, 0.5, 1, 5, 10, 30}),
+	)
 
 	// API tasks observer
-	apiObserver = sentinel.NewObserver(sentinel.ObserverConfig{
-		Namespace:       "app",
-		Subsystem:       "api_requests",
-		Description:     "API request processing",
-		BucketDurations: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
-	})
+	apiObserver = sentinel.NewObserver(
+		sentinel.WithNamespace("app"),
+		sentinel.WithSubsystem("api_requests"),
+		sentinel.WithDescription("API request processing"),
+		sentinel.WithHistogramMetrics([]float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}),
+	)
 
 	limitChan = make(chan struct{}, 15)
 	registry = prometheus.NewRegistry()
@@ -70,15 +71,14 @@ type BackgroundTask struct {
 func (task *BackgroundTask) Config() sentinel.TaskConfig {
 	return sentinel.TaskConfig{
 		Timeout:       30 * time.Second,
-		RecoverPanics: true,
 		MaxRetries:    3,
-		RetryStrategy: sentinel.RetryStrategyExponentialBackoff(500 * time.Millisecond),
+		RetryStrategy: retry.Exponential(500 * time.Millisecond),
 	}
 }
 
 // Execute background tasks:
 // - Simulate background processing (2-10 seconds)
-// - Fail occasionally to show retry behavior
+// - Fail occasionally to show retry behaviour
 // - Complete the task successfully
 func (task *BackgroundTask) Execute(ctx context.Context) error {
 	limitChan <- struct{}{}
@@ -110,10 +110,8 @@ type CriticalTask struct {
 
 func (task *CriticalTask) Config() sentinel.TaskConfig {
 	return sentinel.TaskConfig{
-		Timeout:       5 * time.Second,
-		RecoverPanics: true,
-		MaxRetries:    2,
-		RetryStrategy: sentinel.RetryStrategyImmediate,
+		Timeout:    5 * time.Second,
+		MaxRetries: 2,
 	}
 }
 
@@ -156,8 +154,7 @@ type APITask struct {
 
 func (task *APITask) Config() sentinel.TaskConfig {
 	return sentinel.TaskConfig{
-		Timeout:       2 * time.Second,
-		RecoverPanics: true,
+		Timeout: 2 * time.Second,
 	}
 }
 

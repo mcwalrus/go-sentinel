@@ -34,7 +34,7 @@ docker-compose up -d
 | Metric | Type | Description |
 |--------|------|-------------|
 | `example_workerloop_in_flight` | Gauge | Tasks currently running |
-| `example_workerloop_successes_total` | Counter | Total successful tasks |
+| `example_workerloop_success_total` | Counter | Total successful tasks |
 | `example_workerloop_errors_total` | Counter | Total failed tasks |
 | `example_workerloop_timeouts_total` | Counter | Total timeout errors |
 | `example_workerloop_panics_total` | Counter | Total panics |

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	sentinel "github.com/mcwalrus/go-sentinel"
+	"github.com/mcwalrus/go-sentinel/retry"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -25,12 +26,12 @@ var (
 )
 
 func init() {
-	ob = sentinel.NewObserver(sentinel.ObserverConfig{
-		Namespace:       "example",
-		Subsystem:       "workerloop",
-		Description:     "Worker loop",
-		BucketDurations: []float64{0.01, 0.1, 1, 10, 100, 1000, 10_000},
-	})
+	ob = sentinel.NewObserver(
+		sentinel.WithNamespace("example"),
+		sentinel.WithSubsystem("workerloop"),
+		sentinel.WithDescription("Worker loop"),
+		sentinel.WithHistogramMetrics([]float64{0.01, 0.1, 1, 10, 100, 1000, 10_000}),
+	)
 	registry = prometheus.NewRegistry()
 	ob.MustRegister(registry)
 	limitChan = make(chan struct{}, 10)
@@ -44,9 +45,8 @@ type ProcessingTask struct {
 func (task *ProcessingTask) Config() sentinel.TaskConfig {
 	return sentinel.TaskConfig{
 		Timeout:       5 * time.Second,
-		RecoverPanics: true,
 		MaxRetries:    2,
-		RetryStrategy: sentinel.RetryStrategyImmediate,
+		RetryStrategy: retry.Linear(1 * time.Second),
 	}
 }
 

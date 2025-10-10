@@ -18,99 +18,123 @@ import (
 // - Retry Attempts
 
 type metrics struct {
-	InFlight         prometheus.Gauge
-	Successes        prometheus.Counter
-	Errors           prometheus.Counter
-	TimeoutErrors    prometheus.Counter
-	Panics           prometheus.Counter
-	ObservedRuntimes prometheus.Histogram
-	Retries          prometheus.Counter
+	InFlight  prometheus.Gauge
+	Successes prometheus.Counter
+	Failures  prometheus.Counter
+	Errors    prometheus.Counter
+	Timeouts  prometheus.Counter
+	Panics    prometheus.Counter
+	Durations prometheus.Histogram
+	Retries   prometheus.Counter
 }
 
 // newMetrics creates a new metrics instance with the given configuration.
-func newMetrics(cfg ObserverConfig) *metrics {
-	return &metrics{
+// If bucketDurations is provided, the Durations histogram will be created.
+func newMetrics(cfg observerConfig) *metrics {
+	m := &metrics{
 		InFlight: prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace:   cfg.Namespace,
-			Subsystem:   cfg.Subsystem,
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
 			Name:        "in_flight",
-			Help:        fmt.Sprintf("Number of observed %s in flight", cfg.Description),
-			ConstLabels: cfg.ConstLabels,
+			Help:        fmt.Sprintf("Number of observed %s in flight", cfg.description),
+			ConstLabels: cfg.constLabels,
 		}),
 		Successes: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace:   cfg.Namespace,
-			Subsystem:   cfg.Subsystem,
-			Name:        "successes_total",
-			Help:        fmt.Sprintf("Number of successes from observed %s", cfg.Description),
-			ConstLabels: cfg.ConstLabels,
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
+			Name:        "success_total",
+			Help:        fmt.Sprintf("Number of successes from observed %s", cfg.description),
+			ConstLabels: cfg.constLabels,
+		}),
+		Failures: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
+			Name:        "failures_total",
+			Help:        fmt.Sprintf("Number of failures from observed %s excluding retry attempts", cfg.description),
+			ConstLabels: cfg.constLabels,
 		}),
 		Errors: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace:   cfg.Namespace,
-			Subsystem:   cfg.Subsystem,
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
 			Name:        "errors_total",
-			Help:        fmt.Sprintf("Number of errors from observed %s", cfg.Description),
-			ConstLabels: cfg.ConstLabels,
-		}),
-		TimeoutErrors: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace:   cfg.Namespace,
-			Subsystem:   cfg.Subsystem,
-			Name:        "timeouts_total",
-			Help:        fmt.Sprintf("Number of timeout errors from observed %s", cfg.Description),
-			ConstLabels: cfg.ConstLabels,
+			Help:        fmt.Sprintf("Number of errors from observed %s including retries and panics", cfg.description),
+			ConstLabels: cfg.constLabels,
 		}),
 		Panics: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace:   cfg.Namespace,
-			Subsystem:   cfg.Subsystem,
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
 			Name:        "panics_total",
-			Help:        fmt.Sprintf("Number of panic occurances from observed %s", cfg.Description),
-			ConstLabels: cfg.ConstLabels,
-		}),
-		ObservedRuntimes: prometheus.NewHistogram(prometheus.HistogramOpts{
-			Namespace:   cfg.Namespace,
-			Subsystem:   cfg.Subsystem,
-			Name:        "durations_seconds",
-			Help:        fmt.Sprintf("Histogram of the observed durations of %s", cfg.Description),
-			Buckets:     cfg.BucketDurations,
-			ConstLabels: cfg.ConstLabels,
-		}),
-		Retries: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace:   cfg.Namespace,
-			Subsystem:   cfg.Subsystem,
-			Name:        "retries_total",
-			Help:        fmt.Sprintf("Number of retry attempts from observed %s", cfg.Description),
-			ConstLabels: cfg.ConstLabels,
+			Help:        fmt.Sprintf("Number of panic occurances from observed %s", cfg.description),
+			ConstLabels: cfg.constLabels,
 		}),
 	}
+
+	if len(cfg.bucketDurations) > 0 {
+		m.Durations = prometheus.NewHistogram(prometheus.HistogramOpts{
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
+			Name:        "durations_seconds",
+			Help:        fmt.Sprintf("Histogram of the observed durations of %s", cfg.description),
+			Buckets:     cfg.bucketDurations,
+			ConstLabels: cfg.constLabels,
+		})
+	}
+
+	if cfg.trackTimeouts {
+		m.Timeouts = prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
+			Name:        "timeouts_total",
+			Help:        fmt.Sprintf("Number of timeout errors from observed %s", cfg.description),
+			ConstLabels: cfg.constLabels,
+		})
+	}
+
+	if cfg.trackRetries {
+		m.Retries = prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
+			Name:        "retries_total",
+			Help:        fmt.Sprintf("Number of retry attempts from observed %s", cfg.description),
+			ConstLabels: cfg.constLabels,
+		})
+	}
+
+	return m
+}
+
+// collectors returns all collectors for the metrics.
+func (m *metrics) collectors() []prometheus.Collector {
+	c := []prometheus.Collector{
+		m.InFlight,
+		m.Successes,
+		m.Failures,
+		m.Errors,
+		m.Panics,
+	}
+	if m.Timeouts != nil {
+		c = append(c, m.Timeouts)
+	}
+	if m.Durations != nil {
+		c = append(c, m.Durations)
+	}
+	if m.Retries != nil {
+		c = append(c, m.Retries)
+	}
+	return c
 }
 
 // MustRegister registers all metrics with the given registry.
 // It panics if any metric fails to register.
 func (m *metrics) MustRegister(registry prometheus.Registerer) {
-	registry.MustRegister(
-		m.InFlight,
-		m.Successes,
-		m.Errors,
-		m.TimeoutErrors,
-		m.Panics,
-		m.ObservedRuntimes,
-		m.Retries,
-	)
+	registry.MustRegister(m.collectors()...)
 }
 
 // Register registers all metrics with the given registry.
 // It returns an error if any metric fails to register.
 func (m *metrics) Register(registry prometheus.Registerer) error {
-	collectors := []prometheus.Collector{
-		m.InFlight,
-		m.Successes,
-		m.Errors,
-		m.TimeoutErrors,
-		m.Panics,
-		m.ObservedRuntimes,
-		m.Retries,
-	}
 	var errs []error
-	for _, col := range collectors {
+	for _, col := range m.collectors() {
 		err := registry.Register(col)
 		if err != nil {
 			errs = append(errs, err)
