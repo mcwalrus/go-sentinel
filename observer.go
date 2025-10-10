@@ -40,7 +40,7 @@ type Observer struct {
 //	observer := sentinel.NewObserver(
 //	  sentinel.WithNamespace("myapp"),
 //	  sentinel.WithSubsystem("workers"),
-//	  sentinel.WithHistogramBuckets([]float64{0.05, 1, 5, 30, 600}),
+//	  sentinel.WithHistogramMetrics([]float64{0.05, 1, 5, 30, 600}),
 //	)
 func NewObserver(opts ...ObserverOption) *Observer {
 	cfg := observerConfig{
@@ -231,7 +231,7 @@ func (o *Observer) executeTask(task *implTask) error {
 	// Handle errors
 	if err != nil {
 		o.metrics.Errors.Inc()
-		if errors.Is(err, context.DeadlineExceeded) {
+		if o.metrics.TimeoutErrors != nil && errors.Is(err, context.DeadlineExceeded) {
 			o.metrics.TimeoutErrors.Inc()
 		}
 
@@ -266,7 +266,9 @@ func (o *Observer) executeTask(task *implTask) error {
 			}
 
 			// Wait retry duration
-			o.metrics.Retries.Inc()
+			if o.metrics.Retries != nil {
+				o.metrics.Retries.Inc()
+			}
 			if cfg.RetryStrategy != nil {
 				wait := cfg.RetryStrategy(task.retryCount)
 				if wait > 0 {

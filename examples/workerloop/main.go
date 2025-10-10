@@ -30,7 +30,7 @@ func init() {
 		sentinel.WithNamespace("example"),
 		sentinel.WithSubsystem("workerloop"),
 		sentinel.WithDescription("Worker loop"),
-		sentinel.WithHistogramBuckets([]float64{0.01, 0.1, 1, 10, 100, 1000, 10_000}),
+		sentinel.WithHistogramMetrics([]float64{0.01, 0.1, 1, 10, 100, 1000, 10_000}),
 	)
 	registry = prometheus.NewRegistry()
 	ob.MustRegister(registry)

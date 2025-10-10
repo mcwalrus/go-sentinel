@@ -36,7 +36,7 @@ func TestMetricsMustRegister(t *testing.T) {
 
 	expectedMetrics := []string{
 		"test_metrics_in_flight",
-		"test_metrics_successes_total",
+		"test_metrics_success_total",
 		"test_metrics_errors_total",
 		"test_metrics_timeouts_total",
 		"test_metrics_panics_total",
@@ -185,7 +185,7 @@ func TestMetricLabels(t *testing.T) {
 			},
 			expected: map[string]string{
 				"in_flight":         "in_flight",
-				"successes_total":   "successes_total",
+				"success_total":     "success_total",
 				"errors_total":      "errors_total",
 				"timeouts_total":    "timeouts_total",
 				"panics_total":      "panics_total",
@@ -203,7 +203,7 @@ func TestMetricLabels(t *testing.T) {
 			},
 			expected: map[string]string{
 				"in_flight":         "myapp_workers_in_flight",
-				"successes_total":   "myapp_workers_successes_total",
+				"success_total":     "myapp_workers_success_total",
 				"errors_total":      "myapp_workers_errors_total",
 				"timeouts_total":    "myapp_workers_timeouts_total",
 				"panics_total":      "myapp_workers_panics_total",
@@ -221,7 +221,7 @@ func TestMetricLabels(t *testing.T) {
 			},
 			expected: map[string]string{
 				"in_flight":         "api_in_flight",
-				"successes_total":   "api_successes_total",
+				"success_total":     "api_success_total",
 				"errors_total":      "api_errors_total",
 				"timeouts_total":    "api_timeouts_total",
 				"panics_total":      "api_panics_total",
@@ -279,7 +279,7 @@ func TestMetricHelpText(t *testing.T) {
 
 	expectedHelpTexts := map[string]string{
 		"in_flight":         "Number of observed test operations in flight",
-		"successes_total":   "Number of successes from observed test operations",
+		"success_total":     "Number of successes from observed test operations",
 		"errors_total":      "Number of errors from observed test operations",
 		"timeouts_total":    "Number of timeout errors from observed test operations",
 		"panics_total":      "Number of panic occurances from observed test operations",

@@ -42,7 +42,7 @@ func newMetrics(cfg observerConfig) *metrics {
 		Successes: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace:   cfg.namespace,
 			Subsystem:   cfg.subsystem,
-			Name:        "successes_total",
+			Name:        "success_total",
 			Help:        fmt.Sprintf("Number of successes from observed %s", cfg.description),
 			ConstLabels: cfg.constLabels,
 		}),
@@ -53,25 +53,11 @@ func newMetrics(cfg observerConfig) *metrics {
 			Help:        fmt.Sprintf("Number of errors from observed %s", cfg.description),
 			ConstLabels: cfg.constLabels,
 		}),
-		TimeoutErrors: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace:   cfg.namespace,
-			Subsystem:   cfg.subsystem,
-			Name:        "timeouts_total",
-			Help:        fmt.Sprintf("Number of timeout errors from observed %s", cfg.description),
-			ConstLabels: cfg.constLabels,
-		}),
 		Panics: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace:   cfg.namespace,
 			Subsystem:   cfg.subsystem,
 			Name:        "panics_total",
 			Help:        fmt.Sprintf("Number of panic occurances from observed %s", cfg.description),
-			ConstLabels: cfg.constLabels,
-		}),
-		Retries: prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace:   cfg.namespace,
-			Subsystem:   cfg.subsystem,
-			Name:        "retries_total",
-			Help:        fmt.Sprintf("Number of retry attempts from observed %s", cfg.description),
 			ConstLabels: cfg.constLabels,
 		}),
 	}
@@ -87,7 +73,24 @@ func newMetrics(cfg observerConfig) *metrics {
 		})
 	}
 
-	if cfg.trackFailures {
+	if cfg.trackTimeouts {
+		m.TimeoutErrors = prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
+			Name:        "timeouts_total",
+			Help:        fmt.Sprintf("Number of timeout errors from observed %s", cfg.description),
+			ConstLabels: cfg.constLabels,
+		})
+	}
+
+	if cfg.trackRetries {
+		m.Retries = prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
+			Name:        "retries_total",
+			Help:        fmt.Sprintf("Number of retry attempts from observed %s", cfg.description),
+			ConstLabels: cfg.constLabels,
+		})
 		m.FinalFailures = prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace:   cfg.namespace,
 			Subsystem:   cfg.subsystem,
@@ -106,12 +109,16 @@ func (m *metrics) collectors() []prometheus.Collector {
 		m.InFlight,
 		m.Successes,
 		m.Errors,
-		m.TimeoutErrors,
 		m.Panics,
-		m.Retries,
+	}
+	if m.TimeoutErrors != nil {
+		c = append(c, m.TimeoutErrors)
 	}
 	if m.ObservedRuntimes != nil {
 		c = append(c, m.ObservedRuntimes)
+	}
+	if m.Retries != nil {
+		c = append(c, m.Retries)
 	}
 	if m.FinalFailures != nil {
 		c = append(c, m.FinalFailures)

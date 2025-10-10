@@ -87,7 +87,7 @@ func TestObserver_DefaultConfig(t *testing.T) {
 
 	expected := []string{
 		"sentinel_in_flight",
-		"sentinel_successes_total",
+		"sentinel_success_total",
 		"sentinel_errors_total",
 		"sentinel_timeouts_total",
 		"sentinel_panics_total",
@@ -122,14 +122,14 @@ func TestObserver_CustomConfig(t *testing.T) {
 	observer := NewObserver(
 		WithNamespace("myapp"),
 		WithSubsystem("service"),
-		WithHistogramBuckets([]float64{0.1, 0.5, 1, 2, 5, 10, 30, 60}),
+		WithHistogramMetrics([]float64{0.1, 0.5, 1, 2, 5, 10, 30, 60}),
 	)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
 	expected := []string{
 		"myapp_service_in_flight",
-		"myapp_service_successes_total",
+		"myapp_service_success_total",
 		"myapp_service_errors_total",
 		"myapp_service_timeouts_total",
 		"myapp_service_panics_total",
@@ -198,7 +198,7 @@ func TestObserve_MustRegister(t *testing.T) {
 func TestObserve_SuccessfulExecution(t *testing.T) {
 	t.Parallel()
 
-	observer := NewObserver(WithHistogramBuckets([]float64{1, 3, 5}))
+	observer := NewObserver(WithHistogramMetrics([]float64{1, 3, 5}))
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
@@ -793,7 +793,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 
 			t.Logf("Running scenario: %s", scenario.name)
 
-			observer := NewObserver(WithHistogramBuckets([]float64{1, 2, 3}))
+			observer := NewObserver(WithHistogramMetrics([]float64{1, 2, 3}))
 			registry := prometheus.NewRegistry()
 			observer.MustRegister(registry)
 
@@ -880,7 +880,7 @@ func TestMultipleObservers(t *testing.T) {
 		WithNamespace("test"),
 		WithSubsystem("observer1"),
 		WithDescription("test operations"),
-		WithHistogramBuckets([]float64{0.01, 0.1, 1, 10, 100}),
+		WithHistogramMetrics([]float64{0.01, 0.1, 1, 10, 100}),
 	)
 
 	t.Log("Create observer2")
@@ -888,7 +888,7 @@ func TestMultipleObservers(t *testing.T) {
 		WithNamespace("test"),
 		WithSubsystem("observer2"),
 		WithDescription("test operations"),
-		WithHistogramBuckets([]float64{0.01, 0.1, 1, 10, 100}),
+		WithHistogramMetrics([]float64{0.01, 0.1, 1, 10, 100}),
 	)
 
 	t.Log("Create registry")
@@ -947,7 +947,7 @@ func Benchmark_ObserverRun(b *testing.B) {
 		WithNamespace("test"),
 		WithSubsystem("metrics"),
 		WithDescription("test operations"),
-		WithHistogramBuckets([]float64{0.01, 0.1, 1, 10, 100}),
+		WithHistogramMetrics([]float64{0.01, 0.1, 1, 10, 100}),
 	)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)

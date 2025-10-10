@@ -21,18 +21,17 @@ Sentinel provides retry handling and observability monitoring for Go application
 Standard configuration will automatically export the following observer metrics:
 
 | Metric | Type | Description | Default | Option |
-|--------|------|-------------|---------|----------|
+|--------|------|-------------|---------|--------|
 | `sentinel_in_flight` | Gauge | Active number of running tasks | Yes | - |
-| `sentinel_success_total` | Counter | Total successful task completions | Yes | - |
+| `sentinel_successes_total` | Counter | Total successful task completions | Yes | - |
 | `sentinel_errors_total` | Counter | Total task executions failures | Yes | - |
-| `sentinel_timeouts_total` | Counter | Total timeout based failures | Yes | - |
 | `sentinel_panics_total` | Counter | Total task panic occurrences | Yes | - |
-| `sentinel_durations_seconds` | Histogram | Distribution of task executions | No | _WithHistogramBuckets_ |
-| `sentinel_failures_total` | Counter | Total failures after all retry attempts | No | Hmmm  |
-| `sentinel_retries_total` | Counter | Total retry attempts after failures | No |  Hmmm |
+| `sentinel_timeouts_total` | Counter | Total timeout based failures | No | _WithTimeoutMetrics_ |
+| `sentinel_durations_seconds` | Histogram | Distribution of task executions | No | _WithHistogramMetrics_ |
+| `sentinel_retries_total` | Counter | Total retry attempts after failures | No | _WithRetryMetrics_ |
+| `sentinel_failures_total` | Counter | Total failures after all retry attempts | No | _WithRetryMetrics_ |
 
-
-Note failed _retry attempts_ and _panic occurances_ are both counted by __errors_total__ counter.
+You can configure exported observer metrics based on your application needs.
 
 ## Installation
 
@@ -98,7 +97,6 @@ func main() {
     
     // Records task errors
     err := observer.RunFunc(func() error {
-        fmt.Println("Uh oh...")
         return errors.New("task failed")
     })    
     // Handle your task error
@@ -126,8 +124,10 @@ import (
 )
 
 func main() {
-    // Create new observer
-    observer := sentinel.NewObserver()
+    // Observer with timeout metrics
+    observer := sentinel.NewObserver(
+        sentinel.WithTimeoutMetrics(),
+    )
     
     // TaskConfig with timeout
     config := sentinel.TaskConfig{
@@ -146,7 +146,7 @@ func main() {
 }
 ```
 
-Timeouts are recorded by both `timeouts_total` and `errors_total` counters.
+When timeout metrics are enabled, timeouts are recorded by both `timeouts_total` and `errors_total` counters.
 
 ### Retry Handling
 
@@ -168,12 +168,12 @@ import (
 )
 
 func main() {
-    // Observer with failure
+    // Observer with retry observability
     observer := sentinel.NewObserver(
-        sentinel.WithFailuresTracking(),
+        sentinel.WithRetryMetrics(),
     )
     
-    // Retries exponential backoff with jitter
+    // Retries have wait between attempts
     config := sentinel.TaskConfig{
         MaxRetries:    3,
         Timeout:       10 * time.Second,
@@ -183,7 +183,7 @@ func main() {
         )
     }
 
-    // Fail for two then pass next attempt
+    // Fail twice, pass on third attempt
     var i int
     err := observer.Run(config, func() error {
         if i++; i < 2 {
@@ -193,18 +193,18 @@ func main() {
             return nil
         }
     })
-    
+    // Handle your task error
     if err != nil {
         fmt.Printf("Task failed after all retries: %v\n", err)
     }
 }
 ```
 
-Note a task called with `MaxRetries=3` may be called up to _four times_ total.
+Errors are always recorded with `panics_total` and `errors_total` counters. Note a task called with `MaxRetries=3` may be called up to _four times_ total.
 
 ### Observe Durations
 
-Set histogram buckets with the Observer to export `durations_seconds` metrics:
+Set histogram buckets with the observer to export `durations_seconds` metrics:
 
 ```go
 package main
@@ -223,7 +223,7 @@ import (
 func main() {
     // Oserver with histogram buckets
     observer := sentinel.NewObserver(
-        sentinel.WithHistogramBuckets([]float64{1, 5, 8, 12, 15}),
+        sentinel.WithHistogramMetrics([]float64{1, 5, 8, 12, 15}),
     )
 
     // Configure observer with registry
@@ -246,7 +246,7 @@ func main() {
 }
 ```
 
-Note, duration metrics will not be exported unless `WithHistogramBuckets()` is set.
+Note, duration metrics will not be exported unless `WithHistogramMetrics()` is set.
 
 ### Panic Occurances
 
@@ -276,7 +276,7 @@ func main() {
         panic("panic stations :0")
     })
     
-    // Unwrap errors
+    // Unwraps errors.Join()
     errUnwrap, ok := (err).(interface {Unwrap() []error})
     if !ok {
         panic("not unwrap")
@@ -371,7 +371,7 @@ func main() {
 }
 ```
 
-Prometheus metrics will be exposed with names `myapp_workers_...` on host: _localhost:8080/metrics_.
+Prometheus metrics will be exposed with names `myapp_workers_...` on host _localhost:8080/metrics_.
 
 ## Contributing
 

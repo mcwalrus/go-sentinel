@@ -35,7 +35,7 @@ func init() {
 		sentinel.WithNamespace("app"),
 		sentinel.WithSubsystem("background_tasks"),
 		sentinel.WithDescription("Background processing tasks"),
-		sentinel.WithHistogramBuckets([]float64{0.1, 0.5, 1, 2, 5, 10, 30, 60}),
+		sentinel.WithHistogramMetrics([]float64{0.1, 0.5, 1, 2, 5, 10, 30, 60}),
 	)
 
 	// Critical tasks observer
@@ -43,7 +43,7 @@ func init() {
 		sentinel.WithNamespace("app"),
 		sentinel.WithSubsystem("critical_tasks"),
 		sentinel.WithDescription("Critical business operations"),
-		sentinel.WithHistogramBuckets([]float64{0.01, 0.1, 0.5, 1, 5, 10, 30}),
+		sentinel.WithHistogramMetrics([]float64{0.01, 0.1, 0.5, 1, 5, 10, 30}),
 	)
 
 	// API tasks observer
@@ -51,7 +51,7 @@ func init() {
 		sentinel.WithNamespace("app"),
 		sentinel.WithSubsystem("api_requests"),
 		sentinel.WithDescription("API request processing"),
-		sentinel.WithHistogramBuckets([]float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}),
+		sentinel.WithHistogramMetrics([]float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}),
 	)
 
 	limitChan = make(chan struct{}, 15)
