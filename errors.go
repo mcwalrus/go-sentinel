@@ -2,15 +2,21 @@ package sentinel
 
 import "errors"
 
+// ErrControlBreaker is the error returned when a control breaker is triggered.
+type ErrControlBreaker struct{}
+
+func (e *ErrControlBreaker) Error() string {
+	return "observer: control breaker avoided task execution entirely"
+}
+
 // ErrRecoveredPanic is the error returned when a panic occurs and is recovered
 // by the [Observer]. The panic value can be retrieved from the error directly.
 type ErrRecoveredPanic struct {
 	panic any
 }
 
-// Error implements the error interface.
 func (e *ErrRecoveredPanic) Error() string {
-	return "panic recovered during task execution"
+	return "observer: panic recovery made during function execution"
 }
 
 // RecoveredPanic returns the original panic value that was recovered.

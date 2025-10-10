@@ -23,13 +23,13 @@ Standard configuration will automatically export the following observer metrics:
 | Metric | Type | Description | Default | Option |
 |--------|------|-------------|---------|--------|
 | `sentinel_in_flight` | Gauge | Active number of running tasks | Yes | - |
-| `sentinel_successes_total` | Counter | Total successful task completions | Yes | - |
-| `sentinel_failures_total` | Counter | Total task completion failures | Yes | - |
-| `sentinel_errors_total` | Counter | Total errors including panics and retry failures | Yes | - |
-| `sentinel_panics_total` | Counter | Total task panic occurrences | Yes | - |
-| `sentinel_durations_seconds` | Histogram | Distribution of task executions | No | _WithHistogramMetrics_ |
-| `sentinel_timeouts_total` | Counter | Total timeout based failures | No | _WithTimeoutMetrics_ |
-| `sentinel_retries_total` | Counter | Total retry attempts after failures | No | _WithRetryMetrics_ |
+| `sentinel_successes_total` | Counter | Total successful tasks | Yes | - |
+| `sentinel_failures_total` | Counter | Total failed tasks | Yes | - |
+| `sentinel_errors_total` | Counter | Total errors over all attempts | Yes | - |
+| `sentinel_panics_total` | Counter | Total panic occurrences | Yes | - |
+| `sentinel_durations_seconds` | Histogram | Task execution durations in buckets | No | _WithDurationMetrics_ |
+| `sentinel_timeouts_total` | Counter | Total errors based on timeouts | No | _WithTimeoutMetrics_ |
+| `sentinel_retries_total` | Counter | Total retry attempts for tasks | No | _WithRetryMetrics_ |
 
 You can configure exported observer metrics based on your application needs.
 
@@ -56,15 +56,14 @@ import (
     "log"
     
     sentinel "github.com/mcwalrus/go-sentinel"
-    "github.com/prometheus/client_golang/prometheus"
 )
 
 func main() {
     // Create new observer
     observer := sentinel.NewObserver()
     
-    // Execute a simple task
-    err := observer.RunFunc(func() error {
+    // Execute simple task
+    err := observer.Run(func() error {
         fmt.Println("Processing task...")
         return nil
     })
@@ -88,7 +87,6 @@ import (
     "log"
     
     sentinel "github.com/mcwalrus/go-sentinel"
-    "github.com/prometheus/client_golang/prometheus"
 )
 
 func main() {
@@ -96,7 +94,7 @@ func main() {
     observer := sentinel.NewObserver()
     
     // Records task errors
-    err := observer.RunFunc(func() error {
+    err := observer.Run(func() error {
         return errors.New("task failed")
     })    
     // Handle your task error
@@ -120,7 +118,6 @@ import (
     "time"
     
     sentinel "github.com/mcwalrus/go-sentinel"
-    "github.com/prometheus/client_golang/prometheus"
 )
 
 func main() {
@@ -128,14 +125,14 @@ func main() {
     observer := sentinel.NewObserver(
         sentinel.WithTimeoutMetrics(),
     )
-    
-    // TaskConfig with timeout
-    config := sentinel.TaskConfig{
-        Timeout: 3 * time.Second,
-    }
+
+    // Set timeout
+    observer = observer.SetRunner(sentinel.RunConfig{
+        Timeout: 10 * time.Second,
+    })
 
     // Respects context timeout
-    err := observer.RunCtx(config, func(ctx context.Context) error {
+    err := observer.RunFunc(func(ctx context.Context) error {
             <-ctx.Done()
             return ctx.Err()
         },
@@ -164,21 +161,23 @@ import (
     
     sentinel "github.com/mcwalrus/go-sentinel"
     "github.com/mcwalrus/go-sentinel/retry"
-    "github.com/prometheus/client_golang/prometheus"
 )
 
 func main() {
-    // Create Observer with retry handling
+    // Observer with retry metrics
     observer := sentinel.NewObserver(
-        sentinel.WithRetryMetrics(sentinel.RetryConfig{
-            MaxRetries:    3,
-            Timeout:       10 * time.Second,
-            RetryStrategy: retry.WithJitter(
-                retry.Exponential(100*time.Millisecond),
-                time.Second,
-            ),
-        }),            
+        sentinel.WithRetryMetrics(),           
     )
+
+    // Set retry configuration
+    observer = observer.WithConfig(sentinel.RunConfig{
+        MaxRetries:    3,
+        Timeout:       10 * time.Second,
+        RetryStrategy: retry.WithJitter(
+            retry.Exponential(100*time.Millisecond),
+            time.Second,
+        ),
+    })
 
     // Fail twice, pass on third attempt
     var i int
@@ -214,18 +213,13 @@ import (
     "time"
     
     sentinel "github.com/mcwalrus/go-sentinel"
-    "github.com/prometheus/client_golang/prometheus"
 )
 
 func main() {
     // Oserver with histogram buckets
     observer := sentinel.NewObserver(
-        sentinel.WithHistogramMetrics([]float64{1, 5, 8, 12, 15}),
+        sentinel.WithDurationMetrics([]float64{1, 5, 8, 12, 15}),
     )
-
-    // Configure observer with registry
-    registry := prometheus.NewRegistry()
-    observer.MustRegister(registry)
     
     // Wait random intervals of time
     for range 1000 { 
@@ -243,7 +237,7 @@ func main() {
 }
 ```
 
-Note, duration metrics will not be exported unless `WithHistogramMetrics()` is set.
+Note, duration metrics will not be exported unless `WithDurationMetrics()` is set.
 
 ### Panic Occurances
 
@@ -291,41 +285,6 @@ func main() {
 
 Panics are always recorded with `panics_total` and `errors_total` counters.
 
-### Task Implementation
-
-An alternative means to describe tasks through `sentinel.Task` interface:
-
-```go
-// Example task
-type EmailTask struct {
-    To      string
-    Subject string
-    Body    string
-}
-
-// Define task configuration
-func (e *EmailTask) Config() sentinel.TaskConfig {
-    return sentinel.TaskConfig{
-        Timeout:       30 * time.Second,
-        MaxRetries:    3,
-        RetryStrategy: retry.Exponential(1 * time.Second),
-    }
-}
-
-// Implement task handling
-func (e *EmailTask) Execute(ctx context.Context) error {
-    fmt.Printf("Sending email to %s: %s\n", e.To, e.Subject)
-    return nil
-}
-
-// Example usage
-observer.RunTask(&EmailTask{
-    To:      "user@example.com",
-    Subject: "Welcome!",
-    Body:    "Welcome to our service!",
-})
-```
-
 ### Prometheus Integration
 
 Use template for integrating sentinel with a prometheus endpoint:
@@ -333,9 +292,11 @@ Use template for integrating sentinel with a prometheus endpoint:
 ```go
 import (
     "fmt"
+    "time"
     "net/http"
 
     sentinel "github.com/mcwalrus/go-sentinel"
+    "github.com/prometheus/client_golang/prometheus"
     "github.com/prometheus/client_golang/prometheus/promhttp"
 )
 

@@ -115,7 +115,7 @@ func TestObserver_DefaultConfig(t *testing.T) {
 
 	t.Log("Verify histogram buckets")
 	if _, ok := foundMetrics["sentinel_durations_seconds"]; ok {
-		t.Errorf("Expected not to find 'durations_seconds' on default observer config")
+		t.Errorf("Expected not to find 'durations_seconds' on default observer observerConfig")
 	}
 }
 
@@ -125,7 +125,7 @@ func TestObserver_CustomConfig(t *testing.T) {
 	observer := NewObserver(
 		WithNamespace("myapp"),
 		WithSubsystem("service"),
-		WithHistogramMetrics([]float64{0.1, 0.5, 1, 2, 5, 10, 30, 60}),
+		WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5, 10, 30, 60}),
 	)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
@@ -158,7 +158,7 @@ func TestObserver_CustomConfig(t *testing.T) {
 
 	t.Log("Verify histogram buckets")
 	if _, ok := foundMetrics["myapp_service_durations_seconds"]; !ok {
-		t.Errorf("Expected to find 'durations_seconds' on observer config with histogram buckets")
+		t.Errorf("Expected to find 'durations_seconds' on observer observerConfig with histogram buckets")
 	}
 }
 
@@ -201,7 +201,7 @@ func TestObserve_MustRegister(t *testing.T) {
 func TestObserve_SuccessfulExecution(t *testing.T) {
 	t.Parallel()
 
-	observer := NewObserver(WithHistogramMetrics([]float64{1, 3, 5}))
+	observer := NewObserver(WithDurationMetrics([]float64{1, 3, 5}))
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
@@ -375,7 +375,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 		})
 	})
 
-	t.Run("with panic recovery disabled via ObserverOption", func(t *testing.T) {
+	t.Run("with panic recovery disabled via PrometheusOption", func(t *testing.T) {
 		t.Parallel()
 
 		observer := NewObserver(PanicRecovery(recover bool))
@@ -796,7 +796,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 
 			t.Logf("Running scenario: %s", scenario.name)
 
-			observer := NewObserver(WithHistogramMetrics([]float64{1, 2, 3}))
+			observer := NewObserver(WithDurationMetrics([]float64{1, 2, 3}))
 			registry := prometheus.NewRegistry()
 			observer.MustRegister(registry)
 
@@ -883,7 +883,7 @@ func TestMultipleObservers(t *testing.T) {
 		WithNamespace("test"),
 		WithSubsystem("observer1"),
 		WithDescription("test operations"),
-		WithHistogramMetrics([]float64{0.01, 0.1, 1, 10, 100}),
+		WithDurationMetrics([]float64{0.01, 0.1, 1, 10, 100}),
 	)
 
 	t.Log("Create observer2")
@@ -891,7 +891,7 @@ func TestMultipleObservers(t *testing.T) {
 		WithNamespace("test"),
 		WithSubsystem("observer2"),
 		WithDescription("test operations"),
-		WithHistogramMetrics([]float64{0.01, 0.1, 1, 10, 100}),
+		WithDurationMetrics([]float64{0.01, 0.1, 1, 10, 100}),
 	)
 
 	t.Log("Create registry")
@@ -950,7 +950,7 @@ func Benchmark_ObserverRun(b *testing.B) {
 		WithNamespace("test"),
 		WithSubsystem("metrics"),
 		WithDescription("test operations"),
-		WithHistogramMetrics([]float64{0.01, 0.1, 1, 10, 100}),
+		WithDurationMetrics([]float64{0.01, 0.1, 1, 10, 100}),
 	)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
@@ -1010,7 +1010,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 		})
 	})
 
-	t.Run("with panic recovery disabled via ObserverOption", func(t *testing.T) {
+	t.Run("with panic recovery disabled via PrometheusOption", func(t *testing.T) {
 		t.Parallel()
 
 		observer := NewObserver(PanicRecovery(recover bool))

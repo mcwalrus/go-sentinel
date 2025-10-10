@@ -59,20 +59,16 @@ func WithJitter(strategy Strategy, maxJitter time.Duration) Strategy {
 	if maxJitter <= 0 {
 		return strategy
 	}
-
 	return func(retries int) time.Duration {
 		base := strategy(retries)
-
 		maxNs := maxJitter.Nanoseconds()
 		if maxNs <= 0 {
 			return base
 		}
-
 		n, err := rand.Int(rand.Reader, big.NewInt(maxNs+1))
 		if err != nil {
 			return base
 		}
-
 		jitter := time.Duration(n.Int64())
 		return base + jitter
 	}

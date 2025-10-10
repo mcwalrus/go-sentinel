@@ -6,13 +6,39 @@ import (
 	"time"
 )
 
-// Breaker determines whether retries should stop given the last error.
-// It returns true to stop further retries.
+// Breaker determines whether attempt to run task should stop given the latest error.
+// It returns true to stop further attempts to run tasks. False will allow attempts to
+// continue. The breaker will always expect an error to be provided.
 type Breaker func(err error) bool
 
-// OnPanic stops retries when the last error originated from a panic recovery.
-// It detects sentinel.ErrRecoveredPanic without importing the sentinel package
-// by matching a type that satisfies the same method set.
+// Control determines whether attempt to run task should stop either before the initial
+// attempt or any retry attempt. It returns true to stop further attempts to run tasks.
+// False will allow attempts to continue.
+type Control func() bool
+
+// After stops retries when total elapsed time since breaker creation exceeds d.
+func After(d time.Duration) Breaker {
+	start := time.Now()
+	return func(err error) bool {
+		_ = err
+		return time.Since(start) > d
+	}
+}
+
+// OnMatch uses func match to decide if attempts to run tasks should stop.
+// Note the approach can be achieved just by providing match as [Breaker] itself.
+func OnMatch(match func(error) bool) Breaker {
+	return func(err error) bool {
+		if match == nil {
+			return false
+		}
+		return match(err)
+	}
+}
+
+// OnPanic stops attempts to run tasks when the last error originated by Go panic().
+// It can detect sentinel.ErrRecoveredPanic without importing the sentinel package
+// by matching a interface that satisfies the same method set.
 func OnPanic() Breaker {
 	type panicError interface {
 		error
@@ -24,53 +50,7 @@ func OnPanic() Breaker {
 	}
 }
 
-// After stops retries when total elapsed time since breaker creation exceeds d.
-func After(d time.Duration) Breaker {
-	start := time.Now()
-	return func(err error) bool {
-		_ = err
-		return time.Since(start) > d
-	}
-}
-
-// OnError uses a predicate to decide if retries should stop.
-func OnError(match func(error) bool) Breaker {
-	return func(err error) bool {
-		if match == nil {
-			return false
-		}
-		return match(err)
-	}
-}
-
-// OnErrors stops on any of the specified errors (by errors.Is semantics).
-func OnErrors(errs ...error) Breaker {
-	return func(err error) bool {
-		for _, e := range errs {
-			if e != nil && errors.Is(err, e) {
-				return true
-			}
-		}
-		return false
-	}
-}
-
-// OnErrorIs stops when errors.Is(err, target) is true.
-func OnErrorIs(target error) Breaker {
-	return func(err error) bool {
-		return target != nil && errors.Is(err, target)
-	}
-}
-
-// OnErrorAs stops when errors.As(err, &T) is true.
-func OnErrorAs[T any]() Breaker {
-	return func(err error) bool {
-		var zero T
-		return errors.As(err, &zero)
-	}
-}
-
-// Any returns a breaker that stops when any of the provided breakers stop.
+// Any returns a breaker that stops when any of the provided breakers match.
 func Any(bs ...Breaker) Breaker {
 	return func(err error) bool {
 		for _, b := range bs {
