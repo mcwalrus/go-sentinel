@@ -127,7 +127,7 @@ func main() {
     )
 
     // Set timeout
-    observer = observer.SetRunner(sentinel.RunConfig{
+    observer = observer.SetRunner(sentinel.TaskConfig{
         Timeout: 10 * time.Second,
     })
 
@@ -170,7 +170,7 @@ func main() {
     )
 
     // Set retry configuration
-    observer = observer.WithConfig(sentinel.RunConfig{
+    observer = observer.WithConfig(sentinel.TaskConfig{
         MaxRetries:    3,
         Timeout:       10 * time.Second,
         RetryStrategy: retry.WithJitter(

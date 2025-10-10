@@ -6,6 +6,7 @@ package sentinel
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -15,10 +16,11 @@ import (
 // for successes, failures, timeouts, panics, retries, and observed runtimes.
 // It provides methods to execute tasks with various TaskConfig options.
 type Observer struct {
+	m             *sync.Mutex
 	cfg           observerConfig
 	metrics       *metrics
 	recoverPanics bool
-	runner        RunConfig
+	runner        TaskConfig
 }
 
 // NewObserver configures a new Observer with specified prometheus metrics.
@@ -62,19 +64,20 @@ func NewObserver(opts ...PrometheusOption) *Observer {
 	}
 
 	return &Observer{
+		m:       &sync.Mutex{},
 		cfg:     cfg,
 		metrics: newMetrics(cfg),
 	}
 }
 
-// TODO: redo docs.
+// TODO: redo / revise docs.
 // Register registers all Observer metrics with the provided Prometheus registry.
 // Use [Observer.MustRegister] if you want the program to panic on registration conflicts.
 func (o *Observer) Register(registry prometheus.Registerer) error {
 	return o.metrics.Register(registry)
 }
 
-// TODO: redo docs.
+// TODO: redo / revise docs.
 // MustRegister registers all Observer metrics with the provided Prometheus registry.
 // This method panics if any metric registration failures. Use [Observer.Register] if you prefer
 // to handle registration errors gracefully.
@@ -83,26 +86,31 @@ func (o *Observer) MustRegister(registry prometheus.Registerer) {
 }
 
 // TODO: redo docs.
-// UseRunConfig configures the observer with a different set of RunConfig.
-// It allows the observer to be configured with different options for observer Run methods.
-// They create new observers with the same underlying registered metrics, but can support
-// different configurations. This approach allows for different ways to run functions with
-// without specifying the configuration repeatedly.
-func (o *Observer) UseRunConfig(config RunConfig) *Observer {
+// Branch creates a new Observer with shared underlying metrics as the current Observer.
+// The child shares the underlying metrics but hold different configurations for how to handle
+// Run methods including the use of different TaskConfig and recovery behaviour.
+func (o *Observer) Branch() *Observer {
 	newObserver := *o
-	newObserver.runner = config
 	return &newObserver
 }
 
-// TODO: document.
+// TODO: redo docs.
+// UseConfig configures the observer for how to handle Run methods.
+func (o *Observer) UseConfig(config TaskConfig) {
+	o.m.Lock()
+	o.runner = config
+	o.m.Unlock()
+}
+
+// TODO: revise docs.
 // Used to set whether panic recovery should be disabled. Recovery is enabled by default.
 // It is recommended against disabling panic recovery unless you have a reason to propagate
 // panics to the caller. An alternative means is to retrieve panic value from the error using
 // [IsPanicError] after Run* methods have been executed.
-func (o *Observer) DisableRecovery() *Observer {
-	newObserver := *o
-	newObserver.recoverPanics = false
-	return &newObserver
+func (o *Observer) DisablePanicRecovery() {
+	o.m.Lock()
+	o.recoverPanics = false
+	o.m.Unlock()
 }
 
 // Run executes fn and records metrics according to the observer's configuration.
@@ -119,14 +127,18 @@ func (o *Observer) Run(fn func() error) error {
 	if o == nil || o.metrics == nil {
 		panic("observer: not configured")
 	}
+	o.m.Lock()
+	cfg := o.runner
+	o.m.Unlock()
 
 	task := &implTask{
+		cfg: cfg,
 		fn: func(ctx context.Context) error {
 			return fn() // ignore ctx
 		},
 	}
-	if o.runner.Control != nil {
-		if o.runner.Control() {
+	if cfg.Control != nil {
+		if cfg.Control() {
 			return &ErrControlBreaker{}
 		}
 	}
@@ -148,12 +160,16 @@ func (o *Observer) RunFunc(fn func(ctx context.Context) error) error {
 	if o == nil || o.metrics == nil {
 		panic("observer: not configured")
 	}
+	o.m.Lock()
+	cfg := o.runner
+	o.m.Unlock()
 
 	task := &implTask{
-		fn: fn,
+		cfg: cfg,
+		fn:  fn,
 	}
-	if o.runner.Control != nil {
-		if o.runner.Control() {
+	if cfg.Control != nil {
+		if cfg.Control() {
 			return &ErrControlBreaker{}
 		}
 	}
@@ -171,9 +187,11 @@ func (o *Observer) observe(task *implTask) (err error) {
 // execute is the main entry point for executing a task.
 func (o *Observer) execute(task *implTask) error {
 	var ctx = context.Background()
-	if o.runner.Timeout > 0 {
+
+	// Respect timeout
+	if task.cfg.Timeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, o.runner.Timeout)
+		ctx, cancel = context.WithTimeout(ctx, task.cfg.Timeout)
 		defer cancel()
 	}
 
@@ -210,23 +228,23 @@ func (o *Observer) execute(task *implTask) error {
 		}
 
 		// Handle retries
-		if o.runner.MaxRetries > 0 {
+		if task.cfg.MaxRetries > 0 {
 
 			// Maximum retries reached
-			if task.retryCount >= o.runner.MaxRetries {
+			if task.retryCount >= task.cfg.MaxRetries {
 				o.metrics.Failures.Inc()
 				return err
 			}
 
 			// Try circuit breakers
-			if o.runner.RetryBreaker != nil {
-				if o.runner.RetryBreaker(err) {
+			if task.cfg.RetryBreaker != nil {
+				if task.cfg.RetryBreaker(err) {
 					o.metrics.Failures.Inc()
 					return err
 				}
 			}
-			if o.runner.Control != nil {
-				if o.runner.Control() {
+			if task.cfg.Control != nil {
+				if task.cfg.Control() {
 					o.metrics.Failures.Inc()
 					return err
 				}
@@ -236,8 +254,8 @@ func (o *Observer) execute(task *implTask) error {
 			if o.metrics.Retries != nil {
 				o.metrics.Retries.Inc()
 			}
-			if o.runner.RetryStrategy != nil {
-				wait := o.runner.RetryStrategy(task.retryCount)
+			if task.cfg.RetryStrategy != nil {
+				wait := task.cfg.RetryStrategy(task.retryCount)
 				if wait > 0 {
 					time.Sleep(wait)
 				}

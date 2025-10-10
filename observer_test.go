@@ -52,7 +52,7 @@ func Verify(t *testing.T, observer *Observer, m metricsCounts) {
 // It can execute either a custom function (fn) or use the built-in test logic.
 // See testTask.Execute for how the task is executed.
 type testTask struct {
-	cfg      taskConfig
+	cfg      TaskConfig
 	nRetries int
 	success  bool
 	err      error
@@ -60,7 +60,7 @@ type testTask struct {
 	fn       func(ctx context.Context) error
 }
 
-func (t *testTask) Config() taskConfig {
+func (t *testTask) Config() TaskConfig {
 	return t.cfg
 }
 
@@ -91,15 +91,20 @@ func TestObserver_DefaultConfig(t *testing.T) {
 	expected := []string{
 		"sentinel_in_flight",
 		"sentinel_success_total",
+		"sentinel_failures_total",
 		"sentinel_errors_total",
-		// "sentinel_timeouts_total",
 		"sentinel_panics_total",
-		// "sentinel_retries_total",
 	}
 
 	families, err := registry.Gather()
 	if err != nil {
 		t.Fatalf("Failed to gather metrics: %v", err)
+	}
+	if len(families) != len(expected) {
+		t.Errorf(
+			"Expected %d metrics, got %d",
+			len(expected), len(families),
+		)
 	}
 
 	foundMetrics := make(map[string]bool)
@@ -126,6 +131,8 @@ func TestObserver_CustomConfig(t *testing.T) {
 		WithNamespace("myapp"),
 		WithSubsystem("service"),
 		WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5, 10, 30, 60}),
+		WithTimeoutMetrics(),
+		WithRetryMetrics(),
 	)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
@@ -134,10 +141,10 @@ func TestObserver_CustomConfig(t *testing.T) {
 		"myapp_service_in_flight",
 		"myapp_service_success_total",
 		"myapp_service_errors_total",
-		// "myapp_service_timeouts_total",
+		"myapp_service_timeouts_total",
 		"myapp_service_panics_total",
 		"myapp_service_durations_seconds",
-		// "myapp_service_retries_total",
+		"myapp_service_retries_total",
 	}
 
 	families, err := registry.Gather()
@@ -378,7 +385,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 	t.Run("with panic recovery disabled via PrometheusOption", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(PanicRecovery(recover bool))
+		observer := NewObserver()
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -391,6 +398,8 @@ func TestObserve_PanicRecovery(t *testing.T) {
 				panic("test panic")
 			},
 		}
+
+		observer.DisableRecovery()
 
 		// This should panic and be caught by our test
 		defer func() {
@@ -1013,7 +1022,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 	t.Run("with panic recovery disabled via PrometheusOption", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(PanicRecovery(recover bool))
+		observer := NewObserver()
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -1025,6 +1034,8 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 				panic("test panic")
 			},
 		}
+
+		observer.DisableRecovery()
 
 		// This should panic and be caught by our test
 		defer func() {
