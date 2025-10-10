@@ -249,7 +249,7 @@ func TestObserve_SuccessfulExecution(t *testing.T) {
 	}
 
 	if histogramSampleCount != 1 {
-		t.Errorf("Expected ObservedRuntimes count=1, got %d", histogramSampleCount)
+		t.Errorf("Expected Durations count=1, got %d", histogramSampleCount)
 	}
 }
 

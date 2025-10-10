@@ -200,8 +200,8 @@ func (o *Observer) observe(task *implTask) (err error) {
 }
 
 func (o *Observer) observeRuntime(start time.Time) {
-	if o.metrics.ObservedRuntimes != nil {
-		o.metrics.ObservedRuntimes.Observe(time.Since(start).Seconds())
+	if o.metrics.Durations != nil {
+		o.metrics.Durations.Observe(time.Since(start).Seconds())
 	}
 }
 

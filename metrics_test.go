@@ -125,9 +125,9 @@ func TestMetricUpdates(t *testing.T) {
 	m.InFlight.Dec()
 
 	// Observe metrics
-	m.ObservedRuntimes.Observe(0.05)
-	m.ObservedRuntimes.Observe(0.5)
-	m.ObservedRuntimes.Observe(5.0)
+	m.Durations.Observe(0.05)
+	m.Durations.Observe(0.5)
+	m.Durations.Observe(5.0)
 
 	// Verify metrics
 	if got := testutil.ToFloat64(m.Successes); got != 1 {
@@ -165,7 +165,7 @@ func TestMetricUpdates(t *testing.T) {
 	}
 
 	if histogramSampleCount != 3 {
-		t.Errorf("Expected ObservedRuntimes count=3, got %d", histogramSampleCount)
+		t.Errorf("Expected Durations count=3, got %d", histogramSampleCount)
 	}
 }
 

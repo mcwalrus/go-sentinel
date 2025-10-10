@@ -18,18 +18,18 @@ import (
 // - Retry Attempts
 
 type metrics struct {
-	InFlight         prometheus.Gauge
-	Successes        prometheus.Counter
-	Errors           prometheus.Counter
-	Timeouts         prometheus.Counter
-	Panics           prometheus.Counter
-	ObservedRuntimes prometheus.Histogram
-	Retries          prometheus.Counter
-	FinalFailures    prometheus.Counter
+	InFlight      prometheus.Gauge
+	Successes     prometheus.Counter
+	FinalFailures prometheus.Counter
+	Errors        prometheus.Counter
+	Timeouts      prometheus.Counter
+	Panics        prometheus.Counter
+	Durations     prometheus.Histogram
+	Retries       prometheus.Counter
 }
 
 // newMetrics creates a new metrics instance with the given configuration.
-// If bucketDurations is provided, the ObservedRuntimes histogram will be created.
+// If bucketDurations is provided, the Durations histogram will be created.
 func newMetrics(cfg observerConfig) *metrics {
 	m := &metrics{
 		InFlight: prometheus.NewGauge(prometheus.GaugeOpts{
@@ -63,7 +63,7 @@ func newMetrics(cfg observerConfig) *metrics {
 	}
 
 	if len(cfg.bucketDurations) > 0 {
-		m.ObservedRuntimes = prometheus.NewHistogram(prometheus.HistogramOpts{
+		m.Durations = prometheus.NewHistogram(prometheus.HistogramOpts{
 			Namespace:   cfg.namespace,
 			Subsystem:   cfg.subsystem,
 			Name:        "durations_seconds",
@@ -114,8 +114,8 @@ func (m *metrics) collectors() []prometheus.Collector {
 	if m.Timeouts != nil {
 		c = append(c, m.Timeouts)
 	}
-	if m.ObservedRuntimes != nil {
-		c = append(c, m.ObservedRuntimes)
+	if m.Durations != nil {
+		c = append(c, m.Durations)
 	}
 	if m.Retries != nil {
 		c = append(c, m.Retries)
