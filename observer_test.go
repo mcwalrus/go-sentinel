@@ -1306,3 +1306,58 @@ func TestCircuitBreaker_EdgeCases(t *testing.T) {
 		})
 	})
 }
+
+func TestObserver_UnconfiguredObserver(t *testing.T) {
+	t.Run("observer nil pointer", func(t *testing.T) {
+		t.Parallel()
+		var observer *Observer = nil
+		ExpectObserverMethodsPanic(t, observer)
+	})
+
+	t.Run("observer variable declaration", func(t *testing.T) {
+		t.Parallel()
+		observer := &Observer{}
+		ExpectObserverMethodsPanic(t, observer)
+	})
+}
+
+func ExpectObserverMethodsPanic(t *testing.T, observer *Observer) {
+	t.Helper()
+
+	var expectPanic = func(t *testing.T, msg string) {
+		if r := recover(); r == nil {
+			t.Errorf("Expected panic: %s", msg)
+		}
+	}
+
+	t.Run("Run", func(t *testing.T) {
+		t.Parallel()
+		defer expectPanic(t, "observer.Run")
+		_ = observer.Run(TaskConfig{}, func() error { return nil })
+	})
+
+	t.Run("RunCtx", func(t *testing.T) {
+		t.Parallel()
+		defer expectPanic(t, "observer.RunCtx")
+		_ = observer.RunCtx(TaskConfig{}, func(ctx context.Context) error { return nil })
+	})
+
+	t.Run("RunFunc", func(t *testing.T) {
+		t.Parallel()
+		defer expectPanic(t, "observer.RunFunc")
+		_ = observer.RunFunc(func() error { return nil })
+	})
+
+	t.Run("RunFuncCtx", func(t *testing.T) {
+		t.Parallel()
+		defer expectPanic(t, "observer.RunFuncCtx")
+		_ = observer.RunFuncCtx(func(ctx context.Context) error { return nil })
+	})
+
+	t.Run("RunTask", func(t *testing.T) {
+		t.Parallel()
+		defer expectPanic(t, "observer.RunTask")
+		task := &testTask{success: true}
+		_ = observer.RunTask(task)
+	})
+}

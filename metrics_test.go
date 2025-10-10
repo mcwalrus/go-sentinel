@@ -15,6 +15,8 @@ func testConfig(t *testing.T) observerConfig {
 		subsystem:       "metrics",
 		description:     "test operations",
 		bucketDurations: []float64{0.01, 0.1, 1, 10, 100},
+		trackTimeouts:   true,
+		trackRetries:    true,
 	}
 }
 
