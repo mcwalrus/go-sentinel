@@ -21,7 +21,7 @@ type metrics struct {
 	InFlight         prometheus.Gauge
 	Successes        prometheus.Counter
 	Errors           prometheus.Counter
-	TimeoutErrors    prometheus.Counter
+	Timeouts         prometheus.Counter
 	Panics           prometheus.Counter
 	ObservedRuntimes prometheus.Histogram
 	Retries          prometheus.Counter
@@ -74,7 +74,7 @@ func newMetrics(cfg observerConfig) *metrics {
 	}
 
 	if cfg.trackTimeouts {
-		m.TimeoutErrors = prometheus.NewCounter(prometheus.CounterOpts{
+		m.Timeouts = prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace:   cfg.namespace,
 			Subsystem:   cfg.subsystem,
 			Name:        "timeouts_total",
@@ -111,8 +111,8 @@ func (m *metrics) collectors() []prometheus.Collector {
 		m.Errors,
 		m.Panics,
 	}
-	if m.TimeoutErrors != nil {
-		c = append(c, m.TimeoutErrors)
+	if m.Timeouts != nil {
+		c = append(c, m.Timeouts)
 	}
 	if m.ObservedRuntimes != nil {
 		c = append(c, m.ObservedRuntimes)

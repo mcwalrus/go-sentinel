@@ -231,8 +231,8 @@ func (o *Observer) executeTask(task *implTask) error {
 	// Handle errors
 	if err != nil {
 		o.metrics.Errors.Inc()
-		if o.metrics.TimeoutErrors != nil && errors.Is(err, context.DeadlineExceeded) {
-			o.metrics.TimeoutErrors.Inc()
+		if o.metrics.Timeouts != nil && errors.Is(err, context.DeadlineExceeded) {
+			o.metrics.Timeouts.Inc()
 		}
 
 		// Handle panics

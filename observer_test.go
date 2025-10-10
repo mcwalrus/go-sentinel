@@ -17,9 +17,10 @@ import (
 type metricsCounts struct {
 	Successes     float64
 	Errors        float64
-	TimeoutErrors float64
+	Timeouts      float64
 	Panics        float64
 	Retries       float64
+	RetryFailures float64
 }
 
 // Verify validates observer metrics counts
@@ -31,14 +32,18 @@ func Verify(t *testing.T, observer *Observer, m metricsCounts) {
 	if got := testutil.ToFloat64(observer.metrics.Errors); got != m.Errors {
 		t.Errorf("Expected Errors=%f, got %f", m.Errors, got)
 	}
-	if got := testutil.ToFloat64(observer.metrics.TimeoutErrors); got != m.TimeoutErrors {
-		t.Errorf("Expected TimeoutErrors=%f, got %f", m.TimeoutErrors, got)
+	if observer.metrics.Timeouts != nil {
+		if got := testutil.ToFloat64(observer.metrics.Timeouts); got != m.Timeouts {
+			t.Errorf("Expected Timeouts=%f, got %f", m.Timeouts, got)
+		}
 	}
 	if got := testutil.ToFloat64(observer.metrics.Panics); got != m.Panics {
 		t.Errorf("Expected Panics=%f, got %f", m.Panics, got)
 	}
-	if got := testutil.ToFloat64(observer.metrics.Retries); got != m.Retries {
-		t.Errorf("Expected Retries=%f, got %f", m.Retries, got)
+	if observer.metrics.Retries != nil {
+		if got := testutil.ToFloat64(observer.metrics.Retries); got != m.Retries {
+			t.Errorf("Expected Retries=%f, got %f", m.Retries, got)
+		}
 	}
 }
 
@@ -216,11 +221,11 @@ func TestObserve_SuccessfulExecution(t *testing.T) {
 	}
 
 	Verify(t, observer, metricsCounts{
-		Successes:     1,
-		Errors:        0,
-		TimeoutErrors: 0,
-		Panics:        0,
-		Retries:       0,
+		Successes: 1,
+		Errors:    0,
+		Timeouts:  0,
+		Panics:    0,
+		Retries:   0,
 	})
 
 	if got := testutil.ToFloat64(observer.metrics.InFlight); got != 0 {
@@ -270,11 +275,11 @@ func TestObserve_ErrorHandling(t *testing.T) {
 	}
 
 	Verify(t, observer, metricsCounts{
-		Successes:     0,
-		Errors:        1,
-		TimeoutErrors: 0,
-		Panics:        0,
-		Retries:       0,
+		Successes: 0,
+		Errors:    1,
+		Timeouts:  0,
+		Panics:    0,
+		Retries:   0,
 	})
 }
 
@@ -291,11 +296,11 @@ func TestObserve_RunFunc(t *testing.T) {
 	}
 
 	Verify(t, observer, metricsCounts{
-		Successes:     0,
-		Errors:        1,
-		TimeoutErrors: 0,
-		Panics:        0,
-		Retries:       0,
+		Successes: 0,
+		Errors:    1,
+		Timeouts:  0,
+		Panics:    0,
+		Retries:   0,
 	})
 }
 
@@ -323,11 +328,11 @@ func TestObserve_TimeoutHandling(t *testing.T) {
 
 	// Verify metrics
 	Verify(t, observer, metricsCounts{
-		Successes:     0,
-		Errors:        1,
-		TimeoutErrors: 1,
-		Panics:        0,
-		Retries:       0,
+		Successes: 0,
+		Errors:    1,
+		Timeouts:  1,
+		Panics:    0,
+		Retries:   0,
 	})
 }
 
@@ -364,11 +369,11 @@ func TestObserve_PanicRecovery(t *testing.T) {
 
 		// Verify panic was recorded
 		Verify(t, observer, metricsCounts{
-			Successes:     0,
-			Errors:        1,
-			TimeoutErrors: 0,
-			Panics:        1,
-			Retries:       0,
+			Successes: 0,
+			Errors:    1,
+			Timeouts:  0,
+			Panics:    1,
+			Retries:   0,
 		})
 	})
 
@@ -396,11 +401,11 @@ func TestObserve_PanicRecovery(t *testing.T) {
 			} else {
 				// Verify panic was still recorded even though it propagated
 				Verify(t, observer, metricsCounts{
-					Successes:     0,
-					Errors:        1,
-					TimeoutErrors: 0,
-					Panics:        1,
-					Retries:       0,
+					Successes: 0,
+					Errors:    1,
+					Timeouts:  0,
+					Panics:    1,
+					Retries:   0,
 				})
 			}
 		}()
@@ -445,11 +450,11 @@ func TestObserve_RetryLogic(t *testing.T) {
 
 		// Verify metrics: one retry attempt was made
 		Verify(t, observer, metricsCounts{
-			Successes:     1,
-			Errors:        1,
-			TimeoutErrors: 0,
-			Panics:        0,
-			Retries:       1,
+			Successes: 1,
+			Errors:    1,
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   1,
 		})
 	})
 
@@ -493,11 +498,11 @@ func TestObserve_RetryLogic(t *testing.T) {
 		}
 
 		Verify(t, observer, metricsCounts{
-			Successes:     0,
-			Errors:        3,
-			TimeoutErrors: 0,
-			Panics:        0,
-			Retries:       2,
+			Successes: 0,
+			Errors:    3,
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   2,
 		})
 	})
 
@@ -537,11 +542,11 @@ func TestObserve_RetryLogic(t *testing.T) {
 		}
 
 		Verify(t, observer, metricsCounts{
-			Successes:     0,
-			Errors:        3, // 3 errors, exit on circuit breaker
-			TimeoutErrors: 0,
-			Panics:        0,
-			Retries:       2, // 1 initial + 2 retries
+			Successes: 0,
+			Errors:    3, // 3 errors, exit on circuit breaker
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   2, // 1 initial + 2 retries
 		})
 	})
 }
@@ -685,11 +690,11 @@ func TestObserve_Concurrent(t *testing.T) {
 
 		// Verify all tasks were recorded as successes
 		Verify(t, observer, metricsCounts{
-			Successes:     float64(numGoroutines),
-			Errors:        0,
-			TimeoutErrors: 0,
-			Panics:        0,
-			Retries:       0,
+			Successes: float64(numGoroutines),
+			Errors:    0,
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   0,
 		})
 	})
 }
@@ -714,11 +719,11 @@ func TestObserve_MetricsRecording(t *testing.T) {
 			wantErr: false,
 			validate: func(t *testing.T, observer *Observer) {
 				Verify(t, observer, metricsCounts{
-					Successes:     1,
-					Errors:        0,
-					TimeoutErrors: 0,
-					Panics:        0,
-					Retries:       0,
+					Successes: 1,
+					Errors:    0,
+					Timeouts:  0,
+					Panics:    0,
+					Retries:   0,
 				})
 			},
 			timesRun: 1,
@@ -733,11 +738,11 @@ func TestObserve_MetricsRecording(t *testing.T) {
 			wantErr: true,
 			validate: func(t *testing.T, observer *Observer) {
 				Verify(t, observer, metricsCounts{
-					Successes:     0,
-					Errors:        1,
-					TimeoutErrors: 0,
-					Panics:        0,
-					Retries:       0,
+					Successes: 0,
+					Errors:    1,
+					Timeouts:  0,
+					Panics:    0,
+					Retries:   0,
 				})
 			},
 			timesRun: 1,
@@ -753,11 +758,11 @@ func TestObserve_MetricsRecording(t *testing.T) {
 			wantErr: true,
 			validate: func(t *testing.T, observer *Observer) {
 				Verify(t, observer, metricsCounts{
-					Successes:     0,
-					Errors:        1,
-					TimeoutErrors: 0,
-					Panics:        1,
-					Retries:       0,
+					Successes: 0,
+					Errors:    1,
+					Timeouts:  0,
+					Panics:    1,
+					Retries:   0,
 				})
 			},
 			timesRun: 1,
@@ -776,11 +781,11 @@ func TestObserve_MetricsRecording(t *testing.T) {
 			validate: func(t *testing.T, observer *Observer) {
 				time.Sleep(10 * time.Millisecond)
 				Verify(t, observer, metricsCounts{
-					Successes:     0,
-					Errors:        4,
-					TimeoutErrors: 0,
-					Panics:        0,
-					Retries:       3,
+					Successes: 0,
+					Errors:    4,
+					Timeouts:  0,
+					Panics:    0,
+					Retries:   3,
 				})
 			},
 			timesRun: 4,
@@ -864,11 +869,11 @@ func TestObserve_ContextTimeout(t *testing.T) {
 	}
 
 	Verify(t, observer, metricsCounts{
-		Successes:     0,
-		Errors:        1,
-		TimeoutErrors: 1,
-		Panics:        0,
-		Retries:       0,
+		Successes: 0,
+		Errors:    1,
+		Timeouts:  1,
+		Panics:    0,
+		Retries:   0,
 	})
 }
 
@@ -925,19 +930,19 @@ func TestMultipleObservers(t *testing.T) {
 	}
 
 	Verify(t, observer1, metricsCounts{
-		Successes:     17,
-		Errors:        16,
-		TimeoutErrors: 0,
-		Panics:        0,
-		Retries:       0,
+		Successes: 17,
+		Errors:    16,
+		Timeouts:  0,
+		Panics:    0,
+		Retries:   0,
 	})
 
 	Verify(t, observer2, metricsCounts{
-		Successes:     23,
-		Errors:        14,
-		TimeoutErrors: 0,
-		Panics:        0,
-		Retries:       0,
+		Successes: 23,
+		Errors:    14,
+		Timeouts:  0,
+		Panics:    0,
+		Retries:   0,
 	})
 }
 
@@ -999,11 +1004,11 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 		}
 
 		Verify(t, observer, metricsCounts{
-			Successes:     0,
-			Errors:        1,
-			TimeoutErrors: 0,
-			Panics:        1,
-			Retries:       0,
+			Successes: 0,
+			Errors:    1,
+			Timeouts:  0,
+			Panics:    1,
+			Retries:   0,
 		})
 	})
 
@@ -1030,11 +1035,11 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 			} else {
 				// Verify panic was still recorded even though it propagated
 				Verify(t, observer, metricsCounts{
-					Successes:     0,
-					Errors:        1,
-					TimeoutErrors: 0,
-					Panics:        1,
-					Retries:       0,
+					Successes: 0,
+					Errors:    1,
+					Timeouts:  0,
+					Panics:    1,
+					Retries:   0,
 				})
 			}
 		}()
@@ -1104,11 +1109,11 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 		}
 
 		Verify(t, observer, metricsCounts{
-			Successes:     1,
-			Errors:        2,
-			TimeoutErrors: 0,
-			Panics:        0,
-			Retries:       2,
+			Successes: 1,
+			Errors:    2,
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   2,
 		})
 	})
 
@@ -1144,11 +1149,11 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 		}
 
 		Verify(t, observer, metricsCounts{
-			Successes:     0,
-			Errors:        1, // 1 error, exit on panic
-			TimeoutErrors: 0,
-			Panics:        1,
-			Retries:       0, // 1 initial + 0 retries
+			Successes: 0,
+			Errors:    1, // 1 error, exit on panic
+			Timeouts:  0,
+			Panics:    1,
+			Retries:   0, // 1 initial + 0 retries
 		})
 	})
 
@@ -1184,11 +1189,11 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 		}
 
 		Verify(t, observer, metricsCounts{
-			Successes:     0,
-			Errors:        3, // 3 errors, exit on panic
-			TimeoutErrors: 0,
-			Panics:        1,
-			Retries:       2, // 1 initial + 2 retries
+			Successes: 0,
+			Errors:    3, // 3 errors, exit on panic
+			Timeouts:  0,
+			Panics:    1,
+			Retries:   2, // 1 initial + 2 retries
 		})
 	})
 
@@ -1218,11 +1223,11 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 		}
 
 		Verify(t, observer, metricsCounts{
-			Successes:     0,
-			Errors:        4, // 1 initial + 3 retries
-			TimeoutErrors: 0,
-			Panics:        0,
-			Retries:       3, // 3 retries
+			Successes: 0,
+			Errors:    4, // 1 initial + 3 retries
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   3, // 3 retries
 		})
 	})
 }
@@ -1260,11 +1265,11 @@ func TestCircuitBreaker_EdgeCases(t *testing.T) {
 		}
 
 		Verify(t, observer, metricsCounts{
-			Successes:     0,
-			Errors:        3,
-			TimeoutErrors: 0,
-			Panics:        1,
-			Retries:       2,
+			Successes: 0,
+			Errors:    3,
+			Timeouts:  0,
+			Panics:    1,
+			Retries:   2,
 		})
 	})
 
@@ -1298,11 +1303,11 @@ func TestCircuitBreaker_EdgeCases(t *testing.T) {
 		}
 
 		Verify(t, observer, metricsCounts{
-			Successes:     0,
-			Errors:        3,
-			TimeoutErrors: 0,
-			Panics:        1,
-			Retries:       2,
+			Successes: 0,
+			Errors:    3,
+			Timeouts:  0,
+			Panics:    1,
+			Retries:   2,
 		})
 	})
 }

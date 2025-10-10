@@ -117,7 +117,7 @@ func TestMetricUpdates(t *testing.T) {
 	m.Successes.Inc()
 	m.Errors.Inc()
 	m.Errors.Inc()
-	m.TimeoutErrors.Inc()
+	m.Timeouts.Inc()
 	m.Panics.Inc()
 	m.Retries.Inc()
 	m.InFlight.Inc()
@@ -136,8 +136,8 @@ func TestMetricUpdates(t *testing.T) {
 	if got := testutil.ToFloat64(m.Errors); got != 2 {
 		t.Errorf("Expected Errors=2, got %f", got)
 	}
-	if got := testutil.ToFloat64(m.TimeoutErrors); got != 1 {
-		t.Errorf("Expected TimeoutErrors=1, got %f", got)
+	if got := testutil.ToFloat64(m.Timeouts); got != 1 {
+		t.Errorf("Expected Timeouts=1, got %f", got)
 	}
 	if got := testutil.ToFloat64(m.Panics); got != 1 {
 		t.Errorf("Expected Panics=1, got %f", got)
