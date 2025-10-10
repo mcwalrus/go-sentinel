@@ -18,14 +18,14 @@ import (
 // - Retry Attempts
 
 type metrics struct {
-	InFlight      prometheus.Gauge
-	Successes     prometheus.Counter
-	FinalFailures prometheus.Counter
-	Errors        prometheus.Counter
-	Timeouts      prometheus.Counter
-	Panics        prometheus.Counter
-	Durations     prometheus.Histogram
-	Retries       prometheus.Counter
+	InFlight  prometheus.Gauge
+	Successes prometheus.Counter
+	Failures  prometheus.Counter
+	Errors    prometheus.Counter
+	Timeouts  prometheus.Counter
+	Panics    prometheus.Counter
+	Durations prometheus.Histogram
+	Retries   prometheus.Counter
 }
 
 // newMetrics creates a new metrics instance with the given configuration.
@@ -46,11 +46,18 @@ func newMetrics(cfg observerConfig) *metrics {
 			Help:        fmt.Sprintf("Number of successes from observed %s", cfg.description),
 			ConstLabels: cfg.constLabels,
 		}),
+		Failures: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
+			Name:        "failures_total",
+			Help:        fmt.Sprintf("Number of failures from observed %s excluding retry attempts", cfg.description),
+			ConstLabels: cfg.constLabels,
+		}),
 		Errors: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace:   cfg.namespace,
 			Subsystem:   cfg.subsystem,
 			Name:        "errors_total",
-			Help:        fmt.Sprintf("Number of errors from observed %s", cfg.description),
+			Help:        fmt.Sprintf("Number of errors from observed %s including retries and panics", cfg.description),
 			ConstLabels: cfg.constLabels,
 		}),
 		Panics: prometheus.NewCounter(prometheus.CounterOpts{
@@ -91,13 +98,6 @@ func newMetrics(cfg observerConfig) *metrics {
 			Help:        fmt.Sprintf("Number of retry attempts from observed %s", cfg.description),
 			ConstLabels: cfg.constLabels,
 		})
-		m.FinalFailures = prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace:   cfg.namespace,
-			Subsystem:   cfg.subsystem,
-			Name:        "failures_total",
-			Help:        fmt.Sprintf("Number of final failures from observed %s after all retry attempts", cfg.description),
-			ConstLabels: cfg.constLabels,
-		})
 	}
 
 	return m
@@ -108,6 +108,7 @@ func (m *metrics) collectors() []prometheus.Collector {
 	c := []prometheus.Collector{
 		m.InFlight,
 		m.Successes,
+		m.Failures,
 		m.Errors,
 		m.Panics,
 	}
@@ -119,9 +120,6 @@ func (m *metrics) collectors() []prometheus.Collector {
 	}
 	if m.Retries != nil {
 		c = append(c, m.Retries)
-	}
-	if m.FinalFailures != nil {
-		c = append(c, m.FinalFailures)
 	}
 	return c
 }

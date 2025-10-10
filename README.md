@@ -24,12 +24,12 @@ Standard configuration will automatically export the following observer metrics:
 |--------|------|-------------|---------|--------|
 | `sentinel_in_flight` | Gauge | Active number of running tasks | Yes | - |
 | `sentinel_successes_total` | Counter | Total successful task completions | Yes | - |
-| `sentinel_errors_total` | Counter | Total task executions failures | Yes | - |
+| `sentinel_failures_total` | Counter | Total task completion failures | Yes | - |
+| `sentinel_errors_total` | Counter | Total errors including panics and retry failures | Yes | - |
 | `sentinel_panics_total` | Counter | Total task panic occurrences | Yes | - |
-| `sentinel_timeouts_total` | Counter | Total timeout based failures | No | _WithTimeoutMetrics_ |
 | `sentinel_durations_seconds` | Histogram | Distribution of task executions | No | _WithHistogramMetrics_ |
+| `sentinel_timeouts_total` | Counter | Total timeout based failures | No | _WithTimeoutMetrics_ |
 | `sentinel_retries_total` | Counter | Total retry attempts after failures | No | _WithRetryMetrics_ |
-| `sentinel_failures_total` | Counter | Total failures after all retry attempts | No | _WithRetryMetrics_ |
 
 You can configure exported observer metrics based on your application needs.
 

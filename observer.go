@@ -249,18 +249,14 @@ func (o *Observer) executeTask(task *implTask) error {
 
 			// Maximum retries reached
 			if task.retryCount >= cfg.MaxRetries {
-				if o.metrics.FinalFailures != nil {
-					o.metrics.FinalFailures.Inc()
-				}
+				o.metrics.Failures.Inc()
 				return err
 			}
 
 			// Try circuit break
 			if cfg.CircuitBreaker != nil {
 				if cfg.CircuitBreaker(err) {
-					if o.metrics.FinalFailures != nil {
-						o.metrics.FinalFailures.Inc()
-					}
+					o.metrics.Failures.Inc()
 					return err
 				}
 			}
@@ -283,18 +279,15 @@ func (o *Observer) executeTask(task *implTask) error {
 				retryCount: task.retryCount + 1,
 			}
 
-			// Run retry task
+			// Run retries recursively
 			err2 := o.observe(retryTask)
 			if err2 != nil {
 				return errors.Join(err, err2)
 			} else {
-				return nil // successful recursive return
+				return nil
 			}
 		} else {
-			// No retries configured
-			if o.metrics.FinalFailures != nil {
-				o.metrics.FinalFailures.Inc()
-			}
+			o.metrics.Failures.Inc()
 		}
 	} else {
 		o.metrics.Successes.Inc()
