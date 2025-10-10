@@ -66,55 +66,6 @@ func WithDescription(description string) ObserverOption {
 	}
 }
 
-// WithHistogramMetrics enables histogram durations metrics for the Observer.
-// Buckets are specified in seconds with generated buckets range between 0 and math.Inf.
-// For each observed runtime of a task, it is recorded to one of the specified buckets.
-// Please refer to [prometheus.HistogramOpts].Buckets for more information.
-//
-// Example usage:
-//
-//	observer := sentinel.NewObserver(
-//	    sentinel.WithHistogramMetrics([]float64{0.05, 1, 5, 30, 600}),
-//	)
-func WithHistogramMetrics(buckets []float64) ObserverOption {
-	return func(cfg *observerConfig) {
-		cfg.bucketDurations = buckets
-	}
-}
-
-// WithConstLabels sets constant labels to exported metrics from the Observer.
-// By convention, ConstLabels are not a recommended practice for Prometheus metrics.
-// For more information, please refer to [prometheus.Opts].ConstLabels documentation.
-//
-// Example usage:
-//
-//	observer := sentinel.NewObserver(
-//	    sentinel.WithConstLabels(prometheus.Labels{"env": "production"}),
-//	)
-func WithConstLabels(labels prometheus.Labels) ObserverOption {
-	return func(cfg *observerConfig) {
-		cfg.constLabels = labels
-	}
-}
-
-// WithDefaultTaskConfig sets the default [TaskConfig] for calls to [Observer.RunFunc]
-// and [Observer.RunFuncCtx] where task configuration is not specified through method
-// calls. By default, a basic task configuration without retry attempts will be used.
-//
-// Example usage:
-//
-//	observer := sentinel.NewObserver(
-//	    sentinel.WithDefaultTaskConfig(&sentinel.TaskConfig{
-//	        Timeout: 10 * time.Second,
-//	        MaxRetries: 3,
-//	    }),
-//	)
-func WithDefaultTaskConfig(taskConfig *TaskConfig) ObserverOption {
-	return func(cfg *observerConfig) {
-		cfg.taskConfig = taskConfig
-	}
-}
-
 // DisablePanicRecovery disables automatic panic recovery leaving panics to propagate.
 // Default observer behaviour is to recover and return panics as [ErrRecoveredPanic]
 // errors. Panic occurrences will always be recorded as errors and panics in metrics
@@ -128,6 +79,39 @@ func WithDefaultTaskConfig(taskConfig *TaskConfig) ObserverOption {
 func DisablePanicRecovery() ObserverOption {
 	return func(cfg *observerConfig) {
 		cfg.recoverPanics = false
+	}
+}
+
+// WithTimeoutMetrics enables timeout-specific metrics tracking.
+// When enabled, a separate "timeouts_total" metric is created to track tasks that
+// failed due to context deadline exceeded. This provides visibility into timeout
+// occurrences separate from general errors, allowing for better monitoring of
+// timeout-related issues.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(
+//	    sentinel.WithTimeoutMetrics(),
+//	)
+func WithTimeoutMetrics() ObserverOption {
+	return func(cfg *observerConfig) {
+		cfg.trackTimeouts = true
+	}
+}
+
+// WithHistogramMetrics enables histogram durations metrics for the Observer.
+// Buckets are specified in seconds with generated buckets range between 0 and math.Inf.
+// For each observed runtime of a task, it is recorded to one of the specified buckets.
+// Please refer to [prometheus.HistogramOpts].Buckets for more information.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(
+//	    sentinel.WithHistogramMetrics([]float64{0.05, 1, 5, 30, 600}),
+//	)
+func WithHistogramMetrics(buckets []float64) ObserverOption {
+	return func(cfg *observerConfig) {
+		cfg.bucketDurations = buckets
 	}
 }
 
@@ -149,19 +133,35 @@ func WithRetryMetrics() ObserverOption {
 	}
 }
 
-// WithTimeoutMetrics enables timeout-specific metrics tracking.
-// When enabled, a separate "timeouts_total" metric is created to track tasks that
-// failed due to context deadline exceeded. This provides visibility into timeout
-// occurrences separate from general errors, allowing for better monitoring of
-// timeout-related issues.
+// WithDefaultTaskConfig sets the default [TaskConfig] for calls to [Observer.RunFunc]
+// and [Observer.RunFuncCtx] where task configuration is not specified through method
+// calls. By default, a basic task configuration without retry attempts will be used.
 //
 // Example usage:
 //
 //	observer := sentinel.NewObserver(
-//	    sentinel.WithTimeoutMetrics(),
+//	    sentinel.WithDefaultTaskConfig(&sentinel.TaskConfig{
+//	        Timeout: 10 * time.Second,
+//	        MaxRetries: 3,
+//	    }),
 //	)
-func WithTimeoutMetrics() ObserverOption {
+func WithDefaultTaskConfig(taskConfig *TaskConfig) ObserverOption {
 	return func(cfg *observerConfig) {
-		cfg.trackTimeouts = true
+		cfg.taskConfig = taskConfig
+	}
+}
+
+// WithConstLabels sets constant labels to exported metrics from the Observer.
+// By convention, ConstLabels are not a recommended practice for Prometheus metrics.
+// For more information, please refer to [prometheus.Opts].ConstLabels documentation.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(
+//	    sentinel.WithConstLabels(prometheus.Labels{"env": "production"}),
+//	)
+func WithConstLabels(labels prometheus.Labels) ObserverOption {
+	return func(cfg *observerConfig) {
+		cfg.constLabels = labels
 	}
 }
