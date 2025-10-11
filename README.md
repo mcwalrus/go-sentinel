@@ -6,15 +6,14 @@
 [![GoDoc](https://godoc.org/github.com/mcwalrus/go-sentinel?status.svg)](https://godoc.org/github.com/mcwalrus/go-sentinel)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Sentinel provides retry handling and observability monitoring for Go applications. It wraps functions or task execution with Prometheus metrics, observing for successes, errors caught, panic occurrences, retries, and timeouts - making critical routines more resilient, observable and robust. A core principle of design is that **panics should be treated as errors in production systems**. Use the library as a drop-in solution for new projects or existing applications.
-
+Sentinel provides resilience for Go applications with automatic retry handling and Prometheus observability. Built on the principle that **panics should be treated as errors in production systems**, sentinel wraps function execution to track successes, errors, panics, retries, timeouts and durations - making critical your routines more resilient, observable and robust. Use the library as a simple drop-in solution for new projects or existing applications.
 
 ## Features
 
 - **Prometheus Metrics**: Observe tasks through pre-defined metrics
 - **Composable Pattern**: Multiple observers can be employed at once
 - **Retry Logic**: Enables retry strategies with circuit breaking support
-- **Panic Recovery**: Panic recovery safety or standard panic propagation
+- **Panic Recovery**: Safe panic recovery or standard panic propagation
 - **Context Timeout**: Timeout support for handling task deadlines
 
 ## Metrics
@@ -233,8 +232,6 @@ func main() {
 
 Timeouts are always recorded with `timeouts_total` and `errors_total` counters. 
 
-Note, duration metrics will not be exported unless `WithDurationMetrics()` is set.
-
 ### Retry Handling
 
 Configure retry with wait strategies for resilient task execution:
@@ -289,9 +286,7 @@ func main() {
 }
 ```
 
-Retry metrics will not be exported unless `WithRetryMetrics()` is set.
-
-Note tasks called with `MaxRetries=3` may be called up to _four times_ total.
+Tasks called with `MaxRetries=3` may be called up to _four times_ total.
 
 ### Prometheus Integration
 
@@ -342,6 +337,8 @@ Prometheus metrics will be exposed with names `myapp_workers_...` on host _local
 ## Contributing
 
 Please report any issues or feature requests to the [GitHub repository](https://github.com/mcwalrus/go-sentinel).
+
+I am particularly keen on feedback around how to appropriately present the library.
 
 ## About
 
