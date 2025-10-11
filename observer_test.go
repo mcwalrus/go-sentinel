@@ -15,12 +15,12 @@ import (
 )
 
 type metricsCounts struct {
-	Successes     float64
-	Errors        float64
-	Timeouts      float64
-	Panics        float64
-	Retries       float64
-	RetryFailures float64
+	Successes float64
+	Failures  float64
+	Timeouts  float64
+	Errors    float64
+	Panics    float64
+	Retries   float64
 }
 
 // Verify validates observer metrics counts
@@ -29,16 +29,29 @@ func Verify(t *testing.T, observer *Observer, m metricsCounts) {
 	if got := testutil.ToFloat64(observer.metrics.Successes); got != m.Successes {
 		t.Errorf("Expected Successes=%f, got %f", m.Successes, got)
 	}
+	if got := testutil.ToFloat64(observer.metrics.Failures); got != m.Failures {
+		t.Errorf("Expected Failures=%f, got %f", m.Failures, got)
+	}
 	if got := testutil.ToFloat64(observer.metrics.Errors); got != m.Errors {
 		t.Errorf("Expected Errors=%f, got %f", m.Errors, got)
+	}
+	if got := testutil.ToFloat64(observer.metrics.Panics); got != m.Panics {
+		t.Errorf("Expected Panics=%f, got %f", m.Panics, got)
+	}
+
+	// Timeouts
+	if observer.metrics.Timeouts == nil && m.Timeouts != 0 {
+		t.Errorf("Expected Timeouts=%f, but Timeouts metric is not enabled", m.Timeouts)
 	}
 	if observer.metrics.Timeouts != nil {
 		if got := testutil.ToFloat64(observer.metrics.Timeouts); got != m.Timeouts {
 			t.Errorf("Expected Timeouts=%f, got %f", m.Timeouts, got)
 		}
 	}
-	if got := testutil.ToFloat64(observer.metrics.Panics); got != m.Panics {
-		t.Errorf("Expected Panics=%f, got %f", m.Panics, got)
+
+	// Retries
+	if observer.metrics.Retries == nil && m.Retries != 0 {
+		t.Errorf("Expected Retries=%f, but Retries metric is not enabled", m.Retries)
 	}
 	if observer.metrics.Retries != nil {
 		if got := testutil.ToFloat64(observer.metrics.Retries); got != m.Retries {
@@ -264,7 +277,7 @@ func TestObserve_SuccessfulExecution(t *testing.T) {
 		success: true,
 	}
 
-	err := observer.observe(task)
+	err := observer.RunFunc(task.Execute)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
@@ -325,6 +338,7 @@ func TestObserve_ErrorHandling(t *testing.T) {
 
 	Verify(t, observer, metricsCounts{
 		Successes: 0,
+		Failures:  1,
 		Errors:    1,
 		Timeouts:  0,
 		Panics:    0,
@@ -337,7 +351,7 @@ func TestObserve_RunFunc(t *testing.T) {
 
 	observer := NewObserver()
 
-	err := observer.RunFunc(func() error {
+	err := observer.Run(func() error {
 		return errors.New("task failed")
 	})
 	if err == nil {
@@ -346,6 +360,7 @@ func TestObserve_RunFunc(t *testing.T) {
 
 	Verify(t, observer, metricsCounts{
 		Successes: 0,
+		Failures:  1,
 		Errors:    1,
 		Timeouts:  0,
 		Panics:    0,
@@ -370,7 +385,6 @@ func TestObserve_TimeoutHandling(t *testing.T) {
 	}
 
 	err := observer.RunFunc(task.Execute)
-
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("Expected context.DeadlineExceeded, got %v", err)
 	}
@@ -443,7 +457,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 			},
 		}
 
-		observer.DisableRecovery()
+		observer.DisableRecovery(true)
 
 		// This should panic and be caught by our test
 		defer func() {
@@ -594,10 +608,11 @@ func TestObserve_RetryLogic(t *testing.T) {
 
 		Verify(t, observer, metricsCounts{
 			Successes: 0,
-			Errors:    3, // 3 errors, exit on circuit breaker
+			Errors:    3,
+			Failures:  1,
 			Timeouts:  0,
 			Panics:    0,
-			Retries:   2, // 1 initial + 2 retries
+			Retries:   2,
 		})
 	})
 }
@@ -700,6 +715,15 @@ func TestObserve_InFlightMetrics(t *testing.T) {
 		if got := testutil.ToFloat64(observer.metrics.Successes); got != numTasks {
 			t.Errorf("Expected Successes=%d, got %f", numTasks, got)
 		}
+
+		Verify(t, observer, metricsCounts{
+			Successes: float64(numTasks),
+			Failures:  0,
+			Errors:    0,
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   0,
+		})
 	})
 }
 
@@ -742,6 +766,7 @@ func TestObserve_Concurrent(t *testing.T) {
 		// Verify all tasks were recorded as successes
 		Verify(t, observer, metricsCounts{
 			Successes: float64(numGoroutines),
+			Failures:  0,
 			Errors:    0,
 			Timeouts:  0,
 			Panics:    0,
@@ -771,6 +796,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 			validate: func(t *testing.T, observer *Observer) {
 				Verify(t, observer, metricsCounts{
 					Successes: 1,
+					Failures:  0,
 					Errors:    0,
 					Timeouts:  0,
 					Panics:    0,
@@ -790,6 +816,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 			validate: func(t *testing.T, observer *Observer) {
 				Verify(t, observer, metricsCounts{
 					Successes: 0,
+					Failures:  1,
 					Errors:    1,
 					Timeouts:  0,
 					Panics:    0,
@@ -810,6 +837,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 			validate: func(t *testing.T, observer *Observer) {
 				Verify(t, observer, metricsCounts{
 					Successes: 0,
+					Failures:  1,
 					Errors:    1,
 					Timeouts:  0,
 					Panics:    1,
@@ -833,6 +861,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 				time.Sleep(10 * time.Millisecond)
 				Verify(t, observer, metricsCounts{
 					Successes: 0,
+					Failures:  1,
 					Errors:    4,
 					Timeouts:  0,
 					Panics:    0,
@@ -853,8 +882,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 			registry := prometheus.NewRegistry()
 			observer.MustRegister(registry)
 
-			err := observer.RunTask(scenario.task)
-
+			err := observer.RunFunc(scenario.task.Execute)
 			if scenario.wantErr && err == nil {
 				t.Error("Expected error but got none")
 			}
@@ -921,6 +949,7 @@ func TestObserve_ContextTimeout(t *testing.T) {
 
 	Verify(t, observer, metricsCounts{
 		Successes: 0,
+		Failures:  1,
 		Errors:    1,
 		Timeouts:  1,
 		Panics:    0,
@@ -984,6 +1013,7 @@ func TestMultipleObservers(t *testing.T) {
 
 	Verify(t, observer1, metricsCounts{
 		Successes: 17,
+		Failures:  16,
 		Errors:    16,
 		Timeouts:  0,
 		Panics:    0,
@@ -992,6 +1022,7 @@ func TestMultipleObservers(t *testing.T) {
 
 	Verify(t, observer2, metricsCounts{
 		Successes: 23,
+		Failures:  14,
 		Errors:    14,
 		Timeouts:  0,
 		Panics:    0,
@@ -1027,6 +1058,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 
 		Verify(t, observer, metricsCounts{
 			Successes: 0,
+			Failures:  1,
 			Errors:    1,
 			Timeouts:  0,
 			Panics:    1,
@@ -1050,7 +1082,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 			},
 		}
 
-		observer.DisablePanicRecovery(true)
+		observer.DisableRecovery(true)
 
 		// This should panic and be caught by our test
 		defer func() {
@@ -1059,6 +1091,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 			} else {
 				Verify(t, observer, metricsCounts{
 					Successes: 0,
+					Failures:  1,
 					Errors:    1,
 					Timeouts:  0,
 					Panics:    1,
@@ -1120,6 +1153,7 @@ func TestShortOnPanicRetryBreaker(t *testing.T) {
 
 		Verify(t, observer, metricsCounts{
 			Successes: 1,
+			Failures:  1,
 			Errors:    2,
 			Timeouts:  0,
 			Panics:    0,
@@ -1160,10 +1194,11 @@ func TestShortOnPanicRetryBreaker(t *testing.T) {
 
 		Verify(t, observer, metricsCounts{
 			Successes: 0,
-			Errors:    1, // 1 error, exit on panic
+			Failures:  1,
+			Errors:    1,
 			Timeouts:  0,
 			Panics:    1,
-			Retries:   0, // 1 initial + 0 retries
+			Retries:   0,
 		})
 	})
 
@@ -1200,10 +1235,11 @@ func TestShortOnPanicRetryBreaker(t *testing.T) {
 
 		Verify(t, observer, metricsCounts{
 			Successes: 0,
-			Errors:    3, // 3 errors, exit on panic
+			Failures:  1,
+			Errors:    3,
 			Timeouts:  0,
 			Panics:    1,
-			Retries:   2, // 1 initial + 2 retries
+			Retries:   2,
 		})
 	})
 
@@ -1234,10 +1270,11 @@ func TestShortOnPanicRetryBreaker(t *testing.T) {
 
 		Verify(t, observer, metricsCounts{
 			Successes: 0,
-			Errors:    4, // 1 initial + 3 retries
+			Failures:  1,
+			Errors:    4,
 			Timeouts:  0,
 			Panics:    0,
-			Retries:   3, // 3 retries
+			Retries:   3,
 		})
 	})
 }
@@ -1273,6 +1310,7 @@ func TestRetryBreaker_EdgeCases(t *testing.T) {
 
 		Verify(t, observer, metricsCounts{
 			Successes: 0,
+			Failures:  1,
 			Errors:    3,
 			Timeouts:  0,
 			Panics:    1,
@@ -1306,6 +1344,7 @@ func TestRetryBreaker_EdgeCases(t *testing.T) {
 
 		Verify(t, observer, metricsCounts{
 			Successes: 0,
+			Failures:  1,
 			Errors:    3,
 			Timeouts:  0,
 			Panics:    1,

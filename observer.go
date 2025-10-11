@@ -67,9 +67,10 @@ func NewObserver(opts ...ObserverOption) *Observer {
 	}
 
 	return &Observer{
-		m:       &sync.RWMutex{},
-		cfg:     cfg,
-		metrics: newMetrics(cfg),
+		m:             &sync.RWMutex{},
+		cfg:           cfg,
+		metrics:       newMetrics(cfg),
+		recoverPanics: true,
 	}
 }
 
