@@ -1,5 +1,5 @@
 // Package retry provides retry strategy implementations for the sentinel package.
-// These strategies can be used with Config.RetryStrategy to control retry behavior.
+// These strategies can be used with ObserverConfig.RetryStrategy to control retry behavior.
 package retry
 
 import (

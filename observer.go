@@ -14,16 +14,16 @@ import (
 
 // Observer monitors and measures task executions, collecting Prometheus metrics
 // for successes, failures, timeouts, panics, retries, and observed runtimes.
-// It provides methods to execute tasks with various Config options.
+// It provides methods to execute tasks with various ObserverConfig options.
 type Observer struct {
 	m             *sync.RWMutex
-	cfg           observerConfig
+	cfg           config
 	metrics       *metrics
 	recoverPanics bool
-	runner        Config
+	runner        ObserverConfig
 }
 
-// NewObserver configures a new Observer with specified [MetricsOption] options.
+// NewObserver configures a new Observer with specified [ObserverOption] options.
 // The Observer will need to be registered with a Prometheus registry to expose metrics.
 // Please refer to [Observer.MustRegister] and [Observer.Register] for more information.
 //
@@ -44,8 +44,8 @@ type Observer struct {
 //	  sentinel.WithTimeoutMetrics(),
 //	  sentinel.WithDurationMetrics([]float64{0.05, 1, 5, 30, 600}),
 //	)
-func NewObserver(opts ...MetricsOption) *Observer {
-	cfg := observerConfig{
+func NewObserver(opts ...ObserverOption) *Observer {
+	cfg := config{
 		namespace:   "",
 		subsystem:   "",
 		description: "tasks",
@@ -108,7 +108,7 @@ func (o *Observer) MustRegister(registry prometheus.Registerer) {
 //
 //	baseObserver := sentinel.NewObserver(sentinel.WithNamespace("myapp"))
 //	criticalObserver := baseObserver.Fork()
-//	criticalObserver.UseConfig(sentinel.Config{
+//	criticalObserver.UseConfig(sentinel.ObserverConfig{
 //		MaxRetries: 5,
 //		Timeout:    30 * time.Second,
 //	})
@@ -119,49 +119,35 @@ func (o *Observer) Fork() *Observer {
 }
 
 // UseConfig configures the observer for how to handle Run methods.
-// This sets the Config that will be used for all subsequent Run, RunFunc calls.
-// See [Config] for more information on available configuration options.
+// This sets the ObserverConfig that will be used for all subsequent Run, RunFunc calls.
+// See [ObserverConfig] for more information on available configuration options.
 //
 // The configuration includes settings for timeouts, retry strategies, circuit breakers,
 // and other execution behaviors. This method is thread-safe.
 //
 // Example usage:
 //
-//	observer.UseConfig(sentinel.Config{
+//	observer.UseConfig(sentinel.ObserverConfig{
 //		Timeout:    10 * time.Second,
 //		MaxRetries: 3,
 //		RetryStrategy: retry.Exponential(100 * time.Millisecond),
 //	})
-func (o *Observer) UseConfig(config Config) {
+func (o *Observer) UseConfig(config ObserverConfig) {
 	o.m.Lock()
 	o.runner = config
 	o.m.Unlock()
 }
 
-// DisablePanicRecovery controls whether panic recovery should be disabled.
+// DisableRecovery sets whether panic recovery should be disabled for the observer.
 // Recovery is enabled by default, meaning panics are caught and converted to errors.
-//
-// It is recommended against disabling panic recovery unless you have a specific reason
-// to propagate panics to the caller. An alternative approach is to retrieve panic
-// values from errors using [IsPanicError] after Run* methods have been executed.
-//
-// This method is thread-safe.
-//
-// Example usage:
-//
-//	// Disable panic recovery (panics will propagate)
-//	observer.DisablePanicRecovery(true)
-//
-//	// Re-enable panic recovery (default behavior)
-//	observer.DisablePanicRecovery(false)
-func (o *Observer) DisablePanicRecovery(disable bool) {
+func (o *Observer) DisableRecovery(disable bool) {
 	o.m.Lock()
 	o.recoverPanics = !disable
 	o.m.Unlock()
 }
 
 // Run executes fn and records metrics according to the observer's configuration.
-// This method does not respect timeouts set in the observer's Config.
+// This method does not respect timeouts set in the observer's ObserverConfig.
 // Use RunFunc if you need timeout support.
 //
 // The function is executed with panic recovery enabled by default. Panics are
@@ -204,7 +190,7 @@ func (o *Observer) Run(fn func() error) error {
 }
 
 // RunFunc executes fn and records metrics according to the observer's configuration.
-// For timeouts specified by the observer's Config, the fn will be passed a context
+// For timeouts specified by the observer's ObserverConfig, the fn will be passed a context
 // with the timeout. This is the recommended method when you need timeout support.
 //
 // The function is executed with panic recovery enabled by default. Panics are
@@ -217,7 +203,7 @@ func (o *Observer) Run(fn func() error) error {
 // Example usage:
 //
 //	observer := sentinel.NewObserver()
-//	observer.UseConfig(sentinel.Config{
+//	observer.UseConfig(sentinel.ObserverConfig{
 //		Timeout: 10 * time.Second,
 //	})
 //	err := observer.RunFunc(func(ctx context.Context) error {

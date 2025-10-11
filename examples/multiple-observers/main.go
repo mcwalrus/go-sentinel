@@ -68,8 +68,8 @@ type BackgroundTask struct {
 	TaskID string
 }
 
-func (task *BackgroundTask) Config() sentinel.Config {
-	return sentinel.Config{
+func (task *BackgroundTask) ObserverConfig() sentinel.ObserverConfig {
+	return sentinel.ObserverConfig{
 		Timeout:       30 * time.Second,
 		MaxRetries:    3,
 		RetryStrategy: retry.Exponential(500 * time.Millisecond),
@@ -108,8 +108,8 @@ type CriticalTask struct {
 	TaskID string
 }
 
-func (task *CriticalTask) Config() sentinel.Config {
-	return sentinel.Config{
+func (task *CriticalTask) ObserverConfig() sentinel.ObserverConfig {
+	return sentinel.ObserverConfig{
 		Timeout:    5 * time.Second,
 		MaxRetries: 2,
 	}
@@ -152,8 +152,8 @@ type APITask struct {
 	TaskID string
 }
 
-func (task *APITask) Config() sentinel.Config {
-	return sentinel.Config{
+func (task *APITask) ObserverConfig() sentinel.ObserverConfig {
+	return sentinel.ObserverConfig{
 		Timeout: 2 * time.Second,
 	}
 }

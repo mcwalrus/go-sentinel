@@ -94,7 +94,7 @@ func main() {
     // Create new observer
     observer := sentinel.NewObserver()
     
-    // Records task errors
+    // Obsever views error
     err := observer.Run(func() error {
         return errors.New("task failed")
     })    
@@ -107,7 +107,7 @@ func main() {
 
 ### Timeout Handling
 
-Observer provides context timeouts based on Config:
+Observer provides context timeouts based on ObserverConfig:
 
 ```go
 package main
@@ -122,17 +122,17 @@ import (
 )
 
 func main() {
-    // Observer with timeout metrics
+    // Observer keeps timeout metrics
     observer := sentinel.NewObserver(
         sentinel.WithTimeoutMetrics(),
     )
 
-    // Set timeout via UseConfig
-    observer.UseConfig(sentinel.Config{
+    // Set timeout for observer tasks
+    observer.UseConfig(sentinel.ObserverConfig{
         Timeout: 10 * time.Second,
     })
 
-    // Respects context timeout
+    // Method respects context timeout
     err := observer.RunFunc(func(ctx context.Context) error {
             <-ctx.Done()
             return ctx.Err()
@@ -144,7 +144,96 @@ func main() {
 }
 ```
 
-When timeout metrics are enabled, timeouts are recorded by both `timeouts_total` and `errors_total` counters.
+Timeout errors are recorded by both `timeouts_total` and `errors_total` counters.
+
+Note, timeout metrics will not be exported unless `WithTimeoutMetrics()` is set.
+
+### Panic Handling
+
+Panic occurrences are just returned as errors by the observer:
+
+```go
+package main
+
+import (
+    "context"
+    "errors"
+    "fmt"
+    "math/rand"
+    "time"
+    
+    sentinel "github.com/mcwalrus/go-sentinel"
+    "github.com/prometheus/client_golang/prometheus"
+)
+
+func main() {
+    // Create new observer
+    observer := sentinel.NewObserver()
+    
+    // Panic multiple times
+    err := observer.Run(func() error {
+        panic("panic stations?! :0")
+    })
+    // Handle your task error
+    if err != nil {
+        log.Printf("Task failed: %v", err)
+    }
+    // Recover panic value
+    if rPanic, ok := sentinel.IsPanicError(err); ok {
+        fmt.Printf("panic value: %v\n", rPanic)
+    }
+}
+```
+
+Panics are always recorded with `panics_total` and `errors_total` counters. 
+
+Panics can be set to propogate by the observer with: `DisableRecovery(true)`.
+
+### Observe Durations
+
+Set histogram buckets with the observer to export `durations_seconds` metrics:
+
+```go
+package main
+
+import (
+    "context"
+    "errors"
+    "fmt"
+    "math/rand"
+    "time"
+    
+    sentinel "github.com/mcwalrus/go-sentinel"
+)
+
+func main() {
+    // Observer with duration metrics
+    observer := sentinel.NewObserver(
+        sentinel.WithDurationMetrics([]float64{
+            0.100, 0.250, 0.400, 0.500, 1.000
+        }),
+    )
+    
+    // Run many times for spread
+    for range 50 { 
+        // Run tasks between 50-500ms before return 
+        err := observer.RunFunc(func(ctx context.Context) error {
+            sleep := time.Duration(rand.Intn(450)+50) * time.Millisecond
+            fmt.Printf("Sleeping for %v...\n", sleep)
+            time.Sleep(sleep)
+            return nil
+        })
+        // Handle your task error
+        if err != nil {
+            log.Printf("Task failed: %v", err)
+        }
+    }
+}
+```
+
+Timeouts are always recorded with `timeouts_total` and `errors_total` counters. 
+
+Note, duration metrics will not be exported unless `WithDurationMetrics()` is set.
 
 ### Retry Handling
 
@@ -170,8 +259,8 @@ func main() {
         sentinel.WithRetryMetrics(),           
     )
 
-    // Set retry configuration
-    observer.UseConfig(sentinel.Config{
+    // Observer retry configuration
+    observer.UseConfig(sentinel.ObserverConfig{
         MaxRetries:    3,
         Timeout:       10 * time.Second,
         RetryStrategy: retry.WithJitter(
@@ -180,111 +269,29 @@ func main() {
         ),
     })
 
-    // Fail twice, pass on third attempt
-    var i int
+    // Error multiple times
+    observer.UseConfig(sentinel.ObserverConfig{MaxRetries: 3})
     err := observer.Run(func() error {
-        if i++; i < 2 {
-            return errors.New("no good, try again")
-        } else {
-            fmt.Println("it works!")
-            return nil
-        }
-    })
-    // Handle your task error
-    if err != nil {
-        fmt.Printf("Task failed after all retries: %v\n", err)
-    }
-}
-```
-
-Errors are always recorded with `panics_total` and `errors_total` counters. Note a task called with `MaxRetries=3` may be called up to _four times_ total.
-
-### Observe Durations
-
-Set histogram buckets with the observer to export `durations_seconds` metrics:
-
-```go
-package main
-
-import (
-    "context"
-    "errors"
-    "fmt"
-    "math/rand"
-    "time"
-    
-    sentinel "github.com/mcwalrus/go-sentinel"
-)
-
-func main() {
-    // Observer with histogram buckets
-    observer := sentinel.NewObserver(
-        sentinel.WithDurationMetrics([]float64{1, 5, 8, 12, 15}),
-    )
-    
-    // Wait random intervals of time
-    for range 1000 { 
-        err := observer.RunFunc(func(ctx context.Context) error {
-            sleep := time.Duration(rand.Intn(20)+1) * time.Second
-            fmt.Printf("Sleeping for %v...\n", sleep)
-            time.Sleep(sleep)
-            return nil
-        })
-        // Expect no error
-        if err != nil {
-            panic("unexpected error", err)
-        }
-    }
-}
-```
-
-Note, duration metrics will not be exported unless `WithDurationMetrics()` is set.
-
-### Panic Occurrences
-
-Panic occurrences are just returned as errors:
-
-```go
-package main
-
-import (
-    "context"
-    "errors"
-    "fmt"
-    "math/rand"
-    "time"
-    
-    sentinel "github.com/mcwalrus/go-sentinel"
-    "github.com/prometheus/client_golang/prometheus"
-)
-
-func main() {
-    // Create new observer
-    observer := sentinel.NewObserver()
-    
-    // Panic multiple times
-    observer.UseConfig(sentinel.Config{MaxRetries: 3})
-    err := observer.Run(func() error {
-        panic("panic stations :0")
+        return errors.New("task failed")
     })
     
-    // Unwraps errors.Join()
+    // Unwraps errors.Join
     errUnwrap, ok := (err).(interface {Unwrap() []error})
     if !ok {
         panic("not unwrap")
     }
 
-    // Panics are errors
+    // Handle all errors
     errs := errUnwrap.Unwrap()
-    for _, err := range errs {
-        if rPanic, ok := sentinel.IsPanicError(err); ok {
-            fmt.Printf("panic value: %v\n", rPanic)
-        }
+    for i, err := range errs {
+        log.Printf("Task failed: %d: %v", i, err)
     }
 }
 ```
 
-Panics are always recorded with `panics_total` and `errors_total` counters.
+Retry metrics will not be exported unless `WithRetryMetrics()` is set.
+
+Note tasks called with `MaxRetries=3` may be called up to _four times_ total.
 
 ### Prometheus Integration
 

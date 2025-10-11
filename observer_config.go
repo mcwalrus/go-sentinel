@@ -6,12 +6,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// MetricsOption defines prometheus metric options for an [Observer].
+// ObserverOption defines prometheus metrics options for an [Observer].
 // Options are provided to [NewObserver] on setting up the Observer.
-type MetricsOption func(*observerConfig)
+type ObserverOption func(*config)
 
-// observerConfig defines the configuration for a [Observer].
-type observerConfig struct {
+// config defines the configuration for a [Observer].
+type config struct {
 	namespace     string
 	subsystem     string
 	description   string
@@ -30,8 +30,8 @@ type observerConfig struct {
 //	observer := sentinel.NewObserver(
 //	    sentinel.WithNamespace("myapp"),
 //	)
-func WithNamespace(namespace string) MetricsOption {
-	return func(cfg *observerConfig) {
+func WithNamespace(namespace string) ObserverOption {
+	return func(cfg *config) {
 		cfg.namespace = namespace
 	}
 }
@@ -45,8 +45,8 @@ func WithNamespace(namespace string) MetricsOption {
 //	observer := sentinel.NewObserver(
 //	    sentinel.WithSubsystem("workers"),
 //	)
-func WithSubsystem(subsystem string) MetricsOption {
-	return func(cfg *observerConfig) {
+func WithSubsystem(subsystem string) ObserverOption {
+	return func(cfg *config) {
 		cfg.subsystem = subsystem
 	}
 }
@@ -61,8 +61,8 @@ func WithSubsystem(subsystem string) MetricsOption {
 //	observer := sentinel.NewObserver(
 //	    sentinel.WithDescription("background processes"),
 //	)
-func WithDescription(description string) MetricsOption {
-	return func(cfg *observerConfig) {
+func WithDescription(description string) ObserverOption {
+	return func(cfg *config) {
 		cfg.description = description
 	}
 }
@@ -77,8 +77,8 @@ func WithDescription(description string) MetricsOption {
 //	observer := sentinel.NewObserver(
 //	    sentinel.WithDurationMetrics([]float64{0.05, 1, 5, 30, 600}),
 //	)
-func WithDurationMetrics(buckets []float64) MetricsOption {
-	return func(cfg *observerConfig) {
+func WithDurationMetrics(buckets []float64) ObserverOption {
+	return func(cfg *config) {
 		cfg.buckets = buckets
 	}
 }
@@ -94,8 +94,8 @@ func WithDurationMetrics(buckets []float64) MetricsOption {
 //	observer := sentinel.NewObserver(
 //	    sentinel.WithTimeoutMetrics(),
 //	)
-func WithTimeoutMetrics() MetricsOption {
-	return func(cfg *observerConfig) {
+func WithTimeoutMetrics() ObserverOption {
+	return func(cfg *config) {
 		cfg.trackTimeouts = true
 	}
 }
@@ -105,7 +105,7 @@ func WithTimeoutMetrics() MetricsOption {
 // behaviour. Persistent failures across all retries are recorded in "failures_total".
 //
 // Retry metrics are only recorded when:
-// - MaxRetries is set to a value greater than 0 in [Config].
+// - MaxRetries is set to a value greater than 0 in [ObserverConfig].
 // - When a task returns an error and retry attempt is made.
 //
 // Example usage:
@@ -113,8 +113,8 @@ func WithTimeoutMetrics() MetricsOption {
 //	observer := sentinel.NewObserver(
 //	    sentinel.WithRetryMetrics(),
 //	)
-func WithRetryMetrics() MetricsOption {
-	return func(cfg *observerConfig) {
+func WithRetryMetrics() ObserverOption {
+	return func(cfg *config) {
 		cfg.trackRetries = true
 	}
 }
@@ -130,8 +130,8 @@ func WithRetryMetrics() MetricsOption {
 //	        prometheus.Labels{"env": "production"},
 //	    ),
 //	)
-func WithConstLabels(labels prometheus.Labels) MetricsOption {
-	return func(cfg *observerConfig) {
+func WithConstLabels(labels prometheus.Labels) ObserverOption {
+	return func(cfg *config) {
 		cfg.constLabels = labels
 	}
 }

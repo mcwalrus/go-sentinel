@@ -11,11 +11,11 @@ import (
 
 type implTask struct {
 	fn         func(ctx context.Context) error
-	cfg        Config
+	cfg        ObserverConfig
 	retryCount int
 }
 
-type Config struct {
+type ObserverConfig struct {
 	// Timeout sets a context deadline tasks passed to [Observer.RunFunc].
 	// The Observer records timeout occurrences via metrics when enabled.
 	Timeout time.Duration

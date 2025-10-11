@@ -11,6 +11,7 @@ import (
 
 // - In Flight
 // - Successes
+// - Failures
 // - Error count
 // - Timeout Errors
 // - Panics Occurrences
@@ -28,9 +29,7 @@ type metrics struct {
 	Retries   prometheus.Counter
 }
 
-// newMetrics creates a new metrics instance with the given configuration.
-// If buckets is provided, the Durations histogram will be created.
-func newMetrics(cfg observerConfig) *metrics {
+func newMetrics(cfg config) *metrics {
 	m := &metrics{
 		InFlight: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace:   cfg.namespace,
@@ -103,7 +102,6 @@ func newMetrics(cfg observerConfig) *metrics {
 	return m
 }
 
-// collectors returns all collectors for the metrics.
 func (m *metrics) collectors() []prometheus.Collector {
 	c := []prometheus.Collector{
 		m.InFlight,
@@ -124,14 +122,10 @@ func (m *metrics) collectors() []prometheus.Collector {
 	return c
 }
 
-// MustRegister registers all metrics with the given registry.
-// It panics if any metric fails to register.
 func (m *metrics) MustRegister(registry prometheus.Registerer) {
 	registry.MustRegister(m.collectors()...)
 }
 
-// Register registers all metrics with the given registry.
-// It returns an error if any metric fails to register.
 func (m *metrics) Register(registry prometheus.Registerer) error {
 	var errs []error
 	for _, col := range m.collectors() {

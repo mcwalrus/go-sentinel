@@ -8,9 +8,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
-func testConfig(t *testing.T) observerConfig {
+func testConfig(t *testing.T) config {
 	t.Helper()
-	return observerConfig{
+	return config{
 		namespace:     "test",
 		subsystem:     "metrics",
 		description:   "test operations",
@@ -174,12 +174,12 @@ func TestMetricLabels(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		cfg      observerConfig
+		cfg      config
 		expected map[string]string
 	}{
 		{
 			name: "no namespace or subsystem",
-			cfg: observerConfig{
+			cfg: config{
 				namespace:   "",
 				subsystem:   "",
 				description: "tasks",
@@ -197,7 +197,7 @@ func TestMetricLabels(t *testing.T) {
 		},
 		{
 			name: "with namespace and subsystem",
-			cfg: observerConfig{
+			cfg: config{
 				namespace:   "myapp",
 				subsystem:   "workers",
 				description: "background tasks",
@@ -215,7 +215,7 @@ func TestMetricLabels(t *testing.T) {
 		},
 		{
 			name: "subsystem only",
-			cfg: observerConfig{
+			cfg: config{
 				namespace:   "",
 				subsystem:   "api",
 				description: "API calls",
@@ -263,7 +263,7 @@ func TestMetricLabels(t *testing.T) {
 func TestMetricHelpText(t *testing.T) {
 	t.Parallel()
 
-	cfg := observerConfig{
+	cfg := config{
 		namespace:   "",
 		subsystem:   "",
 		description: "test operations",

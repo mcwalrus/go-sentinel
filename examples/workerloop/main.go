@@ -42,8 +42,8 @@ type ProcessingTask struct {
 	TaskID string
 }
 
-func (task *ProcessingTask) Config() sentinel.Config {
-	return sentinel.Config{
+func (task *ProcessingTask) ObserverConfig() sentinel.ObserverConfig {
+	return sentinel.ObserverConfig{
 		Timeout:       5 * time.Second,
 		MaxRetries:    2,
 		RetryStrategy: retry.Linear(1 * time.Second),

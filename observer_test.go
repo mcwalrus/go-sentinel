@@ -52,7 +52,7 @@ func Verify(t *testing.T, observer *Observer, m metricsCounts) {
 // It can execute either a custom function (fn) or use the built-in test logic.
 // See testTask.Execute for how the task is executed.
 type testTask struct {
-	cfg      Config
+	cfg      ObserverConfig
 	nRetries int
 	success  bool
 	err      error
@@ -60,7 +60,7 @@ type testTask struct {
 	fn       func(ctx context.Context) error
 }
 
-func (t *testTask) Config() Config {
+func (t *testTask) ObserverConfig() ObserverConfig {
 	return t.cfg
 }
 
@@ -120,7 +120,7 @@ func TestObserver_DefaultConfig(t *testing.T) {
 
 	t.Log("Verify histogram buckets")
 	if _, ok := foundMetrics["sentinel_durations_seconds"]; ok {
-		t.Errorf("Expected not to find 'durations_seconds' on default observer observerConfig")
+		t.Errorf("Expected not to find 'durations_seconds' on default observer config")
 	}
 }
 
@@ -165,7 +165,7 @@ func TestObserver_CustomConfig(t *testing.T) {
 
 	t.Log("Verify histogram buckets")
 	if _, ok := foundMetrics["myapp_service_durations_seconds"]; !ok {
-		t.Errorf("Expected to find 'durations_seconds' on observer observerConfig with histogram buckets")
+		t.Errorf("Expected to find 'durations_seconds' on observer config with histogram buckets")
 	}
 }
 
@@ -257,7 +257,7 @@ func TestObserve_SuccessfulExecution(t *testing.T) {
 	observer.MustRegister(registry)
 
 	task := &testTask{
-		cfg: Config{
+		cfg: ObserverConfig{
 			Timeout:    time.Second,
 			MaxRetries: 0,
 		},
@@ -309,7 +309,7 @@ func TestObserve_ErrorHandling(t *testing.T) {
 
 	expectedErr := errors.New("task failed")
 	task := &testTask{
-		cfg: Config{
+		cfg: ObserverConfig{
 			Timeout:    time.Second,
 			MaxRetries: 0,
 		},
@@ -359,7 +359,7 @@ func TestObserve_TimeoutHandling(t *testing.T) {
 	observer := NewObserver()
 
 	task := &testTask{
-		cfg: Config{
+		cfg: ObserverConfig{
 			Timeout:    10 * time.Millisecond, // short timeout
 			MaxRetries: 0,
 		},
@@ -396,7 +396,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 		observer.MustRegister(registry)
 
 		task := &testTask{
-			cfg: Config{
+			cfg: ObserverConfig{
 				Timeout:    time.Second,
 				MaxRetries: 0,
 			},
@@ -426,7 +426,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 		})
 	})
 
-	t.Run("with panic recovery disabled via MetricsOption", func(t *testing.T) {
+	t.Run("with panic recovery disabled via ObserverOption", func(t *testing.T) {
 		t.Parallel()
 
 		observer := NewObserver()
@@ -434,7 +434,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 		observer.MustRegister(registry)
 
 		task := &testTask{
-			cfg: Config{
+			cfg: ObserverConfig{
 				Timeout:    time.Second,
 				MaxRetries: 0,
 			},
@@ -477,7 +477,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 
 		attemptCount := 0
 		task := &testTask{
-			cfg: Config{
+			cfg: ObserverConfig{
 				Timeout:    time.Second,
 				MaxRetries: 2,
 			},
@@ -519,7 +519,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 		attemptCount := 0
 		expectedErr := errors.New("persistent failure")
 		task := &testTask{
-			cfg: Config{
+			cfg: ObserverConfig{
 				Timeout:    10 * time.Millisecond,
 				MaxRetries: 2,
 			},
@@ -567,7 +567,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 		attemptCount := 0
 		expectedErr := errors.New("circuit breaker error")
 		task := &testTask{
-			cfg: Config{
+			cfg: ObserverConfig{
 				Timeout:    time.Second,
 				MaxRetries: 5,
 				RetryBreaker: func(err error) bool {
@@ -612,7 +612,7 @@ func TestObserve_RetryStrategy(t *testing.T) {
 
 		retryStrategyCalls := []int{}
 		task := &testTask{
-			cfg: Config{
+			cfg: ObserverConfig{
 				Timeout:    time.Second,
 				MaxRetries: 2,
 				RetryStrategy: func(retryAttempt int) time.Duration {
@@ -662,7 +662,7 @@ func TestObserve_InFlightMetrics(t *testing.T) {
 				defer wg.Done()
 
 				task := &testTask{
-					cfg: Config{
+					cfg: ObserverConfig{
 						Timeout: time.Second,
 					},
 					fn: func(ctx context.Context) error {
@@ -717,7 +717,7 @@ func TestObserve_Concurrent(t *testing.T) {
 
 		executed := int32(0)
 		task := &testTask{
-			cfg: Config{
+			cfg: ObserverConfig{
 				Timeout: time.Second,
 			},
 			fn: func(ctx context.Context) error {
@@ -801,7 +801,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 		{
 			name: "task with panic (recovered)",
 			task: &testTask{
-				cfg: Config{},
+				cfg: ObserverConfig{},
 				fn: func(ctx context.Context) error {
 					panic("test panic")
 				},
@@ -821,7 +821,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 		{
 			name: "Multiple retries task with error returned",
 			task: &testTask{
-				cfg: Config{
+				cfg: ObserverConfig{
 					MaxRetries: 3,
 				},
 				fn: func(ctx context.Context) error {
@@ -890,7 +890,7 @@ func TestObserve_ContextTimeout(t *testing.T) {
 	t.Parallel()
 
 	observer := NewObserver()
-	observer.UseConfig(Config{
+	observer.UseConfig(ObserverConfig{
 		Timeout: 20 * time.Millisecond,
 	})
 
@@ -1009,7 +1009,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 		task := &testTask{
-			cfg: Config{
+			cfg: ObserverConfig{
 				MaxRetries: 0,
 			},
 			fn: func(ctx context.Context) error {
@@ -1034,7 +1034,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 		})
 	})
 
-	t.Run("with panic recovery disabled via MetricsOption", func(t *testing.T) {
+	t.Run("with panic recovery disabled via ObserverOption", func(t *testing.T) {
 		t.Parallel()
 
 		observer := NewObserver()
@@ -1042,7 +1042,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 		observer.MustRegister(registry)
 
 		task := &testTask{
-			cfg: Config{
+			cfg: ObserverConfig{
 				MaxRetries: 0,
 			},
 			fn: func(ctx context.Context) error {
@@ -1072,7 +1072,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 }
 
 type RetryBreakerTestTask struct {
-	cfg            Config
+	cfg            ObserverConfig
 	attemptCount   int
 	shouldPanic    bool
 	shouldSucceed  bool
@@ -1101,7 +1101,7 @@ func TestShortOnPanicRetryBreaker(t *testing.T) {
 		observer.MustRegister(registry)
 
 		task := &RetryBreakerTestTask{
-			cfg: Config{
+			cfg: ObserverConfig{
 				Timeout:      time.Second,
 				MaxRetries:   3,
 				RetryBreaker: circuit.OnPanic(),
@@ -1135,7 +1135,7 @@ func TestShortOnPanicRetryBreaker(t *testing.T) {
 		observer.MustRegister(registry)
 
 		task := &RetryBreakerTestTask{
-			cfg: Config{
+			cfg: ObserverConfig{
 				Timeout:      time.Second,
 				MaxRetries:   5,
 				RetryBreaker: circuit.OnPanic(),
@@ -1175,7 +1175,7 @@ func TestShortOnPanicRetryBreaker(t *testing.T) {
 		observer.MustRegister(registry)
 
 		task := &RetryBreakerTestTask{
-			cfg: Config{
+			cfg: ObserverConfig{
 				Timeout:      time.Second,
 				MaxRetries:   5,
 				RetryBreaker: circuit.OnPanic(),
@@ -1215,7 +1215,7 @@ func TestShortOnPanicRetryBreaker(t *testing.T) {
 		observer.MustRegister(registry)
 
 		task := &RetryBreakerTestTask{
-			cfg: Config{
+			cfg: ObserverConfig{
 				Timeout:      time.Second,
 				MaxRetries:   3,
 				RetryBreaker: circuit.OnPanic(),
@@ -1253,7 +1253,7 @@ func TestRetryBreaker_EdgeCases(t *testing.T) {
 		observer.MustRegister(registry)
 
 		task := &RetryBreakerTestTask{
-			cfg: Config{
+			cfg: ObserverConfig{
 				Timeout:      time.Second,
 				MaxRetries:   2,
 				RetryBreaker: nil,
@@ -1288,7 +1288,7 @@ func TestRetryBreaker_EdgeCases(t *testing.T) {
 		observer.MustRegister(registry)
 
 		task := &RetryBreakerTestTask{
-			cfg: Config{
+			cfg: ObserverConfig{
 				Timeout:    time.Second,
 				MaxRetries: 2,
 				RetryBreaker: func(err error) bool {
