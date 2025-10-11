@@ -16,26 +16,29 @@ import (
 // for successes, failures, timeouts, panics, retries, and observed runtimes.
 // It provides methods to execute tasks with various TaskConfig options.
 type Observer struct {
-	m             *sync.Mutex
+	m             *sync.RWMutex
 	cfg           observerConfig
 	metrics       *metrics
 	recoverPanics bool
 	runner        TaskConfig
 }
 
-// NewObserver configures a new Observer with specified prometheus metrics.
+// NewObserver configures a new Observer with specified [PrometheusOption] options.
 // The Observer will need to be registered with a Prometheus registry to expose metrics.
 // Please refer to [Observer.MustRegister] and [Observer.Register] for more information.
 //
 // Example usage:
 //
-//	// Uses default configuration
+//	// Default configuration
 //	observer := sentinel.NewObserver()
 //
-//	// Replaces default "sentinel"
-//	observer := sentinel.NewObserver(sentinel.WithSubsystem("workers"))
+//	// Metrics with new namespace and subsystem
+//	observer := sentinel.NewObserver(
+//	  sentinel.WithNamespace("my_app"),
+//	  sentinel.WithSubsystem("workers"),
+//	)
 //
-//	// Support all metrics
+//	// Support metrics variants
 //	observer := sentinel.NewObserver(
 //	  sentinel.WithRetryMetrics(),
 //	  sentinel.WithTimeoutMetrics(),
@@ -64,7 +67,7 @@ func NewObserver(opts ...PrometheusOption) *Observer {
 	}
 
 	return &Observer{
-		m:       &sync.Mutex{},
+		m:       &sync.RWMutex{},
 		cfg:     cfg,
 		metrics: newMetrics(cfg),
 	}
@@ -86,30 +89,32 @@ func (o *Observer) MustRegister(registry prometheus.Registerer) {
 }
 
 // TODO: redo docs.
-// Branch creates a new Observer with shared underlying metrics as the current Observer.
+// Fork creates a new Observer with shared underlying metrics as the current Observer.
 // The child shares the underlying metrics but hold different configurations for how to handle
 // Run methods including the use of different TaskConfig and recovery behaviour.
-func (o *Observer) Branch() *Observer {
+func (o *Observer) Fork() *Observer {
 	newObserver := *o
+	newObserver.m = &sync.RWMutex{}
 	return &newObserver
 }
 
 // TODO: redo docs.
 // UseConfig configures the observer for how to handle Run methods.
+// See [TaskConfig] for more information on how to configure the Run method behaviour.
 func (o *Observer) UseConfig(config TaskConfig) {
 	o.m.Lock()
 	o.runner = config
 	o.m.Unlock()
 }
 
-// TODO: revise docs.
+// TODO: revise / improve docs.
 // Used to set whether panic recovery should be disabled. Recovery is enabled by default.
 // It is recommended against disabling panic recovery unless you have a reason to propagate
 // panics to the caller. An alternative means is to retrieve panic value from the error using
 // [IsPanicError] after Run* methods have been executed.
-func (o *Observer) DisablePanicRecovery() {
+func (o *Observer) DisablePanicRecovery(disable bool) {
 	o.m.Lock()
-	o.recoverPanics = false
+	o.recoverPanics = !disable
 	o.m.Unlock()
 }
 
@@ -127,9 +132,9 @@ func (o *Observer) Run(fn func() error) error {
 	if o == nil || o.metrics == nil {
 		panic("observer: not configured")
 	}
-	o.m.Lock()
+	o.m.RLock()
 	cfg := o.runner
-	o.m.Unlock()
+	o.m.RUnlock()
 
 	task := &implTask{
 		cfg: cfg,
@@ -160,9 +165,9 @@ func (o *Observer) RunFunc(fn func(ctx context.Context) error) error {
 	if o == nil || o.metrics == nil {
 		panic("observer: not configured")
 	}
-	o.m.Lock()
+	o.m.RLock()
 	cfg := o.runner
-	o.m.Unlock()
+	o.m.RUnlock()
 
 	task := &implTask{
 		cfg: cfg,
@@ -222,9 +227,12 @@ func (o *Observer) execute(task *implTask) error {
 		// Handle panics
 		if panicValue != nil {
 			o.metrics.Panics.Inc()
+			o.m.RLock()
 			if !o.recoverPanics {
+				o.m.RUnlock()
 				panic(panicValue) // re-throw
 			}
+			o.m.RUnlock()
 		}
 
 		// Handle retries
