@@ -52,7 +52,7 @@ func Verify(t *testing.T, observer *Observer, m metricsCounts) {
 // It can execute either a custom function (fn) or use the built-in test logic.
 // See testTask.Execute for how the task is executed.
 type testTask struct {
-	cfg      TaskConfig
+	cfg      Config
 	nRetries int
 	success  bool
 	err      error
@@ -60,7 +60,7 @@ type testTask struct {
 	fn       func(ctx context.Context) error
 }
 
-func (t *testTask) Config() TaskConfig {
+func (t *testTask) Config() Config {
 	return t.cfg
 }
 
@@ -169,6 +169,50 @@ func TestObserver_CustomConfig(t *testing.T) {
 	}
 }
 
+func TestObserver_UnconfiguredObserver(t *testing.T) {
+	t.Parallel()
+
+	var expectPanic = func(t *testing.T, msg string) {
+		if r := recover(); r == nil {
+			t.Errorf("Expected panic: %s", msg)
+		}
+	}
+
+	t.Run("observer nil pointer", func(t *testing.T) {
+		t.Parallel()
+		var observer *Observer = nil
+
+		t.Run("Run", func(t *testing.T) {
+			t.Parallel()
+			defer expectPanic(t, "observer.Run")
+			_ = observer.Run(func() error { return nil })
+		})
+
+		t.Run("RunFunc", func(t *testing.T) {
+			t.Parallel()
+			defer expectPanic(t, "observer.RunFunc")
+			_ = observer.RunFunc(func(ctx context.Context) error { return nil })
+		})
+	})
+
+	t.Run("observer variable declaration", func(t *testing.T) {
+		t.Parallel()
+		observer := &Observer{}
+
+		t.Run("Run", func(t *testing.T) {
+			t.Parallel()
+			defer expectPanic(t, "observer.Run")
+			_ = observer.Run(func() error { return nil })
+		})
+
+		t.Run("RunFunc", func(t *testing.T) {
+			t.Parallel()
+			defer expectPanic(t, "observer.RunFunc")
+			_ = observer.RunFunc(func(ctx context.Context) error { return nil })
+		})
+	})
+}
+
 func TestObserve_Register(t *testing.T) {
 	t.Parallel()
 
@@ -213,7 +257,7 @@ func TestObserve_SuccessfulExecution(t *testing.T) {
 	observer.MustRegister(registry)
 
 	task := &testTask{
-		cfg: TaskConfig{
+		cfg: Config{
 			Timeout:    time.Second,
 			MaxRetries: 0,
 		},
@@ -265,7 +309,7 @@ func TestObserve_ErrorHandling(t *testing.T) {
 
 	expectedErr := errors.New("task failed")
 	task := &testTask{
-		cfg: TaskConfig{
+		cfg: Config{
 			Timeout:    time.Second,
 			MaxRetries: 0,
 		},
@@ -274,7 +318,7 @@ func TestObserve_ErrorHandling(t *testing.T) {
 		},
 	}
 
-	err := observer.RunTask(task)
+	err := observer.RunFunc(task.Execute)
 	if err != expectedErr {
 		t.Errorf("Expected error %v, got %v", expectedErr, err)
 	}
@@ -315,7 +359,7 @@ func TestObserve_TimeoutHandling(t *testing.T) {
 	observer := NewObserver()
 
 	task := &testTask{
-		cfg: TaskConfig{
+		cfg: Config{
 			Timeout:    10 * time.Millisecond, // short timeout
 			MaxRetries: 0,
 		},
@@ -325,7 +369,7 @@ func TestObserve_TimeoutHandling(t *testing.T) {
 		},
 	}
 
-	err := observer.RunTask(task)
+	err := observer.RunFunc(task.Execute)
 
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("Expected context.DeadlineExceeded, got %v", err)
@@ -352,7 +396,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 		observer.MustRegister(registry)
 
 		task := &testTask{
-			cfg: TaskConfig{
+			cfg: Config{
 				Timeout:    time.Second,
 				MaxRetries: 0,
 			},
@@ -362,7 +406,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 		}
 
 		// This should not panic due to recovery (default behavior)
-		err := observer.RunTask(task)
+		err := observer.RunFunc(task.Execute)
 
 		// Should return an error indicating panic occurred
 		if err == nil {
@@ -382,7 +426,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 		})
 	})
 
-	t.Run("with panic recovery disabled via PrometheusOption", func(t *testing.T) {
+	t.Run("with panic recovery disabled via MetricsOption", func(t *testing.T) {
 		t.Parallel()
 
 		observer := NewObserver()
@@ -390,7 +434,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 		observer.MustRegister(registry)
 
 		task := &testTask{
-			cfg: TaskConfig{
+			cfg: Config{
 				Timeout:    time.Second,
 				MaxRetries: 0,
 			},
@@ -417,7 +461,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 			}
 		}()
 
-		_ = observer.RunTask(task)
+		_ = observer.RunFunc(task.Execute)
 	})
 }
 
@@ -433,7 +477,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 
 		attemptCount := 0
 		task := &testTask{
-			cfg: TaskConfig{
+			cfg: Config{
 				Timeout:    time.Second,
 				MaxRetries: 2,
 			},
@@ -446,7 +490,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 			},
 		}
 
-		err := observer.RunTask(task)
+		err := observer.RunFunc(task.Execute)
 
 		if err != nil {
 			t.Errorf("Expected no error after successful retry, got %v", err)
@@ -475,7 +519,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 		attemptCount := 0
 		expectedErr := errors.New("persistent failure")
 		task := &testTask{
-			cfg: TaskConfig{
+			cfg: Config{
 				Timeout:    10 * time.Millisecond,
 				MaxRetries: 2,
 			},
@@ -488,7 +532,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 		// Run the task in a goroutine incase of infinite loop
 		done := make(chan error)
 		go func() {
-			done <- observer.RunTask(task)
+			done <- observer.RunFunc(task.Execute)
 		}()
 		var err error
 		select {
@@ -523,10 +567,10 @@ func TestObserve_RetryLogic(t *testing.T) {
 		attemptCount := 0
 		expectedErr := errors.New("circuit breaker error")
 		task := &testTask{
-			cfg: TaskConfig{
+			cfg: Config{
 				Timeout:    time.Second,
 				MaxRetries: 5,
-				CircuitBreaker: func(err error) bool {
+				RetryBreaker: func(err error) bool {
 					return errors.Is(err, expectedErr)
 				},
 			},
@@ -539,7 +583,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 			},
 		}
 
-		err := observer.RunTask(task)
+		err := observer.RunFunc(task.Execute)
 
 		if !errors.Is(err, expectedErr) {
 			t.Errorf("Expected error %v, got %v", expectedErr, err)
@@ -568,7 +612,7 @@ func TestObserve_RetryStrategy(t *testing.T) {
 
 		retryStrategyCalls := []int{}
 		task := &testTask{
-			cfg: TaskConfig{
+			cfg: Config{
 				Timeout:    time.Second,
 				MaxRetries: 2,
 				RetryStrategy: func(retryAttempt int) time.Duration {
@@ -581,7 +625,7 @@ func TestObserve_RetryStrategy(t *testing.T) {
 			},
 		}
 
-		err := observer.RunTask(task)
+		err := observer.RunFunc(task.Execute)
 		if err == nil {
 			t.Errorf("Expected error, got nil")
 		}
@@ -618,7 +662,7 @@ func TestObserve_InFlightMetrics(t *testing.T) {
 				defer wg.Done()
 
 				task := &testTask{
-					cfg: TaskConfig{
+					cfg: Config{
 						Timeout: time.Second,
 					},
 					fn: func(ctx context.Context) error {
@@ -629,7 +673,7 @@ func TestObserve_InFlightMetrics(t *testing.T) {
 					},
 				}
 
-				err := observer.RunTask(task)
+				err := observer.RunFunc(task.Execute)
 				if err != nil {
 					t.Errorf("Unexpected error: %v", err)
 				}
@@ -673,7 +717,7 @@ func TestObserve_Concurrent(t *testing.T) {
 
 		executed := int32(0)
 		task := &testTask{
-			cfg: TaskConfig{
+			cfg: Config{
 				Timeout: time.Second,
 			},
 			fn: func(ctx context.Context) error {
@@ -685,7 +729,7 @@ func TestObserve_Concurrent(t *testing.T) {
 
 		for range numGoroutines {
 			go func() {
-				_ = observer.RunTask(task)
+				_ = observer.RunFunc(task.Execute)
 			}()
 		}
 
@@ -757,7 +801,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 		{
 			name: "task with panic (recovered)",
 			task: &testTask{
-				cfg: TaskConfig{},
+				cfg: Config{},
 				fn: func(ctx context.Context) error {
 					panic("test panic")
 				},
@@ -777,7 +821,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 		{
 			name: "Multiple retries task with error returned",
 			task: &testTask{
-				cfg: TaskConfig{
+				cfg: Config{
 					MaxRetries: 3,
 				},
 				fn: func(ctx context.Context) error {
@@ -846,14 +890,14 @@ func TestObserve_ContextTimeout(t *testing.T) {
 	t.Parallel()
 
 	observer := NewObserver()
+	observer.UseConfig(Config{
+		Timeout: 20 * time.Millisecond,
+	})
 
 	task := &testTask{
-		cfg: TaskConfig{
-			Timeout: 20 * time.Millisecond,
-		},
 		fn: func(ctx context.Context) error {
 			select {
-			case <-ctx.Done(): // Respect context cancellation
+			case <-ctx.Done():
 				return ctx.Err()
 			case <-time.After(100 * time.Millisecond):
 				return nil
@@ -862,7 +906,7 @@ func TestObserve_ContextTimeout(t *testing.T) {
 	}
 
 	start := time.Now()
-	err := observer.RunTask(task)
+	err := observer.RunFunc(task.Execute)
 	duration := time.Since(start)
 
 	t.Log("Should timeout quickly")
@@ -910,29 +954,31 @@ func TestMultipleObservers(t *testing.T) {
 
 	t.Log("Run 17 tasks on observer1")
 	for range 17 {
-		_ = observer1.RunFunc(func() error {
+		_ = observer1.Run(func() error {
 			return nil
 		})
 	}
 
 	t.Log("Run 23 tasks on observer2")
 	for range 23 {
-		_ = observer2.RunFunc(func() error {
+		_ = observer2.Run(func() error {
 			return nil
 		})
 	}
 
 	t.Log("Fail 16 tasks on observer1")
 	for range 16 {
-		_ = observer1.RunFunc(func() error {
-			return errors.New("test error")
+		_ = observer1.Run(func() error {
+			err := errors.New("test error")
+			return err
 		})
 	}
 
 	t.Log("Fail 14 tasks on observer2")
 	for range 14 {
-		_ = observer2.RunFunc(func() error {
-			return errors.New("test error")
+		_ = observer2.Run(func() error {
+			err := errors.New("test error")
+			return err
 		})
 	}
 
@@ -953,37 +999,6 @@ func TestMultipleObservers(t *testing.T) {
 	})
 }
 
-func Benchmark_ObserverRun(b *testing.B) {
-
-	observer := NewObserver(
-		WithNamespace("test"),
-		WithSubsystem("metrics"),
-		WithDescription("test operations"),
-		WithDurationMetrics([]float64{0.01, 0.1, 1, 10, 100}),
-	)
-	registry := prometheus.NewRegistry()
-	observer.MustRegister(registry)
-
-	b.Run("simple function", func(b *testing.B) {
-		cfg := TaskConfig{}
-		for i := 0; i < b.N; i++ {
-			_ = observer.Run(cfg, func() error {
-				return nil
-			})
-		}
-	})
-
-	b.Run("function with work", func(b *testing.B) {
-		cfg := TaskConfig{}
-		for i := 0; i < b.N; i++ {
-			_ = observer.Run(cfg, func() error {
-				time.Sleep(time.Microsecond)
-				return nil
-			})
-		}
-	})
-}
-
 func TestObserver_TestPanicHandling(t *testing.T) {
 	t.Parallel()
 
@@ -994,7 +1009,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 		task := &testTask{
-			cfg: TaskConfig{
+			cfg: Config{
 				MaxRetries: 0,
 			},
 			fn: func(ctx context.Context) error {
@@ -1002,7 +1017,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 			},
 		}
 
-		err := observer.RunTask(task)
+		err := observer.RunFunc(task.Execute)
 		if err == nil {
 			t.Errorf("Expected error indicating panic occurred, got nil")
 		}
@@ -1019,7 +1034,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 		})
 	})
 
-	t.Run("with panic recovery disabled via PrometheusOption", func(t *testing.T) {
+	t.Run("with panic recovery disabled via MetricsOption", func(t *testing.T) {
 		t.Parallel()
 
 		observer := NewObserver()
@@ -1027,22 +1042,21 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 		observer.MustRegister(registry)
 
 		task := &testTask{
-			cfg: TaskConfig{
-				MaxRetries: 0, // No retries to avoid multiple panic attempts
+			cfg: Config{
+				MaxRetries: 0,
 			},
 			fn: func(ctx context.Context) error {
 				panic("test panic")
 			},
 		}
 
-		observer.DisableRecovery()
+		observer.DisablePanicRecovery(true)
 
 		// This should panic and be caught by our test
 		defer func() {
 			if r := recover(); r == nil {
-				t.Error("Expected panic to propagate when PanicRecovery(recover bool)")
+				t.Error("Expected panic to propagate when DisablePanicRecovery(true)")
 			} else {
-				// Verify panic was still recorded even though it propagated
 				Verify(t, observer, metricsCounts{
 					Successes: 0,
 					Errors:    1,
@@ -1053,43 +1067,30 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 			}
 		}()
 
-		_ = observer.RunTask(task)
+		_ = observer.RunFunc(task.Execute)
 	})
 }
 
-// testTask is a test implementation of the Task interface for circuit breaker testing.
-type circuitBreakerTestTask struct {
-	cfg            TaskConfig
+type RetryBreakerTestTask struct {
+	cfg            Config
 	attemptCount   int
 	shouldPanic    bool
 	shouldSucceed  bool
-	panicOnAttempt int // panic on specific attempt (0 = first attempt, 1 = first retry, etc.)
+	panicOnAttempt int
 }
 
-var _ Task = (*circuitBreakerTestTask)(nil)
-
-func (t *circuitBreakerTestTask) Config() TaskConfig {
-	return t.cfg
-}
-
-func (t *circuitBreakerTestTask) Execute(ctx context.Context) error {
+func (t *RetryBreakerTestTask) Execute(ctx context.Context) error {
 	t.attemptCount++
-
-	// Check if we should panic on this specific attempt
 	if t.shouldPanic && t.attemptCount == t.panicOnAttempt {
 		panic("test panic on attempt " + string(rune(t.attemptCount)))
 	}
-
-	// If we should succeed after a certain number of attempts
 	if t.shouldSucceed && t.attemptCount >= 3 {
 		return nil
 	}
-
-	// Return a regular error for retry testing
 	return errors.New("task failed on attempt " + string(rune(t.attemptCount)))
 }
 
-func TestShortOnPanicCircuitBreaker(t *testing.T) {
+func TestShortOnPanicRetryBreaker(t *testing.T) {
 	t.Parallel()
 
 	t.Run("allows retries on regular errors", func(t *testing.T) {
@@ -1099,16 +1100,16 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
-		task := &circuitBreakerTestTask{
-			cfg: TaskConfig{
-				Timeout:        time.Second,
-				MaxRetries:     3,
-				CircuitBreaker: circuit.OnPanic(),
+		task := &RetryBreakerTestTask{
+			cfg: Config{
+				Timeout:      time.Second,
+				MaxRetries:   3,
+				RetryBreaker: circuit.OnPanic(),
 			},
 			shouldSucceed: true,
 		}
 
-		err := observer.RunTask(task)
+		err := observer.RunFunc(task.Execute)
 		if err != nil {
 			t.Errorf("Expected no error after successful retry, got %v", err)
 		}
@@ -1133,17 +1134,17 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
-		task := &circuitBreakerTestTask{
-			cfg: TaskConfig{
-				Timeout:        time.Second,
-				MaxRetries:     5,
-				CircuitBreaker: circuit.OnPanic(),
+		task := &RetryBreakerTestTask{
+			cfg: Config{
+				Timeout:      time.Second,
+				MaxRetries:   5,
+				RetryBreaker: circuit.OnPanic(),
 			},
 			shouldPanic:    true,
 			panicOnAttempt: 1,
 		}
 
-		err := observer.RunTask(task)
+		err := observer.RunFunc(task.Execute)
 		if err == nil {
 			t.Errorf("Expected panic error, got nil")
 		}
@@ -1173,17 +1174,17 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
-		task := &circuitBreakerTestTask{
-			cfg: TaskConfig{
-				Timeout:        time.Second,
-				MaxRetries:     5,
-				CircuitBreaker: circuit.OnPanic(),
+		task := &RetryBreakerTestTask{
+			cfg: Config{
+				Timeout:      time.Second,
+				MaxRetries:   5,
+				RetryBreaker: circuit.OnPanic(),
 			},
 			shouldPanic:    true,
 			panicOnAttempt: 3,
 		}
 
-		err := observer.RunTask(task)
+		err := observer.RunFunc(task.Execute)
 		if err == nil {
 			t.Errorf("Expected panic error, got nil")
 		}
@@ -1213,16 +1214,16 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
-		task := &circuitBreakerTestTask{
-			cfg: TaskConfig{
-				Timeout:        time.Second,
-				MaxRetries:     3,
-				CircuitBreaker: circuit.OnPanic(),
+		task := &RetryBreakerTestTask{
+			cfg: Config{
+				Timeout:      time.Second,
+				MaxRetries:   3,
+				RetryBreaker: circuit.OnPanic(),
 			},
 			shouldSucceed: false,
 		}
 
-		err := observer.RunTask(task)
+		err := observer.RunFunc(task.Execute)
 		if err == nil {
 			t.Errorf("Expected error after all retries exhausted, got nil")
 		}
@@ -1241,34 +1242,31 @@ func TestShortOnPanicCircuitBreaker(t *testing.T) {
 	})
 }
 
-func TestCircuitBreaker_EdgeCases(t *testing.T) {
+func TestRetryBreaker_EdgeCases(t *testing.T) {
 	t.Parallel()
 
-	t.Run("nil circuit breaker behaves like DefaultCircuitBreaker", func(t *testing.T) {
+	t.Run("nil circuit breaker behaves like DefaultRetryBreaker", func(t *testing.T) {
 		t.Parallel()
 
 		observer := NewObserver()
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
-		task := &circuitBreakerTestTask{
-			cfg: TaskConfig{
-				Timeout:        time.Second,
-				MaxRetries:     2,
-				CircuitBreaker: nil, // nil should behave like DeafultCircuitBreaker
+		task := &RetryBreakerTestTask{
+			cfg: Config{
+				Timeout:      time.Second,
+				MaxRetries:   2,
+				RetryBreaker: nil,
 			},
 			shouldPanic:    true,
 			panicOnAttempt: 1, // panic on first attempt
 		}
 
-		err := observer.RunTask(task)
-
-		// Should return panic error after all retries
+		err := observer.RunFunc(task.Execute)
 		if err == nil {
 			t.Errorf("Expected panic error, got nil")
 		}
 
-		// Should have made 3 attempts (1 initial + 2 retries)
 		if task.attemptCount != 3 {
 			t.Errorf("Expected 3 attempts with nil circuit breaker, got %d", task.attemptCount)
 		}
@@ -1289,24 +1287,19 @@ func TestCircuitBreaker_EdgeCases(t *testing.T) {
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
-		// Custom circuit breaker that breaks on specific error type
-		customCircuitBreaker := func(err error) bool {
-			return errors.Is(err, &ErrRecoveredPanic{})
-		}
-
-		task := &circuitBreakerTestTask{
-			cfg: TaskConfig{
-				Timeout:        time.Second,
-				MaxRetries:     2,
-				CircuitBreaker: customCircuitBreaker,
+		task := &RetryBreakerTestTask{
+			cfg: Config{
+				Timeout:    time.Second,
+				MaxRetries: 2,
+				RetryBreaker: func(err error) bool {
+					return errors.Is(err, &ErrRecoveredPanic{})
+				},
 			},
 			shouldPanic:    true,
 			panicOnAttempt: 1, // panic on first attempt
 		}
 
-		err := observer.RunTask(task)
-
-		// Should return panic error immediately (circuit breaker stops retries)
+		err := observer.RunFunc(task.Execute)
 		if err == nil {
 			t.Errorf("Expected panic error, got nil")
 		}
@@ -1318,60 +1311,5 @@ func TestCircuitBreaker_EdgeCases(t *testing.T) {
 			Panics:    1,
 			Retries:   2,
 		})
-	})
-}
-
-func TestObserver_UnconfiguredObserver(t *testing.T) {
-	t.Run("observer nil pointer", func(t *testing.T) {
-		t.Parallel()
-		var observer *Observer = nil
-		ExpectObserverMethodsPanic(t, observer)
-	})
-
-	t.Run("observer variable declaration", func(t *testing.T) {
-		t.Parallel()
-		observer := &Observer{}
-		ExpectObserverMethodsPanic(t, observer)
-	})
-}
-
-func ExpectObserverMethodsPanic(t *testing.T, observer *Observer) {
-	t.Helper()
-
-	var expectPanic = func(t *testing.T, msg string) {
-		if r := recover(); r == nil {
-			t.Errorf("Expected panic: %s", msg)
-		}
-	}
-
-	t.Run("Run", func(t *testing.T) {
-		t.Parallel()
-		defer expectPanic(t, "observer.Run")
-		_ = observer.Run(TaskConfig{}, func() error { return nil })
-	})
-
-	t.Run("RunCtx", func(t *testing.T) {
-		t.Parallel()
-		defer expectPanic(t, "observer.RunCtx")
-		_ = observer.RunCtx(TaskConfig{}, func(ctx context.Context) error { return nil })
-	})
-
-	t.Run("RunFunc", func(t *testing.T) {
-		t.Parallel()
-		defer expectPanic(t, "observer.RunFunc")
-		_ = observer.RunFunc(func() error { return nil })
-	})
-
-	t.Run("RunFuncCtx", func(t *testing.T) {
-		t.Parallel()
-		defer expectPanic(t, "observer.RunFuncCtx")
-		_ = observer.RunFuncCtx(func(ctx context.Context) error { return nil })
-	})
-
-	t.Run("RunTask", func(t *testing.T) {
-		t.Parallel()
-		defer expectPanic(t, "observer.RunTask")
-		task := &testTask{success: true}
-		_ = observer.RunTask(task)
 	})
 }

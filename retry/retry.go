@@ -1,5 +1,5 @@
 // Package retry provides retry strategy implementations for the sentinel package.
-// These strategies can be used with TaskConfig.RetryStrategy to control retry behavior.
+// These strategies can be used with Config.RetryStrategy to control retry behavior.
 package retry
 
 import (
@@ -54,7 +54,17 @@ func WithLimit(strategy Strategy, limit time.Duration) Strategy {
 
 // WithJitter wraps a retry strategy with additional random jitter.
 // The jitter is uniformly sampled in the range [0, maxJitter] and added to the base wait.
+// This helps prevent thundering herd problems by spreading out retry attempts
+// across multiple clients, reducing load spikes on recovering services.
+//
 // When maxJitter is less than or equal to zero, the base strategy is returned unchanged.
+//
+// Example usage:
+//
+//	strategy := retry.WithJitter(
+//		retry.Exponential(100*time.Millisecond),
+//		time.Second, // Max jitter of 1 second
+//	)
 func WithJitter(strategy Strategy, maxJitter time.Duration) Strategy {
 	if maxJitter <= 0 {
 		return strategy

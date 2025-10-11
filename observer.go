@@ -14,16 +14,16 @@ import (
 
 // Observer monitors and measures task executions, collecting Prometheus metrics
 // for successes, failures, timeouts, panics, retries, and observed runtimes.
-// It provides methods to execute tasks with various TaskConfig options.
+// It provides methods to execute tasks with various Config options.
 type Observer struct {
 	m             *sync.RWMutex
 	cfg           observerConfig
 	metrics       *metrics
 	recoverPanics bool
-	runner        TaskConfig
+	runner        Config
 }
 
-// NewObserver configures a new Observer with specified [PrometheusOption] options.
+// NewObserver configures a new Observer with specified [MetricsOption] options.
 // The Observer will need to be registered with a Prometheus registry to expose metrics.
 // Please refer to [Observer.MustRegister] and [Observer.Register] for more information.
 //
@@ -44,7 +44,7 @@ type Observer struct {
 //	  sentinel.WithTimeoutMetrics(),
 //	  sentinel.WithDurationMetrics([]float64{0.05, 1, 5, 30, 600}),
 //	)
-func NewObserver(opts ...PrometheusOption) *Observer {
+func NewObserver(opts ...MetricsOption) *Observer {
 	cfg := observerConfig{
 		namespace:   "",
 		subsystem:   "",
@@ -73,45 +73,87 @@ func NewObserver(opts ...PrometheusOption) *Observer {
 	}
 }
 
-// TODO: redo / revise docs.
 // Register registers all Observer metrics with the provided Prometheus registry.
-// Use [Observer.MustRegister] if you want the program to panic on registration conflicts.
+// This method returns an error if any metric registration fails. Use [Observer.MustRegister]
+// if you want the program to panic on registration conflicts instead of handling errors.
+//
+// Example usage:
+//
+//	registry := prometheus.NewRegistry()
+//	if err := observer.Register(registry); err != nil {
+//		log.Fatalf("Failed to register metrics: %v", err)
+//	}
 func (o *Observer) Register(registry prometheus.Registerer) error {
 	return o.metrics.Register(registry)
 }
 
-// TODO: redo / revise docs.
 // MustRegister registers all Observer metrics with the provided Prometheus registry.
-// This method panics if any metric registration failures. Use [Observer.Register] if you prefer
-// to handle registration errors gracefully.
+// This method panics if any metric registration failures occur. Use [Observer.Register]
+// if you prefer to handle registration errors gracefully instead of panicking.
+//
+// Example usage:
+//
+//	registry := prometheus.NewRegistry()
+//	observer.MustRegister(registry) // Will panic if registration fails
 func (o *Observer) MustRegister(registry prometheus.Registerer) {
 	o.metrics.MustRegister(registry)
 }
 
-// TODO: redo docs.
 // Fork creates a new Observer with shared underlying metrics as the current Observer.
-// The child shares the underlying metrics but hold different configurations for how to handle
-// Run methods including the use of different TaskConfig and recovery behaviour.
+//
+// This is useful when you want multiple observers to share the same metric namespace
+// but have different execution behaviors (e.g., different retry strategies, timeouts).
+//
+// Example usage:
+//
+//	baseObserver := sentinel.NewObserver(sentinel.WithNamespace("myapp"))
+//	criticalObserver := baseObserver.Fork()
+//	criticalObserver.UseConfig(sentinel.Config{
+//		MaxRetries: 5,
+//		Timeout:    30 * time.Second,
+//	})
 func (o *Observer) Fork() *Observer {
 	newObserver := *o
 	newObserver.m = &sync.RWMutex{}
 	return &newObserver
 }
 
-// TODO: redo docs.
 // UseConfig configures the observer for how to handle Run methods.
-// See [TaskConfig] for more information on how to configure the Run method behaviour.
-func (o *Observer) UseConfig(config TaskConfig) {
+// This sets the Config that will be used for all subsequent Run, RunFunc calls.
+// See [Config] for more information on available configuration options.
+//
+// The configuration includes settings for timeouts, retry strategies, circuit breakers,
+// and other execution behaviors. This method is thread-safe.
+//
+// Example usage:
+//
+//	observer.UseConfig(sentinel.Config{
+//		Timeout:    10 * time.Second,
+//		MaxRetries: 3,
+//		RetryStrategy: retry.Exponential(100 * time.Millisecond),
+//	})
+func (o *Observer) UseConfig(config Config) {
 	o.m.Lock()
 	o.runner = config
 	o.m.Unlock()
 }
 
-// TODO: revise / improve docs.
-// Used to set whether panic recovery should be disabled. Recovery is enabled by default.
-// It is recommended against disabling panic recovery unless you have a reason to propagate
-// panics to the caller. An alternative means is to retrieve panic value from the error using
-// [IsPanicError] after Run* methods have been executed.
+// DisablePanicRecovery controls whether panic recovery should be disabled.
+// Recovery is enabled by default, meaning panics are caught and converted to errors.
+//
+// It is recommended against disabling panic recovery unless you have a specific reason
+// to propagate panics to the caller. An alternative approach is to retrieve panic
+// values from errors using [IsPanicError] after Run* methods have been executed.
+//
+// This method is thread-safe.
+//
+// Example usage:
+//
+//	// Disable panic recovery (panics will propagate)
+//	observer.DisablePanicRecovery(true)
+//
+//	// Re-enable panic recovery (default behavior)
+//	observer.DisablePanicRecovery(false)
 func (o *Observer) DisablePanicRecovery(disable bool) {
 	o.m.Lock()
 	o.recoverPanics = !disable
@@ -119,15 +161,25 @@ func (o *Observer) DisablePanicRecovery(disable bool) {
 }
 
 // Run executes fn and records metrics according to the observer's configuration.
-// If a timeout is specified by the observer, it will not be respected by this method.
-// Note if [context.DeadlineExceeded] is returned by fn, it can be recorded as a timeout.
+// This method does not respect timeouts set in the observer's Config.
+// Use RunFunc if you need timeout support.
+//
+// The function is executed with panic recovery enabled by default. Panics are
+// converted to errors and recorded in metrics. Use DisablePanicRecovery(true)
+// to propagate panics instead.
+//
+// If the function returns context.DeadlineExceeded, it will be recorded as a timeout
+// when timeout metrics are enabled.
 //
 // Example usage:
 //
 //	observer := sentinel.NewObserver()
-//	observer.Run(func() error {
+//	err := observer.Run(func() error {
 //		return nil
 //	})
+//	if err != nil {
+//		log.Printf("Task failed: %v", err)
+//	}
 func (o *Observer) Run(fn func() error) error {
 	if o == nil || o.metrics == nil {
 		panic("observer: not configured")
@@ -152,14 +204,30 @@ func (o *Observer) Run(fn func() error) error {
 }
 
 // RunFunc executes fn and records metrics according to the observer's configuration.
-// For timeouts specified by the observer, the fn will be passed a context with the timeout.
-// Note if [context.DeadlineExceeded] is returned by fn, it can be recorded as a timeout.
+// For timeouts specified by the observer's Config, the fn will be passed a context
+// with the timeout. This is the recommended method when you need timeout support.
+//
+// The function is executed with panic recovery enabled by default. Panics are
+// converted to errors and recorded in metrics. Use DisablePanicRecovery(true)
+// to propagate panics instead.
+//
+// If the function returns context.DeadlineExceeded, it will be recorded as a timeout
+// when timeout metrics are enabled.
 //
 // Example usage:
 //
 //	observer := sentinel.NewObserver()
-//	observer.RunFunc(func(ctx context.Context) error {
-//		return nil
+//	observer.UseConfig(sentinel.Config{
+//		Timeout: 10 * time.Second,
+//	})
+//	err := observer.RunFunc(func(ctx context.Context) error {
+//		// Your task logic here with timeout support
+//		select {
+//		case <-ctx.Done():
+//			return ctx.Err()
+//		case <-time.After(5 * time.Second):
+//			return nil
+//		}
 //	})
 func (o *Observer) RunFunc(fn func(ctx context.Context) error) error {
 	if o == nil || o.metrics == nil {

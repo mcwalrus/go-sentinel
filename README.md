@@ -6,7 +6,8 @@
 [![GoDoc](https://godoc.org/github.com/mcwalrus/go-sentinel?status.svg)](https://godoc.org/github.com/mcwalrus/go-sentinel)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Sentinel provides retry handling and observability monitoring for Go applications. It wraps functions or task execution with Prometheus metrics, observing for successes, errors caught, panic occurrences, retries, and timeouts - making critical routines more resilient, observable and robust. Use the library as a drop-in solution for new projects or existing applications.
+Sentinel provides retry handling and observability monitoring for Go applications. It wraps functions or task execution with Prometheus metrics, observing for successes, errors caught, panic occurrences, retries, and timeouts - making critical routines more resilient, observable and robust. A core principle of design is that **panics should be treated as errors in production systems**. Use the library as a drop-in solution for new projects or existing applications.
+
 
 ## Features
 
@@ -106,7 +107,7 @@ func main() {
 
 ### Timeout Handling
 
-Observer provides context timeouts based on TaskConfig:
+Observer provides context timeouts based on Config:
 
 ```go
 package main
@@ -126,8 +127,8 @@ func main() {
         sentinel.WithTimeoutMetrics(),
     )
 
-    // Set timeout
-    observer = observer.SetRunner(sentinel.TaskConfig{
+    // Set timeout via UseConfig
+    observer.UseConfig(sentinel.Config{
         Timeout: 10 * time.Second,
     })
 
@@ -170,7 +171,7 @@ func main() {
     )
 
     // Set retry configuration
-    observer = observer.WithConfig(sentinel.TaskConfig{
+    observer.UseConfig(sentinel.Config{
         MaxRetries:    3,
         Timeout:       10 * time.Second,
         RetryStrategy: retry.WithJitter(
@@ -216,32 +217,32 @@ import (
 )
 
 func main() {
-    // Oserver with histogram buckets
+    // Observer with histogram buckets
     observer := sentinel.NewObserver(
         sentinel.WithDurationMetrics([]float64{1, 5, 8, 12, 15}),
     )
     
     // Wait random intervals of time
     for range 1000 { 
-        err := observer.RunFunc(func() error {
+        err := observer.RunFunc(func(ctx context.Context) error {
             sleep := time.Duration(rand.Intn(20)+1) * time.Second
             fmt.Printf("Sleeping for %v...\n", sleep)
             time.Sleep(sleep)
             return nil
         })
-    }
-    // Expect no error
-    if err != nil {
-        panic("unexpected error", err)
+        // Expect no error
+        if err != nil {
+            panic("unexpected error", err)
+        }
     }
 }
 ```
 
 Note, duration metrics will not be exported unless `WithDurationMetrics()` is set.
 
-### Panic Occurances
+### Panic Occurrences
 
-Panic occurances are just returned as errors:
+Panic occurrences are just returned as errors:
 
 ```go
 package main
@@ -262,8 +263,8 @@ func main() {
     observer := sentinel.NewObserver()
     
     // Panic multiple times
-    config := sentinel.TaskConfig{MaxRetries: 3}
-    err := observer.Run(config, func() error {
+    observer.UseConfig(sentinel.Config{MaxRetries: 3})
+    err := observer.Run(func() error {
         panic("panic stations :0")
     })
     
@@ -276,7 +277,7 @@ func main() {
     // Panics are errors
     errs := errUnwrap.Unwrap()
     for _, err := range errs {
-        if rPanic, ok := sentinel.IsPanicError(err)
+        if rPanic, ok := sentinel.IsPanicError(err); ok {
             fmt.Printf("panic value: %v\n", rPanic)
         }
     }
@@ -307,7 +308,7 @@ func main() {
 	    sentinel.WithSubsystem("workers"),
     )
     // Register with registry
-    registry = prometheus.NewRegistry()
+    registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
     
     // Expose metrics endpoint
@@ -323,7 +324,7 @@ func main() {
     for range time.NewTicker(3 * time.Second).C {
         err := observer.RunFunc(doFunc)
         if err != nil {
-            fmt.Formatf("error occurred: %w\n", err)
+            fmt.Printf("error occurred: %v\n", err)
         }
     }
 }

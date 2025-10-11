@@ -7,13 +7,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// Promtheus metrics:
+// Prometheus metrics:
 
 // - In Flight
 // - Successes
 // - Error count
 // - Timeout Errors
-// - Panics Occurances
+// - Panics Occurrences
 // - Routine Runtime Histogram
 // - Retry Attempts
 
@@ -64,7 +64,7 @@ func newMetrics(cfg observerConfig) *metrics {
 			Namespace:   cfg.namespace,
 			Subsystem:   cfg.subsystem,
 			Name:        "panics_total",
-			Help:        fmt.Sprintf("Number of panic occurances from observed %s", cfg.description),
+			Help:        fmt.Sprintf("Number of panic occurrences from observed %s", cfg.description),
 			ConstLabels: cfg.constLabels,
 		}),
 	}
