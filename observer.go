@@ -19,8 +19,9 @@ type Observer struct {
 	m             *sync.RWMutex
 	cfg           config
 	metrics       *metrics
-	recoverPanics bool
 	runner        ObserverConfig
+	controls      ObserverControls
+	recoverPanics bool
 }
 
 // NewObserver configures a new Observer with specified [ObserverOption] options.
@@ -123,9 +124,6 @@ func (o *Observer) Fork() *Observer {
 // This sets the ObserverConfig that will be used for all subsequent Run, RunFunc calls.
 // See [ObserverConfig] for more information on available configuration options.
 //
-// The configuration includes settings for timeouts, retry strategies, circuit breakers,
-// and other execution behaviors. This method is thread-safe.
-//
 // Example usage:
 //
 //	observer.UseConfig(sentinel.ObserverConfig{
@@ -139,9 +137,31 @@ func (o *Observer) UseConfig(config ObserverConfig) {
 	o.m.Unlock()
 }
 
-// DisableRecovery sets whether panic recovery should be disabled for the observer.
+// UseControls configures the observer for how to handle Run methods.
+// This sets the ObserverControls that will be used for all subsequent Run, RunFunc calls.
+// See [ObserverControls] for more information on available configuration options.
+//
+// Example usage:
+//
+//	// closing signalCh can stop new requests
+//	var signalCh = make(chan struct{})
+//	defer func() {
+//		time.Sleep(10 * time.Second)
+//		close(signalCh)
+//	}()
+//
+//	observer.UseControls(sentinel.ObserverControls{
+//		NewRequestControl: circuit.OnDone(signalCh),
+//	})
+func (o *Observer) UseControls(controls ObserverControls) {
+	o.m.Lock()
+	o.controls = controls
+	o.m.Unlock()
+}
+
+// DisablePanicRecovery sets whether panic recovery should be disabled for the observer.
 // Recovery is enabled by default, meaning panics are caught and converted to errors.
-func (o *Observer) DisableRecovery(disable bool) {
+func (o *Observer) DisablePanicRecovery(disable bool) {
 	o.m.Lock()
 	o.recoverPanics = !disable
 	o.m.Unlock()
@@ -181,8 +201,9 @@ func (o *Observer) Run(fn func() error) error {
 			return fn() // ignore ctx
 		},
 	}
-	if cfg.Control != nil {
-		if cfg.Control() {
+
+	if o.controls.NewRequestControl != nil {
+		if o.controls.NewRequestControl() {
 			return &ErrControlBreaker{}
 		}
 	}
@@ -228,8 +249,8 @@ func (o *Observer) RunFunc(fn func(ctx context.Context) error) error {
 		cfg: cfg,
 		fn:  fn,
 	}
-	if cfg.Control != nil {
-		if cfg.Control() {
+	if o.controls.NewRequestControl != nil {
+		if o.controls.NewRequestControl() {
 			return &ErrControlBreaker{}
 		}
 	}
@@ -307,12 +328,17 @@ func (o *Observer) execute(task *implTask) error {
 					return err
 				}
 			}
-			if task.cfg.Control != nil {
-				if task.cfg.Control() {
+
+			// Try in flight control
+			o.m.RLock()
+			if o.controls.InFlightControl != nil {
+				if o.controls.InFlightControl() {
+					o.m.RUnlock()
 					o.metrics.Failures.Inc()
 					return err
 				}
 			}
+			o.m.RUnlock()
 
 			// Wait retry duration
 			if o.metrics.Retries != nil {

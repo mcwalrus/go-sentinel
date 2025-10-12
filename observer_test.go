@@ -440,7 +440,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 			},
 		}
 
-		observer.DisableRecovery(true)
+		observer.DisablePanicRecovery(true)
 
 		// This should panic and be caught by our test
 		defer func() {
@@ -1069,7 +1069,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 		t.Parallel()
 
 		observer := NewObserver()
-		observer.DisableRecovery(true)
+		observer.DisablePanicRecovery(true)
 
 		fn := func(ctx context.Context) error {
 			panic("test panic")
@@ -1077,7 +1077,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 
 		defer func() {
 			if r := recover(); r == nil {
-				t.Error("Expected panic to propagate when DisableRecovery(true)")
+				t.Error("Expected panic to propagate when DisablePanicRecovery(true)")
 			} else {
 				Verify(t, observer, metricsCounts{
 					Successes: 0,
@@ -1100,7 +1100,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 		t.Parallel()
 
 		observer := NewObserver()
-		observer.DisableRecovery(true)
+		observer.DisablePanicRecovery(true)
 		forkedObserver := observer.Fork()
 
 		fn := func(ctx context.Context) error {
@@ -1109,7 +1109,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 
 		defer func() {
 			if r := recover(); r == nil {
-				t.Error("Expected panic to propagate when DisableRecovery(true)")
+				t.Error("Expected panic to propagate when DisablePanicRecovery(true)")
 			} else {
 				Verify(t, observer, metricsCounts{
 					Successes: 0,
@@ -1132,9 +1132,9 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 		t.Parallel()
 
 		observer := NewObserver()
-		observer.DisableRecovery(true)
+		observer.DisablePanicRecovery(true)
 		forkedObserver := observer.Fork()
-		observer.DisableRecovery(false)
+		observer.DisablePanicRecovery(false)
 
 		fn := func(ctx context.Context) error {
 			panic("test panic")
@@ -1145,7 +1145,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 			t.Log("Forked observer maintains panic recovery disabled")
 			defer func() {
 				if r := recover(); r == nil {
-					t.Error("Expected panic to propagate when DisableRecovery(true)")
+					t.Error("Expected panic to propagate when DisablePanicRecovery(true)")
 				} else {
 					Verify(t, observer, metricsCounts{
 						Successes: 0,
@@ -1169,7 +1169,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 			t.Log("Base observer has panic recovery enabled")
 			defer func() {
 				if r := recover(); r != nil {
-					t.Error("Expected panic to not propagate when DisableRecovery(false)")
+					t.Error("Expected panic to not propagate when DisablePanicRecovery(false)")
 				}
 			}()
 

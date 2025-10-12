@@ -5,20 +5,8 @@ package circuit
 // False will allow attempts to continue.
 type Control func() bool
 
-// OnSignal stops when a value is received on the provided channel.
-// The channel is read in a non-blocking way to keep the predicate fast.
-func OnSignal[T any](ch <-chan T) Control {
-	return func() bool {
-		select {
-		case <-ch:
-			return true
-		default:
-			return false
-		}
-	}
-}
-
 // OnDone stops when the provided done channel is closed.
+// This can be used to represent a full-closed control signal.
 func OnDone(done <-chan struct{}) Control {
 	return func() bool {
 		select {
@@ -27,18 +15,5 @@ func OnDone(done <-chan struct{}) Control {
 		default:
 			return false
 		}
-	}
-}
-
-// AnyControl returns a control that stops when
-// any of the provided controls return true.
-func AnyControl(cs ...Control) Control {
-	return func() bool {
-		for _, c := range cs {
-			if c != nil && c() {
-				return true
-			}
-		}
-		return false
 	}
 }

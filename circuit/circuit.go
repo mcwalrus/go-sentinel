@@ -13,9 +13,9 @@ import (
 //
 // Example usage:
 //
-//	breaker := func(err error) bool {
+//	breaker := circuit.Breaker(func(err error) bool {
 //		return errors.Is(err, context.Canceled)
-//	}
+//	})
 type Breaker func(err error) bool
 
 // After stops retries when total elapsed time since breaker creation exceeds d.

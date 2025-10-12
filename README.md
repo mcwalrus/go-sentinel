@@ -185,7 +185,7 @@ func main() {
 
 Panics are always recorded with `panics_total` and `errors_total` counters. 
 
-Panics can be allowed to propogate from the observer with: `DisableRecovery(true)`.
+Panics can be allowed to propogate from the observer with: `DisablePanicRecovery(true)`.
 
 ### Observe Durations
 
