@@ -285,6 +285,7 @@ func (o *Observer) execute(task *implTask) error {
 			o.m.RLock()
 			if !o.recoverPanics {
 				o.m.RUnlock()
+				o.metrics.Failures.Inc()
 				panic(panicValue) // re-throw
 			}
 			o.m.RUnlock()
@@ -327,6 +328,7 @@ func (o *Observer) execute(task *implTask) error {
 			// Next retry attempt
 			retryTask := &implTask{
 				fn:         task.fn,
+				cfg:        task.cfg,
 				retryCount: task.retryCount + 1,
 			}
 
