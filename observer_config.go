@@ -44,18 +44,21 @@ type ObserverConfig struct {
 	// When nil, the observer will always attempt the next retry. This is useful to stop
 	// retries on particular errors.
 	RetryBreaker circuit.Breaker
+
+	// Controls provides fine-grained control over observer behavior during different phases
+	// of task execution. This is useful to manage or avoid new task executions on shutdown
+	// signals, or through managed resource limits.
+	Controls ObserverControls
 }
 
 type ObserverControls struct {
-	// NewRequestControl prevents new task executions when returning true. This control is
-	// checked before each call to Run() or RunFunc(). This is useful to manage avoid new
-	// task executions on shutdown signals, or through managed resource limits. By default,
-	// new observer requests are always allowed.
-	NewRequestControl circuit.Control
+	// RequestControl prevents new task executions when returning true. This control is
+	// checked before each call to Run() or RunFunc(). By default, requests are always allowed.
+	RequestControl circuit.Control
 
 	// InFlightControl prevents retry attempts when returning true. This control is checked
-	// before each retry attempt for tasks that have failed. This is useful to exit early
-	// on shutdown signals. When nil, retries are allowed according to the retry configuration.
+	// before each retry attempt for tasks that have failed. When nil, retries are allowed
+	// according to the retry configuration.
 	InFlightControl circuit.Control
 }
 

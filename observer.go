@@ -134,28 +134,7 @@ func (o *Observer) Fork() *Observer {
 func (o *Observer) UseConfig(config ObserverConfig) {
 	o.m.Lock()
 	o.runner = config
-	o.m.Unlock()
-}
-
-// UseControls configures the observer for how to handle Run methods.
-// This sets the ObserverControls that will be used for all subsequent Run, RunFunc calls.
-// See [ObserverControls] for more information on available configuration options.
-//
-// Example usage:
-//
-//	// closing signalCh can stop new requests
-//	var signalCh = make(chan struct{})
-//	defer func() {
-//		time.Sleep(10 * time.Second)
-//		close(signalCh)
-//	}()
-//
-//	observer.UseControls(sentinel.ObserverControls{
-//		NewRequestControl: circuit.OnDone(signalCh),
-//	})
-func (o *Observer) UseControls(controls ObserverControls) {
-	o.m.Lock()
-	o.controls = controls
+	o.controls = config.Controls
 	o.m.Unlock()
 }
 
@@ -193,6 +172,7 @@ func (o *Observer) Run(fn func() error) error {
 	}
 	o.m.RLock()
 	cfg := o.runner
+	controls := o.controls
 	o.m.RUnlock()
 
 	task := &implTask{
@@ -202,8 +182,8 @@ func (o *Observer) Run(fn func() error) error {
 		},
 	}
 
-	if o.controls.NewRequestControl != nil {
-		if o.controls.NewRequestControl() {
+	if controls.RequestControl != nil {
+		if controls.RequestControl() {
 			return &ErrControlBreaker{}
 		}
 	}
@@ -243,14 +223,15 @@ func (o *Observer) RunFunc(fn func(ctx context.Context) error) error {
 	}
 	o.m.RLock()
 	cfg := o.runner
+	controls := o.controls
 	o.m.RUnlock()
 
 	task := &implTask{
 		cfg: cfg,
 		fn:  fn,
 	}
-	if o.controls.NewRequestControl != nil {
-		if o.controls.NewRequestControl() {
+	if controls.RequestControl != nil {
+		if controls.RequestControl() {
 			return &ErrControlBreaker{}
 		}
 	}
@@ -321,15 +302,14 @@ func (o *Observer) execute(task *implTask) error {
 				return err
 			}
 
-			// Try circuit breakers
+			// Try circuit breaker
 			if task.cfg.RetryBreaker != nil {
 				if task.cfg.RetryBreaker(err) {
 					o.metrics.Failures.Inc()
 					return err
 				}
 			}
-
-			// Try in flight control
+			// Try in-flight control
 			o.m.RLock()
 			if o.controls.InFlightControl != nil {
 				if o.controls.InFlightControl() {

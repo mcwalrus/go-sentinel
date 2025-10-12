@@ -26,7 +26,9 @@ func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
 		control := func() bool { return true }
 
 		observer.UseConfig(ObserverConfig{
-			Control: control,
+			Controls: ObserverControls{
+				RequestControl: control,
+			},
 		})
 
 		// Track if the function was actually called
@@ -66,7 +68,9 @@ func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
 		control := func() bool { return true }
 
 		observer.UseConfig(ObserverConfig{
-			Control: control,
+			Controls: ObserverControls{
+				RequestControl: control,
+			},
 		})
 
 		// Track if the function was actually called
@@ -106,7 +110,9 @@ func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
 		control := func() bool { return false }
 
 		observer.UseConfig(ObserverConfig{
-			Control: control,
+			Controls: ObserverControls{
+				RequestControl: control,
+			},
 		})
 
 		// Track if the function was actually called
@@ -191,7 +197,10 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 3,
-			Control:    control,
+			Controls: ObserverControls{
+				RequestControl:  control,
+				InFlightControl: control,
+			},
 		})
 
 		// Function that always fails
@@ -239,7 +248,10 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 3,
-			Control:    control,
+			Controls: ObserverControls{
+				RequestControl:  control,
+				InFlightControl: control,
+			},
 		})
 
 		// Function that always fails
@@ -260,7 +272,6 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 			t.Errorf("Expected 3 control checks, got %d", attemptCount)
 		}
 
-		// Verify metrics - should have 2 errors (one for each execution), 1 failure, 1 retry
 		Verify(t, observer, metricsCounts{
 			Successes: 0,
 			Failures:  1,
@@ -292,8 +303,11 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries:   3,
-			Control:      control,
 			RetryBreaker: retryBreaker,
+			Controls: ObserverControls{
+				RequestControl:  control,
+				InFlightControl: control,
+			},
 		})
 
 		// Function that always fails
@@ -335,10 +349,12 @@ func TestObserver_ControlWithCircuitImplementations(t *testing.T) {
 
 		// Create a signal channel
 		signalCh := make(chan struct{}, 1)
-		control := circuit.OnSignal(signalCh)
+		control := circuit.OnDone(signalCh)
 
 		observer.UseConfig(ObserverConfig{
-			Control: control,
+			Controls: ObserverControls{
+				RequestControl: control,
+			},
 		})
 
 		// First execution should succeed (no signal)
@@ -395,7 +411,9 @@ func TestObserver_ControlWithCircuitImplementations(t *testing.T) {
 		control := circuit.OnDone(doneCh)
 
 		observer.UseConfig(ObserverConfig{
-			Control: control,
+			Controls: ObserverControls{
+				RequestControl: control,
+			},
 		})
 
 		// First execution should succeed (channel not closed)
@@ -439,71 +457,6 @@ func TestObserver_ControlWithCircuitImplementations(t *testing.T) {
 			Retries:   0,
 		})
 	})
-
-	t.Run("AnyControl with multiple controls", func(t *testing.T) {
-		t.Parallel()
-
-		observer := NewObserver()
-		registry := prometheus.NewRegistry()
-		observer.MustRegister(registry)
-
-		// Create multiple control channels
-		signalCh1 := make(chan struct{}, 1)
-		signalCh2 := make(chan struct{}, 1)
-		doneCh := make(chan struct{})
-
-		control1 := circuit.OnSignal(signalCh1)
-		control2 := circuit.OnSignal(signalCh2)
-		control3 := circuit.OnDone(doneCh)
-
-		// AnyControl that triggers if any control returns true
-		control := circuit.AnyControl(control1, control2, control3)
-
-		observer.UseConfig(ObserverConfig{
-			Control: control,
-		})
-
-		// First execution should succeed (no signals)
-		executed1 := false
-		err1 := observer.Run(func() error {
-			executed1 = true
-			return nil
-		})
-
-		if err1 != nil {
-			t.Errorf("Expected no error on first execution, got %v", err1)
-		}
-		if !executed1 {
-			t.Error("First execution should have occurred")
-		}
-
-		// Send signal to first channel
-		signalCh1 <- struct{}{}
-
-		// Second execution should be avoided
-		executed2 := false
-		err2 := observer.Run(func() error {
-			executed2 = true
-			return nil
-		})
-
-		if !errors.Is(err2, &ErrControlBreaker{}) {
-			t.Errorf("Expected ErrControlBreaker on second execution, got %v", err2)
-		}
-		if executed2 {
-			t.Error("Second execution should have been avoided")
-		}
-
-		// Verify metrics - should have 1 success, 0 failures
-		Verify(t, observer, metricsCounts{
-			Successes: 1,
-			Failures:  0,
-			Errors:    0,
-			Timeouts:  0,
-			Panics:    0,
-			Retries:   0,
-		})
-	})
 }
 
 func TestObserver_ControlWithTimeout(t *testing.T) {
@@ -521,7 +474,9 @@ func TestObserver_ControlWithTimeout(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			Timeout: 100 * time.Millisecond,
-			Control: control,
+			Controls: ObserverControls{
+				RequestControl: control,
+			},
 		})
 
 		// Function that takes longer than timeout
@@ -567,7 +522,9 @@ func TestObserver_ControlWithTimeout(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			Timeout: 100 * time.Millisecond,
-			Control: control,
+			Controls: ObserverControls{
+				RequestControl: control,
+			},
 		})
 
 		// Function that would timeout
@@ -623,7 +580,9 @@ func TestObserver_ControlConcurrency(t *testing.T) {
 		}
 
 		observer.UseConfig(ObserverConfig{
-			Control: control,
+			Controls: ObserverControls{
+				RequestControl: control,
+			},
 		})
 
 		// Run multiple goroutines concurrently
@@ -706,8 +665,11 @@ func TestObserver_ControlWithRetryStrategy(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries:    2,
-			Control:       control,
 			RetryStrategy: retryStrategy,
+			Controls: ObserverControls{
+				RequestControl:  control,
+				InFlightControl: control,
+			},
 		})
 
 		// Function that always fails
