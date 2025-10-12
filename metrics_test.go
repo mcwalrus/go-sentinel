@@ -309,50 +309,105 @@ func TestMetricLabels(t *testing.T) {
 func TestMetricHelpText(t *testing.T) {
 	t.Parallel()
 
-	cfg := config{
-		namespace:     "",
-		subsystem:     "",
-		description:   "test operations",
-		buckets:       []float64{0.1, 1},
-		trackTimeouts: true,
-		trackRetries:  true,
-	}
+	t.Run("with additional metrics", func(t *testing.T) {
+		cfg := config{
+			namespace:     "",
+			subsystem:     "",
+			description:   "test operations",
+			buckets:       []float64{0.1, 1},
+			trackTimeouts: true,
+			trackRetries:  true,
+		}
 
-	m := newMetrics(cfg)
-	registry := prometheus.NewRegistry()
-	m.MustRegister(registry)
+		m := newMetrics(cfg)
+		registry := prometheus.NewRegistry()
+		m.MustRegister(registry)
 
-	families, err := registry.Gather()
-	if err != nil {
-		t.Fatalf("Failed to gather metrics: %v", err)
-	}
+		families, err := registry.Gather()
+		if err != nil {
+			t.Fatalf("Failed to gather metrics: %v", err)
+		}
 
-	expectedHelpTexts := map[string]string{
-		"in_flight":         "Number of observed test operations in flight",
-		"success_total":     "Number of successes from observed test operations",
-		"failures_total":    "Number of failures from observed test operations excluding retry attempts",
-		"errors_total":      "Number of errors from observed test operations including retries and panics",
-		"panics_total":      "Number of panic occurrences from observed test operations",
-		"durations_seconds": "Histogram of the observed durations of test operations",
-		"timeouts_total":    "Number of timeout errors from observed test operations",
-		"retries_total":     "Number of retry attempts from observed test operations",
-	}
+		expectedHelpTexts := map[string]string{
+			"in_flight":         "Number of observed test operations in flight",
+			"success_total":     "Number of successes from observed test operations",
+			"failures_total":    "Number of failures from observed test operations excluding retry attempts",
+			"errors_total":      "Number of errors from observed test operations including retries and panics",
+			"panics_total":      "Number of panic occurrences from observed test operations",
+			"durations_seconds": "Histogram of the observed durations of test operations",
+			"timeouts_total":    "Number of timeout errors from observed test operations",
+			"retries_total":     "Number of retry attempts from observed test operations",
+		}
 
-	t.Log("Checking help text")
-	if len(families) != len(expectedHelpTexts) {
-		t.Errorf(
-			"Expected %d metrics, got %d",
-			len(expectedHelpTexts), len(families),
+		t.Log("Checking help text")
+		if len(families) != len(expectedHelpTexts) {
+			t.Errorf(
+				"Expected %d metrics, got %d",
+				len(expectedHelpTexts), len(families),
+			)
+		}
+		for _, family := range families {
+			expectedHelp, exists := expectedHelpTexts[*family.Name]
+			if !exists {
+				continue
+			}
+			if *family.Help != expectedHelp {
+				t.Errorf("Metric %s: expected help text %q, got %q",
+					*family.Name, expectedHelp, *family.Help)
+			}
+		}
+	})
+}
+
+func TestMetricHelpText1(t *testing.T) {
+	t.Parallel()
+
+	t.Run("default description should be used", func(t *testing.T) {
+
+		t.Log("default description should be used")
+		observer := NewObserver(
+			WithDescription(""), // no description
+			WithDurationMetrics([]float64{0.1, 1}),
+			WithTimeoutMetrics(),
+			WithRetryMetrics(),
 		)
-	}
-	for _, family := range families {
-		expectedHelp, exists := expectedHelpTexts[*family.Name]
-		if !exists {
-			continue
+
+		m := observer.metrics
+		registry := prometheus.NewRegistry()
+		m.MustRegister(registry)
+
+		families, err := registry.Gather()
+		if err != nil {
+			t.Fatalf("Failed to gather metrics: %v", err)
 		}
-		if *family.Help != expectedHelp {
-			t.Errorf("Metric %s: expected help text %q, got %q",
-				*family.Name, expectedHelp, *family.Help)
+
+		expectedHelpTexts := map[string]string{
+			"in_flight":         "Number of observed tasks in flight",
+			"success_total":     "Number of successes from observed tasks",
+			"failures_total":    "Number of failures from observed tasks excluding retry attempts",
+			"errors_total":      "Number of errors from observed tasks including retries and panics",
+			"panics_total":      "Number of panic occurrences from observed tasks",
+			"durations_seconds": "Histogram of the observed durations of tasks",
+			"timeouts_total":    "Number of timeout errors from observed tasks",
+			"retries_total":     "Number of retry attempts from observed tasks",
 		}
-	}
+
+		t.Log("Checking help text")
+		if len(families) != len(expectedHelpTexts) {
+			t.Errorf(
+				"Expected %d metrics, got %d",
+				len(expectedHelpTexts), len(families),
+			)
+		}
+		for _, family := range families {
+			expectedHelp, exists := expectedHelpTexts[*family.Name]
+			if !exists {
+				continue
+			}
+			if *family.Help != expectedHelp {
+				t.Errorf("Metric %s: expected help text %q, got %q",
+					*family.Name, expectedHelp, *family.Help)
+			}
+		}
+	})
 }
