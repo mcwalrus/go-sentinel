@@ -39,10 +39,10 @@ func TestAnyControl(t *testing.T) {
 		sig2 := make(chan struct{}, 1)
 		bDone := OnDone(sig2)
 
-		if !AnyControl(bSig, bDone)() {
+		if AnyControl(bSig, bDone)() {
 			t.Fatalf("should not trip before signal")
 		}
-		if AnyControl(bSig, bDone, func() bool { return true })() {
+		if !AnyControl(bSig, bDone, func() bool { return true })() {
 			t.Fatalf("should trip on constant control")
 		}
 		close(sig1)
