@@ -77,15 +77,6 @@ func TestRunConfig(t *testing.T) {
 	}
 }
 
-func TestOnMatchNil(t *testing.T) {
-	t.Parallel()
-
-	b := func(err error) bool { return err != nil }
-	if b(errors.New("x")) {
-		t.Fatalf("nil match function should not trip")
-	}
-}
-
 func TestAnyBreakerWithNil(t *testing.T) {
 	t.Parallel()
 

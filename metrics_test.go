@@ -183,16 +183,34 @@ func TestMetricLabels(t *testing.T) {
 				namespace:   "",
 				subsystem:   "",
 				description: "tasks",
-				buckets:     []float64{0.1, 1},
 			},
 			expected: map[string]string{
-				"in_flight":     "in_flight",
-				"success_total": "success_total",
-				"errors_total":  "errors_total",
-				// "timeouts_total":    "timeouts_total",
+				"in_flight":      "in_flight",
+				"success_total":  "success_total",
+				"failures_total": "failures_total",
+				"errors_total":   "errors_total",
+				"panics_total":   "panics_total",
+			},
+		},
+		{
+			name: "no namespace or subsystem with additional metrics",
+			cfg: config{
+				namespace:     "",
+				subsystem:     "",
+				description:   "tasks",
+				buckets:       []float64{0.1, 1},
+				trackTimeouts: true,
+				trackRetries:  true,
+			},
+			expected: map[string]string{
+				"in_flight":         "in_flight",
+				"success_total":     "success_total",
+				"failures_total":    "failures_total",
+				"errors_total":      "errors_total",
 				"panics_total":      "panics_total",
 				"durations_seconds": "durations_seconds",
-				// "retries_total":     "retries_total",
+				"timeouts_total":    "timeouts_total",
+				"retries_total":     "retries_total",
 			},
 		},
 		{
@@ -201,34 +219,53 @@ func TestMetricLabels(t *testing.T) {
 				namespace:   "myapp",
 				subsystem:   "workers",
 				description: "background tasks",
-				buckets:     []float64{0.1, 1},
 			},
 			expected: map[string]string{
-				"in_flight":     "myapp_workers_in_flight",
-				"success_total": "myapp_workers_success_total",
-				"errors_total":  "myapp_workers_errors_total",
-				// "timeouts_total":    "myapp_workers_timeouts_total",
+				"in_flight":      "myapp_workers_in_flight",
+				"success_total":  "myapp_workers_success_total",
+				"failures_total": "myapp_workers_failures_total",
+				"errors_total":   "myapp_workers_errors_total",
+				"panics_total":   "myapp_workers_panics_total",
+			},
+		},
+		{
+			name: "with namespace and subsystem with additional metrics",
+			cfg: config{
+				namespace:     "myapp",
+				subsystem:     "workers",
+				description:   "background tasks",
+				buckets:       []float64{0.1, 1},
+				trackTimeouts: true,
+				trackRetries:  true,
+			},
+			expected: map[string]string{
+				"in_flight":         "myapp_workers_in_flight",
+				"success_total":     "myapp_workers_success_total",
+				"failures_total":    "myapp_workers_failures_total",
+				"errors_total":      "myapp_workers_errors_total",
 				"panics_total":      "myapp_workers_panics_total",
 				"durations_seconds": "myapp_workers_durations_seconds",
-				// "retries_total":     "myapp_workers_retries_total",
+				"timeouts_total":    "myapp_workers_timeouts_total",
+				"retries_total":     "myapp_workers_retries_total",
 			},
 		},
 		{
 			name: "subsystem only",
 			cfg: config{
-				namespace:   "",
-				subsystem:   "api",
-				description: "API calls",
-				buckets:     []float64{0.1, 1},
+				namespace:     "",
+				subsystem:     "api",
+				description:   "API calls",
+				trackTimeouts: true,
+				trackRetries:  true,
 			},
 			expected: map[string]string{
-				"in_flight":     "api_in_flight",
-				"success_total": "api_success_total",
-				"errors_total":  "api_errors_total",
-				// "timeouts_total":    "api_timeouts_total",
-				"panics_total":      "api_panics_total",
-				"durations_seconds": "api_durations_seconds",
-				// "retries_total":     "api_retries_total",
+				"in_flight":      "api_in_flight",
+				"success_total":  "api_success_total",
+				"failures_total": "api_failures_total",
+				"errors_total":   "api_errors_total",
+				"panics_total":   "api_panics_total",
+				"timeouts_total": "api_timeouts_total",
+				"retries_total":  "api_retries_total",
 			},
 		},
 	}
@@ -237,6 +274,8 @@ func TestMetricLabels(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			t.Logf("testing: %s", tt.name)
+
 			m := newMetrics(tt.cfg)
 			registry := prometheus.NewRegistry()
 			m.MustRegister(registry)
@@ -244,6 +283,13 @@ func TestMetricLabels(t *testing.T) {
 			families, err := registry.Gather()
 			if err != nil {
 				t.Fatalf("Failed to gather metrics: %v", err)
+			}
+
+			if len(families) != len(tt.expected) {
+				t.Errorf(
+					"Expected %d metrics, got %d",
+					len(tt.expected), len(families),
+				)
 			}
 
 			foundMetrics := make(map[string]bool)
@@ -264,10 +310,12 @@ func TestMetricHelpText(t *testing.T) {
 	t.Parallel()
 
 	cfg := config{
-		namespace:   "",
-		subsystem:   "",
-		description: "test operations",
-		buckets:     []float64{0.1, 1},
+		namespace:     "",
+		subsystem:     "",
+		description:   "test operations",
+		buckets:       []float64{0.1, 1},
+		trackTimeouts: true,
+		trackRetries:  true,
 	}
 
 	m := newMetrics(cfg)
@@ -282,13 +330,21 @@ func TestMetricHelpText(t *testing.T) {
 	expectedHelpTexts := map[string]string{
 		"in_flight":         "Number of observed test operations in flight",
 		"success_total":     "Number of successes from observed test operations",
+		"failures_total":    "Number of failures from observed test operations excluding retry attempts",
 		"errors_total":      "Number of errors from observed test operations including retries and panics",
-		"timeouts_total":    "Number of timeout errors from observed test operations",
-		"panics_total":      "Number of panic occurances from observed test operations",
+		"panics_total":      "Number of panic occurrences from observed test operations",
 		"durations_seconds": "Histogram of the observed durations of test operations",
+		"timeouts_total":    "Number of timeout errors from observed test operations",
 		"retries_total":     "Number of retry attempts from observed test operations",
 	}
 
+	t.Log("Checking help text")
+	if len(families) != len(expectedHelpTexts) {
+		t.Errorf(
+			"Expected %d metrics, got %d",
+			len(expectedHelpTexts), len(families),
+		)
+	}
 	for _, family := range families {
 		expectedHelp, exists := expectedHelpTexts[*family.Name]
 		if !exists {
