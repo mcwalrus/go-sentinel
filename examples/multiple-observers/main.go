@@ -32,26 +32,26 @@ var (
 func init() {
 	// Background tasks observer
 	backgroundObserver = sentinel.NewObserver(
+		[]float64{0.1, 0.5, 1, 2, 5, 10, 30, 60},
 		sentinel.WithNamespace("app"),
 		sentinel.WithSubsystem("background_tasks"),
 		sentinel.WithDescription("Background processing tasks"),
-		sentinel.WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5, 10, 30, 60}),
 	)
 
 	// Critical tasks observer
 	criticalObserver = sentinel.NewObserver(
+		[]float64{0.01, 0.1, 0.5, 1, 5, 10, 30},
 		sentinel.WithNamespace("app"),
 		sentinel.WithSubsystem("critical_tasks"),
 		sentinel.WithDescription("Critical business operations"),
-		sentinel.WithDurationMetrics([]float64{0.01, 0.1, 0.5, 1, 5, 10, 30}),
 	)
 
 	// API tasks observer
 	apiObserver = sentinel.NewObserver(
+		[]float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
 		sentinel.WithNamespace("app"),
 		sentinel.WithSubsystem("api_requests"),
 		sentinel.WithDescription("API request processing"),
-		sentinel.WithDurationMetrics([]float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}),
 	)
 
 	limitChan = make(chan struct{}, 15)
@@ -216,7 +216,7 @@ func run() {
 				}
 				taskID++
 				go func() {
-					backgroundObserver.RunTask(task)
+					backgroundObserver.RunFunc(task.Execute)
 				}()
 			}
 
@@ -230,7 +230,7 @@ func run() {
 				}
 				taskID++
 				go func() {
-					criticalObserver.RunTask(task)
+					criticalObserver.RunFunc(task.Execute)
 				}()
 			}
 
@@ -244,7 +244,7 @@ func run() {
 				}
 				taskID++
 				go func() {
-					apiObserver.RunTask(task)
+					apiObserver.RunFunc(task.Execute)
 				}()
 			}
 
@@ -262,7 +262,7 @@ func run() {
 				task := &BackgroundTask{TaskID: fmt.Sprintf("bg-%04d", taskID)}
 				taskID++
 				go func() {
-					backgroundObserver.RunTask(task)
+					backgroundObserver.RunFunc(task.Execute)
 				}()
 			}
 
@@ -271,7 +271,7 @@ func run() {
 				task := &CriticalTask{TaskID: fmt.Sprintf("crit-%04d", taskID)}
 				taskID++
 				go func() {
-					criticalObserver.RunTask(task)
+					criticalObserver.RunFunc(task.Execute)
 				}()
 			}
 
@@ -280,7 +280,7 @@ func run() {
 				task := &APITask{TaskID: fmt.Sprintf("api-%04d", taskID)}
 				taskID++
 				go func() {
-					apiObserver.RunTask(task)
+					apiObserver.RunFunc(task.Execute)
 				}()
 			}
 		}

@@ -20,16 +20,16 @@ Sentinel provides resilience for Go applications with automatic retry handling a
 
 Standard configuration will automatically export the following observer metrics:
 
-| Metric | Type | Description | Default | Option |
-|--------|------|-------------|---------|--------|
-| `sentinel_in_flight` | Gauge | Active number of running tasks | Yes | - |
-| `sentinel_successes_total` | Counter | Total successful tasks | Yes | - |
-| `sentinel_failures_total` | Counter | Total failed tasks | Yes | - |
-| `sentinel_errors_total` | Counter | Total errors over all attempts | Yes | - |
-| `sentinel_panics_total` | Counter | Total panic occurrences | Yes | - |
-| `sentinel_durations_seconds` | Histogram | Task execution durations in buckets | No | _WithDurationMetrics_ |
-| `sentinel_timeouts_total` | Counter | Total errors based on timeouts | No | _WithTimeoutMetrics_ |
-| `sentinel_retries_total` | Counter | Total retry attempts for tasks | No | _WithRetryMetrics_ |
+| Metric | Type | Description |
+|--------|------|-------------|
+| `sentinel_in_flight` | Gauge | Active number of running tasks |
+| `sentinel_successes_total` | Counter | Total successful tasks |
+| `sentinel_failures_total` | Counter | Total failed tasks |
+| `sentinel_errors_total` | Counter | Total errors over all attempts |
+| `sentinel_panics_total` | Counter | Total panic occurrences |
+| `sentinel_timeouts_total` | Counter | Total errors based on timeouts |
+| `sentinel_retries_total` | Counter | Total retry attempts for tasks |
+| `sentinel_durations_seconds` | Histogram | Task execution durations in buckets |
 
 You can configure exported observer metrics based on your application needs.
 
@@ -60,7 +60,7 @@ import (
 
 func main() {
     // Create new observer
-    observer := sentinel.NewObserver()
+    observer := sentinel.NewObserver(nil)
     
     // Execute your task
     err := observer.Run(func() error {
@@ -90,7 +90,7 @@ import (
 
 func main() {
     // Create new observer
-    observer := sentinel.NewObserver()
+    observer := sentinel.NewObserver(nil)
     
     // Counts error
     err := observer.Run(func() error {
@@ -121,9 +121,7 @@ import (
 
 func main() {
     // Observer tracks timeout metrics
-    observer := sentinel.NewObserver(
-        sentinel.WithTimeoutMetrics(),
-    )
+    observer := sentinel.NewObserver(nil)
 
     // Set timeout for observer tasks
     observer.UseConfig(sentinel.ObserverConfig{
@@ -144,7 +142,6 @@ func main() {
 
 Timeout errors are recorded by both `timeouts_total` and `errors_total` counters.
 
-Note, timeout metrics will not be exported unless `WithTimeoutMetrics()` is set.
 
 ### Panic Handling
 
@@ -166,7 +163,7 @@ import (
 
 func main() {
     // Create new observer
-    observer := sentinel.NewObserver()
+    observer := sentinel.NewObserver(nil)
     
     // Panic multiple times
     err := observer.Run(func() error {
@@ -206,11 +203,9 @@ import (
 
 func main() {
     // Observer with duration metrics
-    observer := sentinel.NewObserver(
-        sentinel.WithDurationMetrics([]float64{
-            0.100, 0.250, 0.400, 0.500, 1.000, // in seconds
-        }),
-    )
+    observer := sentinel.NewObserver([]float64{
+        0.100, 0.250, 0.400, 0.500, 1.000, // in seconds
+    })
     
     // Run many times ...
     for i := 0; i < 100; i++ {
@@ -252,9 +247,7 @@ import (
 
 func main() {
     // Observer with retry metrics
-    observer := sentinel.NewObserver(
-        sentinel.WithRetryMetrics(),           
-    )
+    observer := sentinel.NewObserver(nil)
 
     // Observer retry configuration
     observer.UseConfig(sentinel.ObserverConfig{
@@ -303,7 +296,7 @@ import (
 
 func main() {
     // Create new observer
-    observer := sentinel.NewObserver(
+    observer := sentinel.NewObserver(nil,
 	    sentinel.WithNamespace("myapp"),
 	    sentinel.WithSubsystem("workers"),
     )
@@ -333,9 +326,11 @@ func main() {
 
 Prometheus metrics will be exposed with names `myapp_workers_...` on host _localhost:8080/metrics_.
 
-### Using Multiple Observers
+## Advanced Usage
 
-Configure multiple observers for different task types and create forks for specialised behaviour:
+### Forked Observers
+
+You can fork observers to provide different behaviour with shared underlying metrics:
 
 ```go
 package main
@@ -353,51 +348,84 @@ import (
 )
 
 func main() {
-    // Create first observer
-    bgObserver := sentinel.NewObserver(
-        sentinel.WithSubsystem("background"),
-    )
-    bgObserver.UseConfig(sentinel.ObserverConfig{
-        Timeout:    30 * time.Second,
-        MaxRetries: 1,
-    })
-
-    // Create a second observer
-    critObserver := sentinel.NewObserver(
+    // New observer
+    criticalObserver1 := sentinel.NewObserver(nil,
+        sentinel.WithNamespace("myapp"),
         sentinel.WithSubsystem("critical"),
     )
-    critObserver.UseConfig(sentinel.ObserverConfig{
+
+    // Create forked observer
+    criticalObserver2 := criticalObserver1.Fork()
+
+    // Set observer configurations
+    criticalObserver1.UseConfig(sentinel.ObserverConfig{
         Timeout:    60 * time.Second,
         MaxRetries: 2,
     })
-
-    // Create fork of second observer
-    critObserver2 := critObserver.Fork()
-    critObserver2.UseConfig(sentinel.ObserverConfig{
+    criticalObserver2.UseConfig(sentinel.ObserverConfig{
         Timeout:    120 * time.Second,
         MaxRetries: 4,
     })
 
-    // Only register root observers
+    // Only register base observer
     registry := prometheus.NewRegistry()
-    bgObserver.MustRegister(registry)
-    critObserver.MustRegister(registry)
+    criticalObserver1.MustRegister(registry)
 
-    // Set up metrics endpoint
-    http.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
-    go func() {
-        log.Println("Metrics server starting on :8080/metrics")
-        log.Fatal(http.ListenAndServe(":8080", nil))
-    }()
-
-    // Run forever
-    select {}
+    // Use observers ...
 }
 ```
 
-The result of this will be that we have two sets of observer metrics `background_...` and `critical_...`. 
+### Multiple Observers
 
-The API observers share the underlying exposed metrics where both observers run with their own configurations.
+You can use multiple observers for different types of tasks with separate metrics:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "math/rand"
+    "net/http"
+    "time"
+
+    sentinel "github.com/mcwalrus/go-sentinel"
+    "github.com/mcwalrus/go-sentinel/retry"
+    "github.com/prometheus/client_golang/prometheus"
+    "github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+func main() {
+    // First observer
+    backgroundObserver := sentinel.NewObserver(
+        []float64{0.1, 0.5, 1, 2, 5, 10, 30, 60},
+        sentinel.WithNamespace("myapp"),
+        sentinel.WithSubsystem("background"),
+        sentinel.WithDescription("Background processing tasks"),
+    )
+    // Second observer
+    criticalObserver := sentinel.NewObserver(
+        []float64{0.01, 0.1, 0.5, 1, 5, 10, 30},
+        sentinel.WithNamespace("myapp"),
+        sentinel.WithSubsystem("critical_jobs"),
+        sentinel.WithDescription("Critical business operations"),
+    )
+
+    // Set observer configurations
+    backgroundObserver.UseConfig(sentinel.ObserverConfig{
+        Timeout:       30 * time.Second,
+        MaxRetries:    3,
+    })
+    criticalObserver.UseConfig(sentinel.ObserverConfig{
+        Timeout:    5 * time.Second,
+        MaxRetries: 2,
+        RetryStrategy: retry.Exponential(500 * time.Millisecond),
+    })
+
+    // Use observers ...
+}
+```
 
 ## Contributing
 

@@ -11,12 +11,10 @@ import (
 func testConfig(t *testing.T) config {
 	t.Helper()
 	return config{
-		namespace:     "test",
-		subsystem:     "metrics",
-		description:   "test operations",
-		buckets:       []float64{0.01, 0.1, 1, 10, 100},
-		trackTimeouts: true,
-		trackRetries:  true,
+		namespace:   "test",
+		subsystem:   "metrics",
+		description: "test operations",
+		buckets:     []float64{0.01, 0.1, 1, 10, 100},
 	}
 }
 
@@ -190,17 +188,17 @@ func TestMetricLabels(t *testing.T) {
 				"failures_total": "failures_total",
 				"errors_total":   "errors_total",
 				"panics_total":   "panics_total",
+				"timeouts_total": "timeouts_total",
+				"retries_total":  "retries_total",
 			},
 		},
 		{
 			name: "no namespace or subsystem with additional metrics",
 			cfg: config{
-				namespace:     "",
-				subsystem:     "",
-				description:   "tasks",
-				buckets:       []float64{0.1, 1},
-				trackTimeouts: true,
-				trackRetries:  true,
+				namespace:   "",
+				subsystem:   "",
+				description: "tasks",
+				buckets:     []float64{0.1, 1},
 			},
 			expected: map[string]string{
 				"in_flight":         "in_flight",
@@ -208,9 +206,9 @@ func TestMetricLabels(t *testing.T) {
 				"failures_total":    "failures_total",
 				"errors_total":      "errors_total",
 				"panics_total":      "panics_total",
-				"durations_seconds": "durations_seconds",
 				"timeouts_total":    "timeouts_total",
 				"retries_total":     "retries_total",
+				"durations_seconds": "durations_seconds",
 			},
 		},
 		{
@@ -226,17 +224,17 @@ func TestMetricLabels(t *testing.T) {
 				"failures_total": "myapp_workers_failures_total",
 				"errors_total":   "myapp_workers_errors_total",
 				"panics_total":   "myapp_workers_panics_total",
+				"timeouts_total": "myapp_workers_timeouts_total",
+				"retries_total":  "myapp_workers_retries_total",
 			},
 		},
 		{
 			name: "with namespace and subsystem with additional metrics",
 			cfg: config{
-				namespace:     "myapp",
-				subsystem:     "workers",
-				description:   "background tasks",
-				buckets:       []float64{0.1, 1},
-				trackTimeouts: true,
-				trackRetries:  true,
+				namespace:   "myapp",
+				subsystem:   "workers",
+				description: "background tasks",
+				buckets:     []float64{0.1, 1},
 			},
 			expected: map[string]string{
 				"in_flight":         "myapp_workers_in_flight",
@@ -244,19 +242,17 @@ func TestMetricLabels(t *testing.T) {
 				"failures_total":    "myapp_workers_failures_total",
 				"errors_total":      "myapp_workers_errors_total",
 				"panics_total":      "myapp_workers_panics_total",
-				"durations_seconds": "myapp_workers_durations_seconds",
 				"timeouts_total":    "myapp_workers_timeouts_total",
 				"retries_total":     "myapp_workers_retries_total",
+				"durations_seconds": "myapp_workers_durations_seconds",
 			},
 		},
 		{
 			name: "subsystem only",
 			cfg: config{
-				namespace:     "",
-				subsystem:     "api",
-				description:   "API calls",
-				trackTimeouts: true,
-				trackRetries:  true,
+				namespace:   "",
+				subsystem:   "api",
+				description: "API calls",
 			},
 			expected: map[string]string{
 				"in_flight":      "api_in_flight",
@@ -311,12 +307,10 @@ func TestMetricHelpText(t *testing.T) {
 
 	t.Run("with additional metrics", func(t *testing.T) {
 		cfg := config{
-			namespace:     "",
-			subsystem:     "",
-			description:   "test operations",
-			buckets:       []float64{0.1, 1},
-			trackTimeouts: true,
-			trackRetries:  true,
+			namespace:   "",
+			subsystem:   "",
+			description: "test operations",
+			buckets:     []float64{0.1, 1},
 		}
 
 		m := newMetrics(cfg)
@@ -366,10 +360,8 @@ func TestMetricHelpText1(t *testing.T) {
 
 		t.Log("default description should be used")
 		observer := NewObserver(
+			[]float64{0.1, 1},
 			WithDescription(""), // no description
-			WithDurationMetrics([]float64{0.1, 1}),
-			WithTimeoutMetrics(),
-			WithRetryMetrics(),
 		)
 
 		m := observer.metrics
