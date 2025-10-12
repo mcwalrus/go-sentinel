@@ -7,13 +7,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// Promtheus metrics:
+// Prometheus metrics:
 
 // - In Flight
 // - Successes
+// - Failures
 // - Error count
 // - Timeout Errors
-// - Panics Occurances
+// - Panics Occurrences
 // - Routine Runtime Histogram
 // - Retry Attempts
 
@@ -28,9 +29,7 @@ type metrics struct {
 	Retries   prometheus.Counter
 }
 
-// newMetrics creates a new metrics instance with the given configuration.
-// If bucketDurations is provided, the Durations histogram will be created.
-func newMetrics(cfg observerConfig) *metrics {
+func newMetrics(cfg config) *metrics {
 	m := &metrics{
 		InFlight: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace:   cfg.namespace,
@@ -64,18 +63,18 @@ func newMetrics(cfg observerConfig) *metrics {
 			Namespace:   cfg.namespace,
 			Subsystem:   cfg.subsystem,
 			Name:        "panics_total",
-			Help:        fmt.Sprintf("Number of panic occurances from observed %s", cfg.description),
+			Help:        fmt.Sprintf("Number of panic occurrences from observed %s", cfg.description),
 			ConstLabels: cfg.constLabels,
 		}),
 	}
 
-	if len(cfg.bucketDurations) > 0 {
+	if len(cfg.buckets) > 0 {
 		m.Durations = prometheus.NewHistogram(prometheus.HistogramOpts{
 			Namespace:   cfg.namespace,
 			Subsystem:   cfg.subsystem,
 			Name:        "durations_seconds",
 			Help:        fmt.Sprintf("Histogram of the observed durations of %s", cfg.description),
-			Buckets:     cfg.bucketDurations,
+			Buckets:     cfg.buckets,
 			ConstLabels: cfg.constLabels,
 		})
 	}
@@ -103,7 +102,6 @@ func newMetrics(cfg observerConfig) *metrics {
 	return m
 }
 
-// collectors returns all collectors for the metrics.
 func (m *metrics) collectors() []prometheus.Collector {
 	c := []prometheus.Collector{
 		m.InFlight,
@@ -124,14 +122,10 @@ func (m *metrics) collectors() []prometheus.Collector {
 	return c
 }
 
-// MustRegister registers all metrics with the given registry.
-// It panics if any metric fails to register.
 func (m *metrics) MustRegister(registry prometheus.Registerer) {
 	registry.MustRegister(m.collectors()...)
 }
 
-// Register registers all metrics with the given registry.
-// It returns an error if any metric fails to register.
 func (m *metrics) Register(registry prometheus.Registerer) error {
 	var errs []error
 	for _, col := range m.collectors() {

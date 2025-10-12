@@ -35,7 +35,7 @@ func init() {
 		sentinel.WithNamespace("app"),
 		sentinel.WithSubsystem("background_tasks"),
 		sentinel.WithDescription("Background processing tasks"),
-		sentinel.WithHistogramMetrics([]float64{0.1, 0.5, 1, 2, 5, 10, 30, 60}),
+		sentinel.WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5, 10, 30, 60}),
 	)
 
 	// Critical tasks observer
@@ -43,7 +43,7 @@ func init() {
 		sentinel.WithNamespace("app"),
 		sentinel.WithSubsystem("critical_tasks"),
 		sentinel.WithDescription("Critical business operations"),
-		sentinel.WithHistogramMetrics([]float64{0.01, 0.1, 0.5, 1, 5, 10, 30}),
+		sentinel.WithDurationMetrics([]float64{0.01, 0.1, 0.5, 1, 5, 10, 30}),
 	)
 
 	// API tasks observer
@@ -51,7 +51,7 @@ func init() {
 		sentinel.WithNamespace("app"),
 		sentinel.WithSubsystem("api_requests"),
 		sentinel.WithDescription("API request processing"),
-		sentinel.WithHistogramMetrics([]float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}),
+		sentinel.WithDurationMetrics([]float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}),
 	)
 
 	limitChan = make(chan struct{}, 15)
@@ -68,8 +68,8 @@ type BackgroundTask struct {
 	TaskID string
 }
 
-func (task *BackgroundTask) Config() sentinel.TaskConfig {
-	return sentinel.TaskConfig{
+func (task *BackgroundTask) ObserverConfig() sentinel.ObserverConfig {
+	return sentinel.ObserverConfig{
 		Timeout:       30 * time.Second,
 		MaxRetries:    3,
 		RetryStrategy: retry.Exponential(500 * time.Millisecond),
@@ -108,8 +108,8 @@ type CriticalTask struct {
 	TaskID string
 }
 
-func (task *CriticalTask) Config() sentinel.TaskConfig {
-	return sentinel.TaskConfig{
+func (task *CriticalTask) ObserverConfig() sentinel.ObserverConfig {
+	return sentinel.ObserverConfig{
 		Timeout:    5 * time.Second,
 		MaxRetries: 2,
 	}
@@ -152,8 +152,8 @@ type APITask struct {
 	TaskID string
 }
 
-func (task *APITask) Config() sentinel.TaskConfig {
-	return sentinel.TaskConfig{
+func (task *APITask) ObserverConfig() sentinel.ObserverConfig {
+	return sentinel.ObserverConfig{
 		Timeout: 2 * time.Second,
 	}
 }

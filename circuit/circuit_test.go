@@ -7,7 +7,6 @@ import (
 	"time"
 )
 
-// stubPanicErr simulates sentinel.ErrRecoveredPanic (error + RecoveredPanic())
 type stubPanicErr struct{ v any }
 
 func (e *stubPanicErr) Error() string       { return "panic occurred" }
@@ -44,9 +43,10 @@ func TestAfter(t *testing.T) {
 func TestAny(t *testing.T) {
 	t.Parallel()
 
-	b := Any(
-		OnErrorIs(context.Canceled),
-		OnErrors(context.DeadlineExceeded),
+	// Test with custom error matching functions instead of error wrappers
+	b := AnyBreaker(
+		func(err error) bool { return errors.Is(err, context.Canceled) },
+		func(err error) bool { return errors.Is(err, context.DeadlineExceeded) },
 	)
 	if b(nil) {
 		t.Fatalf("nil should not trip")
@@ -62,10 +62,10 @@ func TestAny(t *testing.T) {
 	}
 }
 
-func TestOnError(t *testing.T) {
+func TestRunConfig(t *testing.T) {
 	t.Parallel()
 
-	b := OnError(func(err error) bool { return errors.Is(err, context.DeadlineExceeded) })
+	b := func(err error) bool { return errors.Is(err, context.DeadlineExceeded) }
 	if b(nil) {
 		t.Fatalf("nil should not trip")
 	}
@@ -77,49 +77,14 @@ func TestOnError(t *testing.T) {
 	}
 }
 
-func TestOnErrorIs(t *testing.T) {
+func TestAnyBreakerWithNil(t *testing.T) {
 	t.Parallel()
 
-	b := OnErrorIs(context.Canceled)
-	if !b(context.Canceled) {
-		t.Fatalf("should trip on target")
+	b := AnyBreaker(nil, func(err error) bool { return err != nil })
+	if b(nil) {
+		t.Fatalf("should not trip on nil error")
 	}
-	if b(context.DeadlineExceeded) {
-		t.Fatalf("should not trip on other")
-	}
-}
-
-type customErr struct{ msg string }
-
-func (e *customErr) Error() string { return e.msg }
-
-func TestOnErrorAs(t *testing.T) {
-	t.Parallel()
-
-	b := OnErrorAs[*customErr]()
-	if b(errors.New("x")) {
-		t.Fatalf("should not trip on non-target type")
-	}
-	if !b(&customErr{"x"}) {
-		t.Fatalf("should trip on target type")
-	}
-}
-
-func TestOnSignalAndDone(t *testing.T) {
-	t.Parallel()
-
-	sig1 := make(chan struct{}, 1)
-	bSig := OnSignal(sig1)
-	sig2 := make(chan struct{}, 1)
-	bDone := OnDone(sig2)
-
-	if bSig(errors.New("x")) || bDone(errors.New("x")) {
-		t.Fatalf("should not trip before signal")
-	}
-
-	sig1 <- struct{}{}
-	close(sig2)
-	if !bSig(errors.New("x")) || !bDone(errors.New("x")) {
-		t.Fatalf("should trip after signal")
+	if !b(errors.New("test")) {
+		t.Fatalf("should trip on non-nil error")
 	}
 }

@@ -30,7 +30,7 @@ func init() {
 		sentinel.WithNamespace("example"),
 		sentinel.WithSubsystem("workerloop"),
 		sentinel.WithDescription("Worker loop"),
-		sentinel.WithHistogramMetrics([]float64{0.01, 0.1, 1, 10, 100, 1000, 10_000}),
+		sentinel.WithDurationMetrics([]float64{0.01, 0.1, 1, 10, 100, 1000, 10_000}),
 	)
 	registry = prometheus.NewRegistry()
 	ob.MustRegister(registry)
@@ -42,8 +42,8 @@ type ProcessingTask struct {
 	TaskID string
 }
 
-func (task *ProcessingTask) Config() sentinel.TaskConfig {
-	return sentinel.TaskConfig{
+func (task *ProcessingTask) ObserverConfig() sentinel.ObserverConfig {
+	return sentinel.ObserverConfig{
 		Timeout:       5 * time.Second,
 		MaxRetries:    2,
 		RetryStrategy: retry.Linear(1 * time.Second),

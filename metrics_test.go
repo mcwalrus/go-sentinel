@@ -8,15 +8,15 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
-func testConfig(t *testing.T) observerConfig {
+func testConfig(t *testing.T) config {
 	t.Helper()
-	return observerConfig{
-		namespace:       "test",
-		subsystem:       "metrics",
-		description:     "test operations",
-		bucketDurations: []float64{0.01, 0.1, 1, 10, 100},
-		trackTimeouts:   true,
-		trackRetries:    true,
+	return config{
+		namespace:     "test",
+		subsystem:     "metrics",
+		description:   "test operations",
+		buckets:       []float64{0.01, 0.1, 1, 10, 100},
+		trackTimeouts: true,
+		trackRetries:  true,
 	}
 }
 
@@ -174,61 +174,98 @@ func TestMetricLabels(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		cfg      observerConfig
+		cfg      config
 		expected map[string]string
 	}{
 		{
 			name: "no namespace or subsystem",
-			cfg: observerConfig{
-				namespace:       "",
-				subsystem:       "",
-				description:     "tasks",
-				bucketDurations: []float64{0.1, 1},
+			cfg: config{
+				namespace:   "",
+				subsystem:   "",
+				description: "tasks",
 			},
 			expected: map[string]string{
-				"in_flight":     "in_flight",
-				"success_total": "success_total",
-				"errors_total":  "errors_total",
-				// "timeouts_total":    "timeouts_total",
+				"in_flight":      "in_flight",
+				"success_total":  "success_total",
+				"failures_total": "failures_total",
+				"errors_total":   "errors_total",
+				"panics_total":   "panics_total",
+			},
+		},
+		{
+			name: "no namespace or subsystem with additional metrics",
+			cfg: config{
+				namespace:     "",
+				subsystem:     "",
+				description:   "tasks",
+				buckets:       []float64{0.1, 1},
+				trackTimeouts: true,
+				trackRetries:  true,
+			},
+			expected: map[string]string{
+				"in_flight":         "in_flight",
+				"success_total":     "success_total",
+				"failures_total":    "failures_total",
+				"errors_total":      "errors_total",
 				"panics_total":      "panics_total",
 				"durations_seconds": "durations_seconds",
-				// "retries_total":     "retries_total",
+				"timeouts_total":    "timeouts_total",
+				"retries_total":     "retries_total",
 			},
 		},
 		{
 			name: "with namespace and subsystem",
-			cfg: observerConfig{
-				namespace:       "myapp",
-				subsystem:       "workers",
-				description:     "background tasks",
-				bucketDurations: []float64{0.1, 1},
+			cfg: config{
+				namespace:   "myapp",
+				subsystem:   "workers",
+				description: "background tasks",
 			},
 			expected: map[string]string{
-				"in_flight":     "myapp_workers_in_flight",
-				"success_total": "myapp_workers_success_total",
-				"errors_total":  "myapp_workers_errors_total",
-				// "timeouts_total":    "myapp_workers_timeouts_total",
+				"in_flight":      "myapp_workers_in_flight",
+				"success_total":  "myapp_workers_success_total",
+				"failures_total": "myapp_workers_failures_total",
+				"errors_total":   "myapp_workers_errors_total",
+				"panics_total":   "myapp_workers_panics_total",
+			},
+		},
+		{
+			name: "with namespace and subsystem with additional metrics",
+			cfg: config{
+				namespace:     "myapp",
+				subsystem:     "workers",
+				description:   "background tasks",
+				buckets:       []float64{0.1, 1},
+				trackTimeouts: true,
+				trackRetries:  true,
+			},
+			expected: map[string]string{
+				"in_flight":         "myapp_workers_in_flight",
+				"success_total":     "myapp_workers_success_total",
+				"failures_total":    "myapp_workers_failures_total",
+				"errors_total":      "myapp_workers_errors_total",
 				"panics_total":      "myapp_workers_panics_total",
 				"durations_seconds": "myapp_workers_durations_seconds",
-				// "retries_total":     "myapp_workers_retries_total",
+				"timeouts_total":    "myapp_workers_timeouts_total",
+				"retries_total":     "myapp_workers_retries_total",
 			},
 		},
 		{
 			name: "subsystem only",
-			cfg: observerConfig{
-				namespace:       "",
-				subsystem:       "api",
-				description:     "API calls",
-				bucketDurations: []float64{0.1, 1},
+			cfg: config{
+				namespace:     "",
+				subsystem:     "api",
+				description:   "API calls",
+				trackTimeouts: true,
+				trackRetries:  true,
 			},
 			expected: map[string]string{
-				"in_flight":     "api_in_flight",
-				"success_total": "api_success_total",
-				"errors_total":  "api_errors_total",
-				// "timeouts_total":    "api_timeouts_total",
-				"panics_total":      "api_panics_total",
-				"durations_seconds": "api_durations_seconds",
-				// "retries_total":     "api_retries_total",
+				"in_flight":      "api_in_flight",
+				"success_total":  "api_success_total",
+				"failures_total": "api_failures_total",
+				"errors_total":   "api_errors_total",
+				"panics_total":   "api_panics_total",
+				"timeouts_total": "api_timeouts_total",
+				"retries_total":  "api_retries_total",
 			},
 		},
 	}
@@ -237,6 +274,8 @@ func TestMetricLabels(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			t.Logf("testing: %s", tt.name)
+
 			m := newMetrics(tt.cfg)
 			registry := prometheus.NewRegistry()
 			m.MustRegister(registry)
@@ -244,6 +283,13 @@ func TestMetricLabels(t *testing.T) {
 			families, err := registry.Gather()
 			if err != nil {
 				t.Fatalf("Failed to gather metrics: %v", err)
+			}
+
+			if len(families) != len(tt.expected) {
+				t.Errorf(
+					"Expected %d metrics, got %d",
+					len(tt.expected), len(families),
+				)
 			}
 
 			foundMetrics := make(map[string]bool)
@@ -263,40 +309,105 @@ func TestMetricLabels(t *testing.T) {
 func TestMetricHelpText(t *testing.T) {
 	t.Parallel()
 
-	cfg := observerConfig{
-		namespace:       "",
-		subsystem:       "",
-		description:     "test operations",
-		bucketDurations: []float64{0.1, 1},
-	}
-
-	m := newMetrics(cfg)
-	registry := prometheus.NewRegistry()
-	m.MustRegister(registry)
-
-	families, err := registry.Gather()
-	if err != nil {
-		t.Fatalf("Failed to gather metrics: %v", err)
-	}
-
-	expectedHelpTexts := map[string]string{
-		"in_flight":         "Number of observed test operations in flight",
-		"success_total":     "Number of successes from observed test operations",
-		"errors_total":      "Number of errors from observed test operations including retries and panics",
-		"timeouts_total":    "Number of timeout errors from observed test operations",
-		"panics_total":      "Number of panic occurances from observed test operations",
-		"durations_seconds": "Histogram of the observed durations of test operations",
-		"retries_total":     "Number of retry attempts from observed test operations",
-	}
-
-	for _, family := range families {
-		expectedHelp, exists := expectedHelpTexts[*family.Name]
-		if !exists {
-			continue
+	t.Run("with additional metrics", func(t *testing.T) {
+		cfg := config{
+			namespace:     "",
+			subsystem:     "",
+			description:   "test operations",
+			buckets:       []float64{0.1, 1},
+			trackTimeouts: true,
+			trackRetries:  true,
 		}
-		if *family.Help != expectedHelp {
-			t.Errorf("Metric %s: expected help text %q, got %q",
-				*family.Name, expectedHelp, *family.Help)
+
+		m := newMetrics(cfg)
+		registry := prometheus.NewRegistry()
+		m.MustRegister(registry)
+
+		families, err := registry.Gather()
+		if err != nil {
+			t.Fatalf("Failed to gather metrics: %v", err)
 		}
-	}
+
+		expectedHelpTexts := map[string]string{
+			"in_flight":         "Number of observed test operations in flight",
+			"success_total":     "Number of successes from observed test operations",
+			"failures_total":    "Number of failures from observed test operations excluding retry attempts",
+			"errors_total":      "Number of errors from observed test operations including retries and panics",
+			"panics_total":      "Number of panic occurrences from observed test operations",
+			"durations_seconds": "Histogram of the observed durations of test operations",
+			"timeouts_total":    "Number of timeout errors from observed test operations",
+			"retries_total":     "Number of retry attempts from observed test operations",
+		}
+
+		t.Log("Checking help text")
+		if len(families) != len(expectedHelpTexts) {
+			t.Errorf(
+				"Expected %d metrics, got %d",
+				len(expectedHelpTexts), len(families),
+			)
+		}
+		for _, family := range families {
+			expectedHelp, exists := expectedHelpTexts[*family.Name]
+			if !exists {
+				continue
+			}
+			if *family.Help != expectedHelp {
+				t.Errorf("Metric %s: expected help text %q, got %q",
+					*family.Name, expectedHelp, *family.Help)
+			}
+		}
+	})
+}
+
+func TestMetricHelpText1(t *testing.T) {
+	t.Parallel()
+
+	t.Run("default description should be used", func(t *testing.T) {
+
+		t.Log("default description should be used")
+		observer := NewObserver(
+			WithDescription(""), // no description
+			WithDurationMetrics([]float64{0.1, 1}),
+			WithTimeoutMetrics(),
+			WithRetryMetrics(),
+		)
+
+		m := observer.metrics
+		registry := prometheus.NewRegistry()
+		m.MustRegister(registry)
+
+		families, err := registry.Gather()
+		if err != nil {
+			t.Fatalf("Failed to gather metrics: %v", err)
+		}
+
+		expectedHelpTexts := map[string]string{
+			"in_flight":         "Number of observed tasks in flight",
+			"success_total":     "Number of successes from observed tasks",
+			"failures_total":    "Number of failures from observed tasks excluding retry attempts",
+			"errors_total":      "Number of errors from observed tasks including retries and panics",
+			"panics_total":      "Number of panic occurrences from observed tasks",
+			"durations_seconds": "Histogram of the observed durations of tasks",
+			"timeouts_total":    "Number of timeout errors from observed tasks",
+			"retries_total":     "Number of retry attempts from observed tasks",
+		}
+
+		t.Log("Checking help text")
+		if len(families) != len(expectedHelpTexts) {
+			t.Errorf(
+				"Expected %d metrics, got %d",
+				len(expectedHelpTexts), len(families),
+			)
+		}
+		for _, family := range families {
+			expectedHelp, exists := expectedHelpTexts[*family.Name]
+			if !exists {
+				continue
+			}
+			if *family.Help != expectedHelp {
+				t.Errorf("Metric %s: expected help text %q, got %q",
+					*family.Name, expectedHelp, *family.Help)
+			}
+		}
+	})
 }
