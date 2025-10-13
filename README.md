@@ -59,11 +59,12 @@ import (
 )
 
 func main() {
-    // Create new observer
+    // New observer
     observer := sentinel.NewObserver(nil)
     
-    // Execute your task
+    // Execute task
     err := observer.Run(func() error {
+        log.Println("Processing task...")
         return nil
     })
     // Handle task error
@@ -89,10 +90,10 @@ import (
 )
 
 func main() {
-    // Create new observer
+    // New observer
     observer := sentinel.NewObserver(nil)
     
-    // Counts error
+    // Counts task error
     err := observer.Run(func() error {
         return errors.New("task failed")
     })    
@@ -120,14 +121,13 @@ import (
 )
 
 func main() {
-    // Observer tracks timeout metrics
+    // New observer
     observer := sentinel.NewObserver(nil)
 
-    // Set timeout for observer tasks
+    // Set tasks timeout
     observer.UseConfig(sentinel.ObserverConfig{
         Timeout: 10 * time.Second,
     })
-
     // Method respects context timeout
     err := observer.RunFunc(func(ctx context.Context) error {
             <-ctx.Done()
@@ -162,10 +162,10 @@ import (
 )
 
 func main() {
-    // Create new observer
+    // New observer
     observer := sentinel.NewObserver(nil)
     
-    // Panic multiple times
+    // Panic in observer
     err := observer.Run(func() error {
         panic("panic stations!")
     })
@@ -202,7 +202,7 @@ import (
 )
 
 func main() {
-    // Observer with duration metrics
+    // New observer with duration metrics
     observer := sentinel.NewObserver([]float64{
         0.100, 0.250, 0.400, 0.500, 1.000, // in seconds
     })
@@ -210,7 +210,7 @@ func main() {
     // Run many times ...
     for i := 0; i < 100; i++ {
 
-        // Tasks run between 50-500ms before return
+        // Run task between 50 - 500ms before return
         err := observer.RunFunc(func(ctx context.Context) error {
             sleep := time.Duration(rand.Intn(450)+50) * time.Millisecond
             fmt.Printf("Sleeping for %v...\n", sleep)
@@ -246,10 +246,10 @@ import (
 )
 
 func main() {
-    // Observer with retry metrics
+    // New observer
     observer := sentinel.NewObserver(nil)
 
-    // Observer retry configuration
+    // Configure retry strategy
     observer.UseConfig(sentinel.ObserverConfig{
         MaxRetries:    3,
         RetryStrategy: retry.WithJitter(
@@ -258,18 +258,18 @@ func main() {
         ),
     })
 
-    // Error on every attempt
+    // Task fails on every attempt
     err := observer.Run(func() error {
         return errors.New("task failed")
     })
     
-    // Unwrap errors.Join
+    // Unwrap errors
     errUnwrap, ok := (err).(interface {Unwrap() []error})
     if !ok {
         panic("not unwrap")
     }
 
-    // Handle all errors
+    // Handle each error
     errs := errUnwrap.Unwrap()
     for i, err := range errs {
         log.Printf("Task failed: %d: %v", i, err)
@@ -295,13 +295,12 @@ import (
 )
 
 func main() {
-    // Create new observer
+    // New observer
     observer := sentinel.NewObserver(nil,
 	    sentinel.WithNamespace("myapp"),
 	    sentinel.WithSubsystem("workers"),
     )
-    
-    // Register with registry
+    // Register observer
     registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
     
@@ -313,7 +312,6 @@ func main() {
             fmt.Fatal(err)
         }
     }()
-    
     // Your application code
     for range time.NewTicker(3 * time.Second).C {
         err := observer.RunFunc(doFunc)
@@ -349,27 +347,27 @@ import (
 
 func main() {
     // New observer
-    criticalObserver1 := sentinel.NewObserver(nil,
+    observer := sentinel.NewObserver(nil,
         sentinel.WithNamespace("myapp"),
-        sentinel.WithSubsystem("critical"),
+        sentinel.WithSubsystem("processes"),
     )
 
-    // Create forked observer
-    criticalObserver2 := criticalObserver1.Fork()
+    // Only register observer
+    registry := prometheus.NewRegistry()
+    observer.MustRegister(registry)
 
-    // Set observer configurations
-    criticalObserver1.UseConfig(sentinel.ObserverConfig{
+    // Create forked observer
+    forkedObserver := observer.Fork()
+
+    // Set configurations per observer
+    observer.UseConfig(sentinel.ObserverConfig{
         Timeout:    60 * time.Second,
         MaxRetries: 2,
     })
-    criticalObserver2.UseConfig(sentinel.ObserverConfig{
+    forkedObserver.UseConfig(sentinel.ObserverConfig{
         Timeout:    120 * time.Second,
         MaxRetries: 4,
     })
-
-    // Only register base observer
-    registry := prometheus.NewRegistry()
-    criticalObserver1.MustRegister(registry)
 
     // Use observers ...
 }
@@ -398,7 +396,7 @@ import (
 
 func main() {
     // First observer
-    backgroundObserver := sentinel.NewObserver(
+    bgObserver := sentinel.NewObserver(
         []float64{0.1, 0.5, 1, 2, 5, 10, 30, 60},
         sentinel.WithNamespace("myapp"),
         sentinel.WithSubsystem("background"),
@@ -411,9 +409,13 @@ func main() {
         sentinel.WithSubsystem("critical_jobs"),
         sentinel.WithDescription("Critical business operations"),
     )
+    // Register both observers
+    registry := prometheus.NewRegistry()
+    bgObserver.MustRegister(registry)
+    criticalObserver.MustRegister(registry)
 
-    // Set observer configurations
-    backgroundObserver.UseConfig(sentinel.ObserverConfig{
+    // Set configurations per observer
+    bgObserver.UseConfig(sentinel.ObserverConfig{
         Timeout:       30 * time.Second,
         MaxRetries:    3,
     })
