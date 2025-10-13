@@ -6,7 +6,7 @@
 [![GoDoc](https://godoc.org/github.com/mcwalrus/go-sentinel?status.svg)](https://godoc.org/github.com/mcwalrus/go-sentinel)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Sentinel provides resilience for Go applications with automatic retry handling and Prometheus observability. Considering that **panics should be treated as errors in production systems for critical processes**, sentinel wraps function execution to track successes, errors, panics, retries, timeouts and durations - making critical your routines more resilient, observable and robust. Use the library as a simple drop-in solution for new projects or existing applications.
+Sentinel provides retry handling with observerable metrics for Go applications. **Consider how panics should be handled as critical processes in production systems**. Sentinel wraps function execution to recover panics as errors while tracking Prometheus metrics for successes, errors, panics, retries, timeouts and durations - making routines to become more resilient, observable and robust, right out of the box. Use the library as a simple drop-in solution for new projects or existing applications.
 
 ## Features
 
@@ -93,7 +93,7 @@ func main() {
     // New observer
     observer := sentinel.NewObserver(nil)
     
-    // Counts task error
+    // Tracks task error
     err := observer.Run(func() error {
         return errors.New("task failed")
     })    
@@ -128,6 +128,7 @@ func main() {
     observer.UseConfig(sentinel.ObserverConfig{
         Timeout: 10 * time.Second,
     })
+
     // Method respects context timeout
     err := observer.RunFunc(func(ctx context.Context) error {
             <-ctx.Done()
@@ -167,12 +168,13 @@ func main() {
     
     // Panic in observer
     err := observer.Run(func() error {
-        panic("panic stations!")
+        panic("stations")
     })
     // Handle task error
     if err != nil {
         log.Printf("Task failed: %v", err)
     }
+
     // Recover panic value
     if rPanic, ok := sentinel.IsPanicError(err); ok {
         fmt.Printf("panic value: %v\n", rPanic)
@@ -207,19 +209,17 @@ func main() {
         0.100, 0.250, 0.400, 0.500, 1.000, // in seconds
     })
     
-    // Run many times ...
+    // Run tasks 50-500ms before return
     for i := 0; i < 100; i++ {
-
-        // Run task between 50 - 500ms before return
         err := observer.RunFunc(func(ctx context.Context) error {
             sleep := time.Duration(rand.Intn(450)+50) * time.Millisecond
             fmt.Printf("Sleeping for %v...\n", sleep)
             time.Sleep(sleep)
             return nil
         })
-        // Handle task error
+        // Handle task errors
         if err != nil {
-            log.Printf("Task failed: %v", err)
+            log.Printf("Task failed: %d: %v", i, err)
         }
     }
 }
@@ -258,7 +258,7 @@ func main() {
         ),
     })
 
-    // Task fails on every attempt
+    // Fail on every attempt
     err := observer.Run(func() error {
         return errors.New("task failed")
     })
