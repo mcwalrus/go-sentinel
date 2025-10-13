@@ -128,8 +128,8 @@ func main() {
     observer.UseConfig(sentinel.ObserverConfig{
         Timeout: 10 * time.Second,
     })
-
-    // Method respects context timeout
+    
+    // RunFunc respects context timeout
     err := observer.RunFunc(func(ctx context.Context) error {
             <-ctx.Done()
             return ctx.Err()
