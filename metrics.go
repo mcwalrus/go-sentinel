@@ -66,6 +66,20 @@ func newMetrics(cfg config) *metrics {
 			Help:        fmt.Sprintf("Number of panic occurrences from observed %s", cfg.description),
 			ConstLabels: cfg.constLabels,
 		}),
+		Timeouts: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
+			Name:        "timeouts_total",
+			Help:        fmt.Sprintf("Number of timeout errors from observed %s", cfg.description),
+			ConstLabels: cfg.constLabels,
+		}),
+		Retries: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace:   cfg.namespace,
+			Subsystem:   cfg.subsystem,
+			Name:        "retries_total",
+			Help:        fmt.Sprintf("Number of retry attempts from observed %s", cfg.description),
+			ConstLabels: cfg.constLabels,
+		}),
 	}
 
 	if len(cfg.buckets) > 0 {
@@ -75,26 +89,6 @@ func newMetrics(cfg config) *metrics {
 			Name:        "durations_seconds",
 			Help:        fmt.Sprintf("Histogram of the observed durations of %s", cfg.description),
 			Buckets:     cfg.buckets,
-			ConstLabels: cfg.constLabels,
-		})
-	}
-
-	if cfg.trackTimeouts {
-		m.Timeouts = prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace:   cfg.namespace,
-			Subsystem:   cfg.subsystem,
-			Name:        "timeouts_total",
-			Help:        fmt.Sprintf("Number of timeout errors from observed %s", cfg.description),
-			ConstLabels: cfg.constLabels,
-		})
-	}
-
-	if cfg.trackRetries {
-		m.Retries = prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace:   cfg.namespace,
-			Subsystem:   cfg.subsystem,
-			Name:        "retries_total",
-			Help:        fmt.Sprintf("Number of retry attempts from observed %s", cfg.description),
 			ConstLabels: cfg.constLabels,
 		})
 	}
@@ -109,15 +103,11 @@ func (m *metrics) collectors() []prometheus.Collector {
 		m.Failures,
 		m.Errors,
 		m.Panics,
-	}
-	if m.Timeouts != nil {
-		c = append(c, m.Timeouts)
+		m.Timeouts,
+		m.Retries,
 	}
 	if m.Durations != nil {
 		c = append(c, m.Durations)
-	}
-	if m.Retries != nil {
-		c = append(c, m.Retries)
 	}
 	return c
 }

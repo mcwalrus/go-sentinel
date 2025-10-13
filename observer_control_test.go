@@ -18,7 +18,7 @@ func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
 	t.Run("Run with Control", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
+		observer := NewObserver(nil)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -60,7 +60,7 @@ func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
 	t.Run("RunFunc with Control", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
+		observer := NewObserver(nil)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -102,7 +102,7 @@ func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
 	t.Run("Run with Control returning false", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
+		observer := NewObserver(nil)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -144,7 +144,7 @@ func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
 	t.Run("Run with nil Control", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
+		observer := NewObserver(nil)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -184,7 +184,7 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 	t.Run("Control prevents retry attempts", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(WithRetryMetrics())
+		observer := NewObserver(nil)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -235,7 +235,7 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 	t.Run("Control allows retries initially but prevents later ones", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(WithRetryMetrics())
+		observer := NewObserver(nil)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -285,7 +285,7 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 	t.Run("Control with RetryBreaker interaction", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(WithRetryMetrics())
+		observer := NewObserver(nil)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -343,7 +343,7 @@ func TestObserver_ControlWithCircuitImplementations(t *testing.T) {
 	t.Run("OnSignal Control", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
+		observer := NewObserver(nil)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -402,7 +402,7 @@ func TestObserver_ControlWithCircuitImplementations(t *testing.T) {
 	t.Run("OnDone Control", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
+		observer := NewObserver(nil)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -465,7 +465,7 @@ func TestObserver_ControlWithTimeout(t *testing.T) {
 	t.Run("Control with timeout configuration", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(WithTimeoutMetrics())
+		observer := NewObserver(nil)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -513,7 +513,7 @@ func TestObserver_ControlWithTimeout(t *testing.T) {
 	t.Run("Control prevents execution with timeout", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(WithTimeoutMetrics())
+		observer := NewObserver(nil)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -565,7 +565,7 @@ func TestObserver_ControlConcurrency(t *testing.T) {
 	t.Run("Control with concurrent executions", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
+		observer := NewObserver(nil)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -647,7 +647,7 @@ func TestObserver_ControlWithRetryStrategy(t *testing.T) {
 	t.Run("Control with retry strategy", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(WithRetryMetrics())
+		observer := NewObserver(nil)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 

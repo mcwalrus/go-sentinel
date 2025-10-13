@@ -38,23 +38,11 @@ func Verify(t *testing.T, observer *Observer, m metricsCounts) {
 	if got := testutil.ToFloat64(observer.metrics.Panics); got != m.Panics {
 		t.Errorf("Expected Panics=%f, got %f", m.Panics, got)
 	}
-	// Timeouts
-	if observer.metrics.Timeouts == nil && m.Timeouts != 0 {
-		t.Errorf("Expected Timeouts=%f, but Timeouts metric is not enabled", m.Timeouts)
+	if got := testutil.ToFloat64(observer.metrics.Timeouts); got != m.Timeouts {
+		t.Errorf("Expected Timeouts=%f, got %f", m.Timeouts, got)
 	}
-	if observer.metrics.Timeouts != nil {
-		if got := testutil.ToFloat64(observer.metrics.Timeouts); got != m.Timeouts {
-			t.Errorf("Expected Timeouts=%f, got %f", m.Timeouts, got)
-		}
-	}
-	// Retries
-	if observer.metrics.Retries == nil && m.Retries != 0 {
-		t.Errorf("Expected Retries=%f, but Retries metric is not enabled", m.Retries)
-	}
-	if observer.metrics.Retries != nil {
-		if got := testutil.ToFloat64(observer.metrics.Retries); got != m.Retries {
-			t.Errorf("Expected Retries=%f, got %f", m.Retries, got)
-		}
+	if got := testutil.ToFloat64(observer.metrics.Retries); got != m.Retries {
+		t.Errorf("Expected Retries=%f, got %f", m.Retries, got)
 	}
 }
 
@@ -86,7 +74,7 @@ func (t *testTask) Execute(ctx context.Context) error {
 func TestObserver_DefaultConfig(t *testing.T) {
 	t.Parallel()
 
-	observer := NewObserver()
+	observer := NewObserver(nil)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
@@ -96,6 +84,8 @@ func TestObserver_DefaultConfig(t *testing.T) {
 		"sentinel_failures_total",
 		"sentinel_errors_total",
 		"sentinel_panics_total",
+		"sentinel_timeouts_total",
+		"sentinel_retries_total",
 	}
 
 	families, err := registry.Gather()
@@ -130,11 +120,9 @@ func TestObserver_CustomConfig(t *testing.T) {
 	t.Parallel()
 
 	observer := NewObserver(
+		[]float64{0.1, 0.5, 1, 2, 5, 10, 30, 60},
 		WithNamespace("myapp"),
 		WithSubsystem("service"),
-		WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5, 10, 30, 60}),
-		WithTimeoutMetrics(),
-		WithRetryMetrics(),
 	)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
@@ -142,11 +130,12 @@ func TestObserver_CustomConfig(t *testing.T) {
 	expected := []string{
 		"myapp_service_in_flight",
 		"myapp_service_success_total",
+		"myapp_service_failures_total",
 		"myapp_service_errors_total",
-		"myapp_service_timeouts_total",
 		"myapp_service_panics_total",
-		"myapp_service_durations_seconds",
+		"myapp_service_timeouts_total",
 		"myapp_service_retries_total",
+		"myapp_service_durations_seconds",
 	}
 
 	families, err := registry.Gather()
@@ -218,7 +207,7 @@ func TestObserver_UnconfiguredObserver(t *testing.T) {
 func TestObserve_Register(t *testing.T) {
 	t.Parallel()
 
-	observer := NewObserver()
+	observer := NewObserver(nil)
 	registry := prometheus.NewRegistry()
 
 	t.Log("First registration should succeed")
@@ -236,7 +225,7 @@ func TestObserve_Register(t *testing.T) {
 func TestObserve_MustRegister(t *testing.T) {
 	t.Parallel()
 
-	observer := NewObserver()
+	observer := NewObserver(nil)
 	registry := prometheus.NewRegistry()
 
 	t.Log("First registration should succeed")
@@ -254,7 +243,7 @@ func TestObserve_MustRegister(t *testing.T) {
 func TestObserve_SuccessfulExecution(t *testing.T) {
 	t.Parallel()
 
-	observer := NewObserver(WithDurationMetrics([]float64{1, 3, 5}))
+	observer := NewObserver([]float64{1, 3, 5})
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
@@ -309,7 +298,7 @@ func TestObserve_SuccessfulExecution(t *testing.T) {
 func TestObserve_ErrorHandling(t *testing.T) {
 	t.Parallel()
 
-	observer := NewObserver()
+	observer := NewObserver(nil)
 	observer.UseConfig(ObserverConfig{
 		Timeout: time.Second,
 	})
@@ -339,7 +328,7 @@ func TestObserve_ErrorHandling(t *testing.T) {
 func TestObserve_RunFunc(t *testing.T) {
 	t.Parallel()
 
-	observer := NewObserver()
+	observer := NewObserver(nil)
 
 	err := observer.Run(func() error {
 		return errors.New("task failed")
@@ -361,9 +350,7 @@ func TestObserve_RunFunc(t *testing.T) {
 func TestObserve_TimeoutHandling(t *testing.T) {
 	t.Parallel()
 
-	observer := NewObserver(
-		WithTimeoutMetrics(),
-	)
+	observer := NewObserver(nil)
 
 	observer.UseConfig(ObserverConfig{
 		Timeout:    10 * time.Millisecond,
@@ -399,7 +386,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 	t.Run("with panic recovery enabled (default)", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
+		observer := NewObserver(nil)
 		observer.UseConfig(ObserverConfig{
 			Timeout:    time.Second,
 			MaxRetries: 0,
@@ -429,7 +416,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 	t.Run("with panic recovery disabled via ObserverOption", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
+		observer := NewObserver(nil)
 		observer.UseConfig(ObserverConfig{
 			Timeout: time.Second,
 		})
@@ -469,9 +456,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 	t.Run("successful retry", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(
-			WithRetryMetrics(),
-		)
+		observer := NewObserver(nil)
 
 		observer.UseConfig(ObserverConfig{
 			Timeout:    10 * time.Millisecond,
@@ -512,9 +497,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 	t.Run("exhausted retries", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(
-			WithRetryMetrics(),
-		)
+		observer := NewObserver(nil)
 
 		observer.UseConfig(ObserverConfig{
 			Timeout:    10 * time.Millisecond,
@@ -562,9 +545,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 	t.Run("custom circuit breaker stops retries", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(
-			WithRetryMetrics(),
-		)
+		observer := NewObserver(nil)
 
 		expectedErr := errors.New("circuit breaker error")
 		observer.UseConfig(ObserverConfig{
@@ -609,9 +590,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 func TestObserve_RetryStrategy(t *testing.T) {
 	t.Parallel()
 
-	observer := NewObserver(
-		WithRetryMetrics(),
-	)
+	observer := NewObserver(nil)
 
 	t.Run("retry strategy is called with correct parameters", func(t *testing.T) {
 		t.Parallel()
@@ -658,7 +637,7 @@ func TestObserve_RetryStrategy(t *testing.T) {
 func TestObserve_InFlightMetrics(t *testing.T) {
 	t.Parallel()
 
-	observer := NewObserver()
+	observer := NewObserver(nil)
 
 	observer.UseConfig(ObserverConfig{
 		Timeout: time.Second,
@@ -730,7 +709,7 @@ func TestObserve_InFlightMetrics(t *testing.T) {
 func TestObserve_Concurrent(t *testing.T) {
 	t.Parallel()
 
-	observer := NewObserver()
+	observer := NewObserver(nil)
 
 	t.Run("concurrent task execution", func(t *testing.T) {
 		t.Parallel()
@@ -880,9 +859,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 			t.Logf("Running scenario: %s", scenario.name)
 
 			observer := NewObserver(
-				WithDurationMetrics([]float64{1, 2, 3}),
-				WithTimeoutMetrics(),
-				WithRetryMetrics(),
+				[]float64{1, 2, 3},
 			)
 
 			observer.UseConfig(scenario.cfg)
@@ -924,9 +901,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 func TestObserve_ContextTimeout(t *testing.T) {
 	// t.Parallel()
 
-	observer := NewObserver(
-		WithTimeoutMetrics(),
-	)
+	observer := NewObserver(nil)
 	observer.UseConfig(ObserverConfig{
 		Timeout:    20 * time.Millisecond,
 		MaxRetries: 0,
@@ -970,18 +945,18 @@ func TestMultipleObservers(t *testing.T) {
 
 	t.Log("Create observer1")
 	observer1 := NewObserver(
+		[]float64{0.01, 0.1, 1, 10, 100},
 		WithNamespace("test"),
 		WithSubsystem("observer1"),
 		WithDescription("test operations"),
-		WithDurationMetrics([]float64{0.01, 0.1, 1, 10, 100}),
 	)
 
 	t.Log("Create observer2")
 	observer2 := NewObserver(
+		[]float64{0.01, 0.1, 1, 10, 100},
 		WithNamespace("test"),
 		WithSubsystem("observer2"),
 		WithDescription("test operations"),
-		WithDurationMetrics([]float64{0.01, 0.1, 1, 10, 100}),
 	)
 
 	t.Log("Create registry")
@@ -1044,7 +1019,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 	t.Run("with panic recovery enabled (default)", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
+		observer := NewObserver(nil)
 
 		fn := func(ctx context.Context) error {
 			panic("test panic")
@@ -1068,7 +1043,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 	t.Run("with panic recovery disabled via ObserverOption", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
+		observer := NewObserver(nil)
 		observer.DisablePanicRecovery(true)
 
 		fn := func(ctx context.Context) error {
@@ -1099,7 +1074,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 	t.Run("with panic recovery from forked inherited observer", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
+		observer := NewObserver(nil)
 		observer.DisablePanicRecovery(true)
 		forkedObserver := observer.Fork()
 
@@ -1131,7 +1106,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 	t.Run("with panic recovery from forked inherited observer maintained", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
+		observer := NewObserver(nil)
 		observer.DisablePanicRecovery(true)
 		forkedObserver := observer.Fork()
 		observer.DisablePanicRecovery(false)
@@ -1216,9 +1191,7 @@ func TestShortOnPanicRetryBreaker(t *testing.T) {
 	t.Run("allows retries on regular errors", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(
-			WithRetryMetrics(),
-		)
+		observer := NewObserver(nil)
 
 		observer.UseConfig(ObserverConfig{
 			Timeout:      time.Second,
@@ -1253,9 +1226,7 @@ func TestShortOnPanicRetryBreaker(t *testing.T) {
 	t.Run("stops retries immediately on panic", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(
-			WithRetryMetrics(),
-		)
+		observer := NewObserver(nil)
 
 		observer.UseConfig(ObserverConfig{
 			Timeout:      time.Second,
@@ -1295,9 +1266,7 @@ func TestShortOnPanicRetryBreaker(t *testing.T) {
 	t.Run("stops retries on panic during retry attempt", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(
-			WithRetryMetrics(),
-		)
+		observer := NewObserver(nil)
 
 		observer.UseConfig(ObserverConfig{
 			Timeout:      time.Second,
@@ -1337,9 +1306,7 @@ func TestShortOnPanicRetryBreaker(t *testing.T) {
 	t.Run("continues retrying regular errors until max retries", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(
-			WithRetryMetrics(),
-		)
+		observer := NewObserver(nil)
 
 		observer.UseConfig(ObserverConfig{
 			Timeout:      time.Second,
@@ -1377,9 +1344,7 @@ func TestRetryBreaker_EdgeCases(t *testing.T) {
 	t.Run("nil circuit breaker behaves like DefaultRetryBreaker", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(
-			WithRetryMetrics(),
-		)
+		observer := NewObserver(nil)
 
 		observer.UseConfig(ObserverConfig{
 			Timeout:      time.Second,
@@ -1414,9 +1379,7 @@ func TestRetryBreaker_EdgeCases(t *testing.T) {
 	t.Run("circuit breaker with custom error type", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(
-			WithRetryMetrics(),
-		)
+		observer := NewObserver(nil)
 
 		observer.UseConfig(ObserverConfig{
 			Timeout:    time.Second,

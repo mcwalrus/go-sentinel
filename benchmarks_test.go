@@ -9,10 +9,10 @@ import (
 
 func Benchmark_ObserverRun(b *testing.B) {
 	observer := NewObserver(
+		[]float64{0.01, 0.1, 1, 10, 100},
 		WithNamespace("test"),
 		WithSubsystem("metrics"),
 		WithDescription("test operations"),
-		WithDurationMetrics([]float64{0.01, 0.1, 1, 10, 100}),
 	)
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
