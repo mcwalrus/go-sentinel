@@ -2,7 +2,6 @@ package sentinel
 
 import (
 	"context"
-	_ "errors"
 )
 
 type implTask struct {

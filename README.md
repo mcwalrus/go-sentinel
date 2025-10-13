@@ -27,9 +27,9 @@ Standard configuration will automatically export the following observer metrics:
 | `sentinel_failures_total` | Counter | Total failed tasks |
 | `sentinel_errors_total` | Counter | Total errors over all attempts |
 | `sentinel_panics_total` | Counter | Total panic occurrences |
+| `sentinel_durations_seconds` | Histogram | Task execution durations in buckets |
 | `sentinel_timeouts_total` | Counter | Total errors based on timeouts |
 | `sentinel_retries_total` | Counter | Total retry attempts for tasks |
-| `sentinel_durations_seconds` | Histogram | Task execution durations in buckets |
 
 You can configure exported observer metrics based on your application needs.
 
@@ -453,6 +453,8 @@ func main() {
 Please report any issues or feature requests to the [GitHub repository](https://github.com/mcwalrus/go-sentinel).
 
 I am particularly keen to hear feedback around how to appropriately present the library alongside issues.
+
+Please reach out to me directly for issues which require urgent fixes.
 
 ## About
 
