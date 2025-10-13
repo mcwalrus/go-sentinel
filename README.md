@@ -52,7 +52,6 @@ package main
 
 import (
     "context"
-    "fmt"
     "log"
     
     sentinel "github.com/mcwalrus/go-sentinel"
@@ -69,7 +68,7 @@ func main() {
     })
     // Handle task error
     if err != nil {
-        log.Printf("Task failed: %v", err)
+        log.Printf("Task failed: %v\n", err)
     }
 }
 ```
@@ -83,7 +82,6 @@ package main
 
 import (
     "errors"
-    "fmt"
     "log"
     
     sentinel "github.com/mcwalrus/go-sentinel"
@@ -99,7 +97,7 @@ func main() {
     })    
     // Handle task error
     if err != nil {
-        log.Printf("Task failed: %v", err)
+        log.Printf("Task failed: %v\n", err)
     }
 }
 ```
@@ -114,7 +112,6 @@ package main
 import (
     "context"
     "errors"
-    "fmt"
     "time"
     
     sentinel "github.com/mcwalrus/go-sentinel"
@@ -128,7 +125,7 @@ func main() {
     observer.UseConfig(sentinel.ObserverConfig{
         Timeout: 10 * time.Second,
     })
-    
+
     // RunFunc respects context timeout
     err := observer.RunFunc(func(ctx context.Context) error {
             <-ctx.Done()
@@ -154,7 +151,6 @@ package main
 import (
     "context"
     "errors"
-    "fmt"
     "math/rand"
     "time"
     
@@ -172,12 +168,11 @@ func main() {
     })
     // Handle task error
     if err != nil {
-        log.Printf("Task failed: %v", err)
+        log.Printf("Task failed: %v\n", err)
     }
-
     // Recover panic value
     if rPanic, ok := sentinel.IsPanicError(err); ok {
-        fmt.Printf("panic value: %v\n", rPanic)
+        log.Printf("panic value: %v\n", rPanic)
     }
 }
 ```
@@ -193,7 +188,6 @@ package main
 
 import (
     "context"
-    "fmt"
     "log"
     
     sentinel "github.com/mcwalrus/go-sentinel"
@@ -210,7 +204,7 @@ func main() {
     err := observer.Run(func() error {
         panic("some failure")
     })
-    // Unreachable code ...
+    // Unreachable code :(
     if err != nil {
         log.Printf("Task failed: %v", err)
     }
@@ -227,7 +221,7 @@ package main
 import (
     "context"
     "errors"
-    "fmt"
+    "log"
     "math/rand"
     "time"
     
@@ -244,7 +238,7 @@ func main() {
     for i := 0; i < 100; i++ {
         err := observer.RunFunc(func(ctx context.Context) error {
             sleep := time.Duration(rand.Intn(450)+50) * time.Millisecond
-            fmt.Printf("Sleeping for %v...\n", sleep)
+            log.Printf("Sleeping for %v...\n", sleep)
             time.Sleep(sleep)
             return nil
         })
@@ -268,7 +262,7 @@ package main
 import (
     "context"
     "errors"
-    "fmt"
+    "log"
     "math/rand"
     "time"
     
@@ -316,7 +310,7 @@ Use template for integrating sentinel with a prometheus endpoint:
 
 ```go
 import (
-    "fmt"
+    "log"
     "time"
     "net/http"
 
@@ -340,14 +334,14 @@ func main() {
     go func() {
         err := http.ListenAndServe(":8080", nil)
         if err != nil {
-            fmt.Fatal(err)
+            log.Fatal(err)
         }
     }()
     // Your application code
     for range time.NewTicker(3 * time.Second).C {
-        err := observer.RunFunc(doFunc)
+        err := observer.Run(doFunc)
         if err != nil {
-            fmt.Printf("error occurred: %v\n", err)
+            log.Printf("error occurred: %v\n", err)
         }
     }
 }
@@ -365,9 +359,6 @@ You can fork observers to provide different behaviour with shared underlying met
 package main
 
 import (
-    "context"
-    "fmt"
-    "log"
     "net/http"
     "time"
 
@@ -412,9 +403,6 @@ You can use multiple observers for different types of tasks with separate metric
 package main
 
 import (
-    "context"
-    "fmt"
-    "log"
     "math/rand"
     "net/http"
     "time"
