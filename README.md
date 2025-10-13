@@ -182,9 +182,40 @@ func main() {
 }
 ```
 
-Panics are always recorded with `panics_total` and `errors_total` counters. 
+Panics are always recorded with `panics_total` and `errors_total` counters.
 
-Panics can be allowed to propogate from the observer with: `DisablePanicRecovery(true)`.
+### Disable Panic Recovery
+
+By default, the observer recovers panics and converts them to errors. You can disable this behavior to let panics propagate normally:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    
+    sentinel "github.com/mcwalrus/go-sentinel"
+)
+
+func main() {
+    // New observer
+    observer := sentinel.NewObserver(nil)
+    
+    // Disable panic recovery
+    observer.DisableRecovery(true)
+    
+    // Panic will crash the program
+    err := observer.Run(func() error {
+        panic("some failure")
+    })
+    // Unreachable code ...
+    if err != nil {
+        log.Printf("Task failed: %v", err)
+    }
+}
+```
 
 ### Observe Durations
 
@@ -204,12 +235,12 @@ import (
 )
 
 func main() {
-    // New observer with duration metrics
-    observer := sentinel.NewObserver([]float64{
-        0.100, 0.250, 0.400, 0.500, 1.000, // in seconds
-    })
+    // New observer with durations
+    observer := sentinel.NewObserver(
+        []float64{0.100, 0.250, 0.400, 0.500, 1.000}, // in seconds
+    )
     
-    // Run tasks 50-500ms before return
+    // Run tasks 50-500ms before returning
     for i := 0; i < 100; i++ {
         err := observer.RunFunc(func(ctx context.Context) error {
             sleep := time.Duration(rand.Intn(450)+50) * time.Millisecond
