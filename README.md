@@ -10,11 +10,11 @@ Sentinel provides retry handling with observerable metrics for Go applications. 
 
 ## Features
 
-- **Prometheus Metrics**: Observe tasks through pre-defined metrics
-- **Composable Pattern**: Multiple observers can be employed at once
-- **Retry Logic**: Enables retry strategies with circuit breaking support
-- **Panic Recovery**: Safe panic recovery or standard panic propagation
-- **Context Timeout**: Timeout support for handling task deadlines
+- 📊 **Prometheus Metrics**: Observe tasks through pre-defined metrics
+- 🧩 **Composable Pattern**: Multiple observers can be employed at once
+- 🔁 **Retry Logic**: Enables retry strategies with circuit breaking support
+- 🧯 **Panic Recovery**: Safe panic recovery or standard panic propagation
+- ⏱️ **Context Timeout**: Timeout support for handling task deadlines
 
 ## Metrics
 
