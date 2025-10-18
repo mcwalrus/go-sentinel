@@ -6,7 +6,8 @@
 [![GoDoc](https://godoc.org/github.com/mcwalrus/go-sentinel?status.svg)](https://godoc.org/github.com/mcwalrus/go-sentinel)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Sentinel provides retry handling and performance metrics for critical routines in Go applications. **Consider how panics should be handled for routines in long-running production services**. Sentinel provides an observer to wrap functions for recovering panics as errors, specifying retry behavior, and tracking metrics for successes, errors, panics, retries, timeouts and durations - improving resilience and observability of your routines right out of the box.
+Sentinel provides retry handling and performance metrics for your functions in Go applications. In long-running production services, it’s important to consider how panics are handled in routines. Sentinel offers an observer that wraps functions to recover panics as errors, define retry behavior, and track metrics - including successes, errors, panics, retries, timeouts, and execution durations. Sentinel exposes a lightweight interface designed to integrate immediately with your applications.
+
 
 ## Features
 
@@ -75,7 +76,7 @@ func main() {
 
 ### Failure Handlers
 
-Observer records errors via metrics returning errors:
+Observer records errors via metrics and returns errors:
 
 ```go
 package main
@@ -91,7 +92,7 @@ func main() {
     // New observer
     observer := sentinel.NewObserver(nil)
     
-    // Tracks error
+    // Task fails
     err := observer.Run(func() error {
         return errors.New("task failed")
     })
@@ -126,7 +127,7 @@ func main() {
         Timeout: 10 * time.Second,
     })
 
-    // RunFunc respects context timeout
+    // Task respects context timeout
     err := observer.RunFunc(func(ctx context.Context) error {
             <-ctx.Done()
             return ctx.Err()
@@ -162,14 +163,15 @@ func main() {
     // New observer
     observer := sentinel.NewObserver(nil)
     
-    // Panic in observer
+    // Task panics
     err := observer.Run(func() error {
-        panic("stations")
+        panic("stations!:0")
     })
-    // Handle task error
+    // Handle error
     if err != nil {
         log.Printf("Task failed: %v\n", err)
     }
+
     // Recover panic value
     if rPanic, ok := sentinel.IsPanicError(err); ok {
         log.Printf("panic value: %v\n", rPanic)
@@ -197,17 +199,16 @@ func main() {
     // New observer
     observer := sentinel.NewObserver(nil)
     
-    // Disable panic recovery
-    observer.DisableRecovery(true)
+    // Disabled recovery
+    observer.DisablePanicRecovery(true)
     
-    // Panic will crash the program
+    // Panic propogates
     err := observer.Run(func() error {
         panic("some failure")
     })
-    // Unreachable code :(
-    if err != nil {
-        log.Printf("Task failed: %v", err)
-    }
+
+    // Unreachable code
+    log.Printf("err was: %v\n", err)
 }
 ```
 
@@ -234,18 +235,14 @@ func main() {
         []float64{0.100, 0.250, 0.400, 0.500, 1.000}, // in seconds
     )
     
-    // Run tasks 50-500ms before returning
+    // Run tasks for 50-1000ms before returning
     for i := 0; i < 100; i++ {
-        err := observer.RunFunc(func(ctx context.Context) error {
-            sleep := time.Duration(rand.Intn(450)+50) * time.Millisecond
+        _ = observer.RunFunc(func(ctx context.Context) error {
+            sleep := time.Duration(rand.Intn(950)+50) * time.Millisecond
             log.Printf("Sleeping for %v...\n", sleep)
             time.Sleep(sleep)
             return nil
         })
-        // Handle task errors
-        if err != nil {
-            log.Printf("Task failed: %d: %v", i, err)
-        }
     }
 }
 ```
@@ -274,7 +271,7 @@ func main() {
     // New observer
     observer := sentinel.NewObserver(nil)
 
-    // Configure retry strategy
+    // Set retry behavior
     observer.UseConfig(sentinel.ObserverConfig{
         MaxRetries:    3,
         RetryStrategy: retry.WithJitter(
@@ -283,12 +280,12 @@ func main() {
         ),
     })
 
-    // Fail on every attempt
+    // Fail every attempt
     err := observer.Run(func() error {
         return errors.New("task failed")
     })
     
-    // Unwrap errors
+    // Unwrap join errors
     errUnwrap, ok := (err).(interface {Unwrap() []error})
     if !ok {
         panic("not unwrap")
@@ -325,6 +322,7 @@ func main() {
 	    sentinel.WithNamespace("myapp"),
 	    sentinel.WithSubsystem("workers"),
     )
+
     // Register observer
     registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
@@ -337,6 +335,7 @@ func main() {
             log.Fatal(err)
         }
     }()
+
     // Your application code
     for range time.NewTicker(3 * time.Second).C {
         err := observer.Run(doFunc)
@@ -373,15 +372,15 @@ func main() {
         sentinel.WithNamespace("myapp"),
         sentinel.WithSubsystem("processes"),
     )
-
-    // Only register observer
+    
+    // Register base observer
     registry := prometheus.NewRegistry()
     observer.MustRegister(registry)
 
-    // Create forked observer
+    // Fork observer
     forkedObserver := observer.Fork()
 
-    // Set configurations per observer
+    // Configurations set per observer
     observer.UseConfig(sentinel.ObserverConfig{
         Timeout:    60 * time.Second,
         MaxRetries: 2,
@@ -421,6 +420,7 @@ func main() {
         sentinel.WithSubsystem("background"),
         sentinel.WithDescription("Background processing tasks"),
     )
+
     // Second observer
     criticalObserver := sentinel.NewObserver(
         []float64{0.01, 0.1, 0.5, 1, 5, 10, 30},
@@ -428,12 +428,13 @@ func main() {
         sentinel.WithSubsystem("critical_jobs"),
         sentinel.WithDescription("Critical business operations"),
     )
-    // Register both observers
+
+    // Register observers
     registry := prometheus.NewRegistry()
     bgObserver.MustRegister(registry)
     criticalObserver.MustRegister(registry)
 
-    // Set configurations per observer
+    // Set configurations
     bgObserver.UseConfig(sentinel.ObserverConfig{
         Timeout:       30 * time.Second,
         MaxRetries:    3,
