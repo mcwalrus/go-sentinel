@@ -6,7 +6,7 @@
 [![GoDoc](https://godoc.org/github.com/mcwalrus/go-sentinel?status.svg)](https://godoc.org/github.com/mcwalrus/go-sentinel)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Sentinel provides retry handling with observerable metrics for Go applications. **Consider how panics should be handled as critical processes in production systems**. Sentinel wraps function execution to recover panics as errors while tracking Prometheus metrics for successes, errors, panics, retries, timeouts and durations - making routines to become more resilient, observable and robust, right out of the box. Use the library as a simple drop-in solution for new projects or existing applications.
+Sentinel provides retry handling and performance metrics for critical routines in Go applications. **Consider how panics should be handled for routines in long-running production services**. Sentinel provides an observer to wrap functions for recovering panics as errors, specifying retry behavior, and tracking metrics for successes, errors, panics, retries, timeouts and durations - improving resilience and observability of your routines right out of the box.
 
 ## Features
 
@@ -18,7 +18,7 @@ Sentinel provides retry handling with observerable metrics for Go applications. 
 
 ## Metrics
 
-Standard configuration will automatically export the following observer metrics:
+Standard configurations will automatically export the following observer metrics:
 
 | Metric | Type | Description |
 |--------|------|-------------|
@@ -31,7 +31,7 @@ Standard configuration will automatically export the following observer metrics:
 | `sentinel_timeouts_total` | Counter | Total errors based on timeouts |
 | `sentinel_retries_total` | Counter | Total retry attempts for tasks |
 
-You can configure exported observer metrics based on your application needs.
+Configure observers with metrics and retry behavior based on your application needs.
 
 ## Installation
 
@@ -66,7 +66,7 @@ func main() {
         log.Println("Processing task...")
         return nil
     })
-    // Handle task error
+    // Handle error
     if err != nil {
         log.Printf("Task failed: %v\n", err)
     }
@@ -91,11 +91,11 @@ func main() {
     // New observer
     observer := sentinel.NewObserver(nil)
     
-    // Tracks task error
+    // Tracks error
     err := observer.Run(func() error {
         return errors.New("task failed")
-    })    
-    // Handle task error
+    })
+    // Handle error
     if err != nil {
         log.Printf("Task failed: %v\n", err)
     }
