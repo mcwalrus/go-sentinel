@@ -1,4 +1,4 @@
-// Package retry provides retry strategy implementations for the sentinel package.
+// Package retry provides WaitFunc implementations for the sentinel package.
 // These strategies can be used with ObserverConfig.RetryStrategy to control retry behavior.
 package retry
 
@@ -8,41 +8,70 @@ import (
 	"time"
 )
 
-// Strategy defines a retry strategy function that returns the wait duration
-// for a given retry attempt count.
-type Strategy func(retryCount int) time.Duration
+// WaitFunc defines a fuction to return wait durations from a specific retry
+// attempt count. Retries start from 1 and increment and should increment with
+// each call.
+type WaitFunc func(retries int) time.Duration
 
-// Immediate returns a retry strategy that implements immediate retry with no delay.
-func Immediate() Strategy {
+// Immediate returns a WaitFunc that implements immediate retry with no delay.
+func Immediate() WaitFunc {
 	return func(retries int) time.Duration {
 		return 0
 	}
 }
 
-// Linear returns a retry strategy that implements linear backoff.
-// The wait duration increases linearly with each retry: wait * (retryCount + 1).
-func Linear(wait time.Duration) Strategy {
+// Linear returns a WaitFunc that implements linear backoff.
+func Linear(wait time.Duration) WaitFunc {
 	return func(retries int) time.Duration {
-		return time.Duration(retries+1) * wait
+		if retries <= 0 {
+			return 0
+		}
+		return time.Duration(retries) * wait
 	}
 }
 
-// Exponential returns a retry strategy that implements exponential backoff.
-// The duration is the base factor for the exponential backoff where the first retry
-// will wait for duration, second retry for 2*duration, third for 4*duration, etc.
-func Exponential(factor time.Duration) Strategy {
+// Exponential returns a WaitFunc that implements exponential backoff.
+func Exponential(factor time.Duration) WaitFunc {
 	return func(retries int) time.Duration {
-		if retries == 0 {
+		if retries <= 0 {
 			return 0
 		}
 		return time.Duration(1<<uint(retries)) * factor
 	}
 }
 
-// WithLimit wraps a retry strategy to limit the maximum wait duration.
-// If the base strategy returns a duration greater than or equal to the limit,
-// the limit is returned instead.
-func WithLimit(strategy Strategy, limit time.Duration) Strategy {
+// UseDelays returns a WaitFunc that implements a list of delays for each retry.
+// The max delay will be returned for retries greater than the length of the delays.
+//
+// Example usage:
+//
+//	strategy := retry.UseDelays(
+//		[]time.Duration{
+//			100*time.Millisecond, 150*time.Millisecond, 250*time.Millisecond,
+//			400*time.Millisecond, 500*time.Millisecond, 1000*time.Millisecond,
+//		},
+//	)
+func UseDelays(delays []time.Duration) WaitFunc {
+	return func(retries int) time.Duration {
+		if retries <= 0 {
+			return 0
+		} else if retries >= len(delays) {
+			return delays[len(delays)-1]
+		} else {
+			return delays[retries-1]
+		}
+	}
+}
+
+// WithLimit wraps a WaitFunc to limit the maximum wait duration.
+//
+// Example usage:
+//
+//	strategy := retry.WithLimit(
+//		1 * time.Second, // Limit to 1 second
+//		retry.Exponential(100*time.Millisecond),
+//	)
+func WithLimit(limit time.Duration, strategy WaitFunc) WaitFunc {
 	return func(retries int) time.Duration {
 		wait := strategy(retries)
 		if wait >= limit {
@@ -52,26 +81,43 @@ func WithLimit(strategy Strategy, limit time.Duration) Strategy {
 	}
 }
 
-// WithJitter wraps a retry strategy with additional random jitter.
-// The jitter is uniformly sampled in the range [0, maxJitter] and added to the base wait.
+// ForgoAttempts returns a WaitFunc that skips the first n attempts.
+//
+// Example usage:
+//
+//	strategy := retry.ForgoAttempts(
+//		2, // Skip the first 2 attempts
+//		retry.Exponential(100*time.Millisecond),
+//	)
+func ForgoAttempts(skipN int, strategy WaitFunc) WaitFunc {
+	return func(retries int) time.Duration {
+		if retries-skipN <= 0 {
+			return 0
+		}
+		return strategy(retries - skipN)
+	}
+}
+
+// WithJitter wraps a WaitFunc with additional random jitter.
+// The jitter is uniformly sampled in the range [0, jitter] and added to the base wait.
 // This helps prevent thundering herd problems by spreading out retry attempts
 // across multiple clients, reducing load spikes on recovering services.
 //
-// When maxJitter is less than or equal to zero, the base strategy is returned unchanged.
+// When jitter is less than or equal to zero, the base strategy is returned unchanged.
 //
 // Example usage:
 //
 //	strategy := retry.WithJitter(
+//		time.Second, // Jitter up to 1 second
 //		retry.Exponential(100*time.Millisecond),
-//		time.Second, // Max jitter of 1 second
 //	)
-func WithJitter(strategy Strategy, maxJitter time.Duration) Strategy {
-	if maxJitter <= 0 {
+func WithJitter(jitter time.Duration, strategy WaitFunc) WaitFunc {
+	if jitter <= 0 {
 		return strategy
 	}
 	return func(retries int) time.Duration {
 		base := strategy(retries)
-		maxNs := maxJitter.Nanoseconds()
+		maxNs := jitter.Nanoseconds()
 		if maxNs <= 0 {
 			return base
 		}

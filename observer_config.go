@@ -35,7 +35,7 @@ type ObserverConfig struct {
 	// RetryStrategy is a handler which returns wait durations between retry attempts.
 	// The first call to the handler will provide retryCount at 0. Subsequent calls
 	// will increment retryCount. By default, no wait strategy is applied.
-	RetryStrategy retry.Strategy
+	RetryStrategy retry.WaitFunc
 
 	// RetryBreaker is a handler that skips following retry attempts for a task when
 	// returning true. The handler will be provided the error from the previous attempt.

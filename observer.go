@@ -382,6 +382,7 @@ func (o *Observer) execute(task *implTask) error {
 			o.m.RUnlock()
 
 			// Wait retry duration
+			task.retryCount += 1
 			o.metrics.Retries.Inc()
 			if task.cfg.RetryStrategy != nil {
 				wait := task.cfg.RetryStrategy(task.retryCount)
@@ -394,7 +395,7 @@ func (o *Observer) execute(task *implTask) error {
 			retryTask := &implTask{
 				fn:         task.fn,
 				cfg:        task.cfg,
-				retryCount: task.retryCount + 1,
+				retryCount: task.retryCount,
 			}
 
 			// Try retries recursively

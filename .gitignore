@@ -29,6 +29,7 @@ go.work.sum
 *~
 previous.md
 TODO.md
+.DS_Store
 
 # Editor/IDE
 # .idea/

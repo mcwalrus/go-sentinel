@@ -19,7 +19,7 @@ Sentinel provides retry handling and performance metrics for your functions in G
 
 ## Metrics
 
-Standard configurations will automatically export the following observer metrics:
+Standard configurations will automatically export the following Prometheus metrics:
 
 | Metric | Type | Description |
 |--------|------|-------------|
@@ -31,8 +31,6 @@ Standard configurations will automatically export the following observer metrics
 | `sentinel_durations_seconds` | Histogram | Task execution durations in buckets |
 | `sentinel_timeouts_total` | Counter | Total errors based on timeouts |
 | `sentinel_retries_total` | Counter | Total retry attempts for tasks |
-
-Configure observers with metrics and retry behavior based on your application needs.
 
 ## Installation
 
@@ -76,7 +74,7 @@ func main() {
 
 ### Failure Handlers
 
-Observer records errors via metrics and returns errors:
+Observer records errors via metrics with returning errors:
 
 ```go
 package main
@@ -167,6 +165,7 @@ func main() {
     err := observer.Run(func() error {
         panic("stations!:0")
     })
+    
     // Handle error
     if err != nil {
         log.Printf("Task failed: %v\n", err)
@@ -275,8 +274,8 @@ func main() {
     observer.UseConfig(sentinel.ObserverConfig{
         MaxRetries:    3,
         RetryStrategy: retry.WithJitter(
-            retry.Exponential(100*time.Millisecond),
             time.Second,
+            retry.Exponential(100*time.Millisecond),
         ),
     })
 
