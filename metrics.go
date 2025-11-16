@@ -134,6 +134,16 @@ func (m *metrics) collectors() []prometheus.Collector {
 	return c
 }
 
+func (m *metrics) Describe(ch chan<- *prometheus.Desc) {
+	prometheus.DescribeByCollect(m, ch)
+}
+
+func (m *metrics) Collect(ch chan<- prometheus.Metric) {
+	for _, col := range m.collectors() {
+		col.Collect(ch)
+	}
+}
+
 func (m *metrics) MustRegister(registry prometheus.Registerer) {
 	registry.MustRegister(m.collectors()...)
 }
@@ -167,6 +177,16 @@ func (m *vecMetrics) collectors() []prometheus.Collector {
 		}
 	}
 	return c
+}
+
+func (m *vecMetrics) Describe(ch chan<- *prometheus.Desc) {
+	prometheus.DescribeByCollect(m, ch)
+}
+
+func (m *vecMetrics) Collect(ch chan<- prometheus.Metric) {
+	for _, col := range m.collectors() {
+		col.Collect(ch)
+	}
 }
 
 func (m *vecMetrics) MustRegister(registry prometheus.Registerer) {
@@ -225,8 +245,8 @@ func (m *vecMetrics) withLabels(labelValues ...string) metrics {
 }
 
 func (m *vecMetrics) CurryWith(labels prometheus.Labels) vecMetrics {
-	if len(labels) != len(m.labelNames) {
-		panic("number of labels must match the number of label names")
+	if len(labels) >= len(m.labelNames) {
+		panic("number of labels must be less than the number of label names")
 	}
 	ob := vecMetrics{
 		inFlightVec:  m.inFlightVec.MustCurryWith(labels),

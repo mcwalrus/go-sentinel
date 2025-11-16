@@ -617,9 +617,9 @@ func TestObserve_RetryStrategy(t *testing.T) {
 		if len(retryStrategyCalls) != 2 {
 			t.Fatalf("Expected 1 retry strategy call, got %d", len(retryStrategyCalls))
 		}
-		if retryStrategyCalls[0] != 0 && retryStrategyCalls[1] != 1 {
+		if retryStrategyCalls[0] != 1 && retryStrategyCalls[1] != 2 {
 			t.Errorf(
-				"Expected retry strategy called with args: 0 and 1",
+				"Expected retry strategy called with args: 1 and 2",
 			)
 		}
 

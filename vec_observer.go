@@ -41,6 +41,14 @@ func (vo *VecObserver) MustRegister(registry prometheus.Registerer) {
 	vo.metrics.MustRegister(registry)
 }
 
+func (vo *VecObserver) Describe(ch chan<- *prometheus.Desc) {
+	vo.metrics.Describe(ch)
+}
+
+func (vo *VecObserver) Collect(ch chan<- prometheus.Metric) {
+	vo.metrics.Collect(ch)
+}
+
 func (vo *VecObserver) Fork(labelValues ...string) *Observer {
 	return &Observer{
 		m:             &sync.RWMutex{},
@@ -66,8 +74,10 @@ func (vo *VecObserver) Fork(labelValues ...string) *Observer {
 //	// Metrics will have: service="api", environment="production"
 func (vo *VecObserver) ForkWith(labels prometheus.Labels) *Observer {
 	return &Observer{
-		cfg:     vo.cfg,
-		metrics: vo.metrics.with(labels),
+		m:             &sync.RWMutex{},
+		cfg:           vo.cfg,
+		metrics:       vo.metrics.with(labels),
+		recoverPanics: true,
 	}
 }
 

@@ -52,6 +52,14 @@ func NewObserver(durationBuckets []float64, opts ...ObserverOption) *Observer {
 	}
 }
 
+func (o *Observer) Describe(ch chan<- *prometheus.Desc) {
+	o.metrics.Describe(ch)
+}
+
+func (o *Observer) Collect(ch chan<- prometheus.Metric) {
+	o.metrics.Collect(ch)
+}
+
 // Register registers all Observer metrics with the provided Prometheus registry.
 // This method returns an error if any metric registration fails. Use [Observer.MustRegister]
 // if you want the program to panic on registration conflicts instead of handling errors.
