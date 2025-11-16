@@ -6,21 +6,11 @@ import (
 
 	"github.com/mcwalrus/go-sentinel/circuit"
 	"github.com/mcwalrus/go-sentinel/retry"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 // ObserverOption defines prometheus metrics options for an [Observer].
 // Options are provided to [NewObserver] on setting up the Observer.
 type ObserverOption func(*config)
-
-// config defines the configuration for a [Observer].
-type config struct {
-	namespace   string
-	subsystem   string
-	description string
-	buckets     []float64
-	constLabels prometheus.Labels
-}
 
 type ObserverConfig struct {
 	// Timeout sets a context deadline tasks passed to [Observer.RunFunc].
