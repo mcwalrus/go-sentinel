@@ -1,7 +1,6 @@
 package sentinel
 
 import (
-	"fmt"
 	"maps"
 	"slices"
 	"sync"
@@ -29,12 +28,8 @@ import (
 //	apiObserver := vecObserver.WithLabelValues("api", "production")
 //	dbObserver := vecObserver.WithLabelValues("db", "staging")
 type VecObserver struct {
-	m             *sync.RWMutex
-	cfg           config
-	runner        ObserverConfig
-	controls      ObserverControls
-	metrics       vecMetrics
-	recoverPanics bool
+	cfg     config
+	metrics vecMetrics
 }
 
 // NewVecObserver creates a new VecObserver with label support.
@@ -50,10 +45,8 @@ type VecObserver struct {
 func NewVecObserver(durationBuckets []float64, labelNames []string, opts ...ObserverOption) *VecObserver {
 	cfg := setupConfig(durationBuckets, opts...)
 	return &VecObserver{
-		m:             &sync.RWMutex{},
-		cfg:           cfg,
-		metrics:       *newVecMetrics(cfg, labelNames),
-		recoverPanics: true,
+		cfg:     cfg,
+		metrics: *newVecMetrics(cfg, labelNames),
 	}
 }
 
@@ -67,167 +60,64 @@ func (vo *VecObserver) MustRegister(registry prometheus.Registerer) {
 	vo.metrics.MustRegister(registry)
 }
 
+// Describe implements the [prometheus.Collector] interface by describing metrics.
+// This can be useful to register the Observer with the default Prometheus registry.
 func (vo *VecObserver) Describe(ch chan<- *prometheus.Desc) {
 	vo.metrics.Describe(ch)
 }
 
+// Collect implements the [prometheus.Collector] interface by collecting metrics.
+// This can be useful to register the Observer with the default Prometheus registry.
 func (vo *VecObserver) Collect(ch chan<- prometheus.Metric) {
 	vo.metrics.Collect(ch)
 }
 
-// UseConfig configures the observer for how to handle Run methods.
-// This sets the ObserverConfig that will be used for all subsequent Run, RunFunc calls.
-// See [ObserverConfig] for more information on available configuration options.
-//
-// Example usage:
-//
-//	observer.UseConfig(sentinel.ObserverConfig{
-//		Timeout:    10 * time.Second,
-//		MaxRetries: 3,
-//		RetryStrategy: retry.Exponential(100 * time.Millisecond),
-//	})
-func (vo *VecObserver) UseConfig(config ObserverConfig) {
-	vo.m.Lock()
-	vo.runner = config
-	vo.controls = config.Controls
-	vo.m.Unlock()
-}
-
-// DisablePanicRecovery sets whether panic recovery should be disabled for the observer.
-// Recovery is enabled by default, meaning panics are caught and converted to errors.
-func (vo *VecObserver) DisablePanicRecovery(disable bool) {
-	vo.m.Lock()
-	vo.recoverPanics = !disable
-	vo.m.Unlock()
-}
-
+// With returns a new Observer with the given labels. The observer will share the same
+// underlying metrics as the original, but specifi
+// An error will be returned if the labels do not match initially configured label names.
 func (vo *VecObserver) With(labels prometheus.Labels) (*Observer, error) {
 	m, err := vo.metrics.with(labels)
 	if err != nil {
 		return nil, err
 	}
-	vo.m.RLock()
-	defer vo.m.RUnlock()
-
 	return &Observer{
 		m:             &sync.RWMutex{},
 		cfg:           vo.cfg,
-		runner:        vo.runner,
-		controls:      vo.controls,
 		metrics:       m,
 		labelValues:   slices.Collect(maps.Values(labels)),
-		recoverPanics: vo.recoverPanics,
-		parent:        vo,
+		recoverPanics: true,
 	}, nil
 }
 
+// WithLabels returns a new Observer with the given label values.
+// An error will be returned if the label values do not match initially configured label names.
 func (vo *VecObserver) WithLabels(labelValues ...string) (*Observer, error) {
-	m, err := vo.metrics.withLabelValues(labelValues...)
+	m, err := vo.metrics.withLabels(labelValues...)
 	if err != nil {
 		return nil, err
 	}
-	vo.m.RLock()
-	defer vo.m.RUnlock()
-
 	return &Observer{
 		m:             &sync.RWMutex{},
 		cfg:           vo.cfg,
 		metrics:       m,
-		runner:        vo.runner,
-		controls:      vo.controls,
 		labelValues:   labelValues,
-		recoverPanics: vo.recoverPanics,
-		parent:        vo,
+		recoverPanics: true,
 	}, nil
 }
 
-// With returns an Observer with the given labels. This method follows the same pattern
-// as Prometheus's GaugeVec.With method.
-//
-// The returned Observer shares the same underlying metric vectors as the VecObserver.
-// All metrics recorded by the returned Observer will have the specified labels.
-//
-// Panics if the number of labels does not match the number of label names.
-func (vo *VecObserver) MustWith(labels prometheus.Labels) *Observer {
-	vo.m.RLock()
-	defer vo.m.RUnlock()
-
-	return &Observer{
-		m:             &sync.RWMutex{},
-		cfg:           vo.cfg,
-		metrics:       vo.metrics.withMust(labels),
-		labelValues:   slices.Collect(maps.Values(labels)),
-		recoverPanics: vo.recoverPanics,
-		parent:        vo,
-	}
-}
-
-// WithLabels returns an Observer with the given label values. This method follows
-// the same pattern as Prometheus's GaugeVec.WithLabelValues method.
-//
-// The returned Observer shares the same underlying metric vectors as the VecObserver.
-// All metrics recorded by the returned Observer will have the specified label values.
-//
-// Panics if the number of label values does not match the number of label names.
-func (vo *VecObserver) MustWithLabels(labelValues ...string) *Observer {
-	vo.m.RLock()
-	defer vo.m.RUnlock()
-
-	return &Observer{
-		m:             &sync.RWMutex{},
-		cfg:           vo.cfg,
-		metrics:       vo.metrics.withLabelsMust(labelValues...),
-		labelValues:   labelValues,
-		recoverPanics: vo.recoverPanics,
-		parent:        vo,
-	}
-}
-
-// CurryWith returns a VecObserver curried with the provided labels. This method follows
-// the same pattern as Prometheus's GaugeVec.CurryWith method.
-//
-// Currying allows you to pre-set some labels, creating a new VecObserver that requires
-// fewer labels for subsequent operations. The number of provided labels must be less
-// than the total number of label names.
-//
-// The returned VecObserver shares the same underlying metric vectors as the original.
+// CurryWithLabels returns a VecObserver curried with the provided labels. Currying allows
+// you to pre-set some labels, creating a new VecObserver that requires fewer labels
+// for subsequent operations.
+// An error will be returned if the labels do not match initially configured label names.
 func (vo *VecObserver) CurryWith(labels prometheus.Labels) (*VecObserver, error) {
-	curriedMetrics, err := vo.metrics.CurryWith(labels)
+	curriedMetrics, err := vo.metrics.curryWith(labels)
 	if err != nil {
 		return nil, err
 	}
-
-	vo.m.RLock()
-	defer vo.m.RUnlock()
-
 	return &VecObserver{
-		m:             &sync.RWMutex{},
-		cfg:           vo.cfg,
-		runner:        vo.runner,
-		controls:      vo.controls,
-		recoverPanics: vo.recoverPanics,
-		metrics:       curriedMetrics,
+		cfg:     vo.cfg,
+		metrics: curriedMetrics,
 	}, nil
-}
-
-// MustCurryWith works as CurryWith but panics where CurryWith would have returned an error.
-// This method follows the same pattern as Prometheus's GaugeVec.MustCurryWith method.
-func (vo *VecObserver) MustCurryWith(labels prometheus.Labels) *VecObserver {
-	curried, err := vo.CurryWith(labels)
-	if err != nil {
-		panic(err)
-	}
-	return curried
-}
-
-func (vo *VecObserver) Revoke(ob *Observer) error {
-	if ob.parent != vo {
-		return fmt.Errorf("observer %v is not a child of this VecObserver", ob.labelValues)
-	}
-	if vo.metrics.DeleteLabelValues(ob.labelValues...) {
-		return nil
-	}
-	return fmt.Errorf("failed to unregister observer")
 }
 
 // Reset deletes all metrics in this VecObserver.
@@ -238,5 +128,5 @@ func (vo *VecObserver) Revoke(ob *Observer) error {
 //
 // This method follows the same pattern as Prometheus's GaugeVec.Reset method.
 func (vo *VecObserver) Reset() {
-	vo.metrics.Reset()
+	vo.metrics.reset()
 }

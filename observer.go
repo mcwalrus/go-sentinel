@@ -23,7 +23,6 @@ type Observer struct {
 	controls      ObserverControls
 	labelValues   []string
 	recoverPanics bool
-	parent        *VecObserver
 }
 
 // NewObserver configures a new Observer with duration buckets and optional configuration.
@@ -54,10 +53,14 @@ func NewObserver(durationBuckets []float64, opts ...ObserverOption) *Observer {
 	}
 }
 
+// Describe implements the [prometheus.Collector] interface by describing metrics.
+// This can be useful to register the Observer with the default Prometheus registry.
 func (o *Observer) Describe(ch chan<- *prometheus.Desc) {
 	o.metrics.Describe(ch)
 }
 
+// Collect implements the [prometheus.Collector] interface by collecting metrics.
+// This can be useful to register the Observer with the default Prometheus registry.
 func (o *Observer) Collect(ch chan<- prometheus.Metric) {
 	o.metrics.Collect(ch)
 }

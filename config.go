@@ -4,20 +4,22 @@ import "github.com/prometheus/client_golang/prometheus"
 
 // config defines the configuration for a [Observer].
 type config struct {
-	namespace   string
-	subsystem   string
-	description string
-	buckets     []float64
-	constLabels prometheus.Labels
+	namespace    string
+	subsystem    string
+	description  string
+	buckets      []float64
+	constLabels  prometheus.Labels
+	metricFilter map[string]bool
 }
 
 // setupConfig sets up the configuration
 func setupConfig(durationBuckets []float64, opts ...ObserverOption) config {
 	cfg := config{
-		namespace:   "",
-		subsystem:   "",
-		description: "tasks",
-		buckets:     durationBuckets,
+		namespace:    "",
+		subsystem:    "",
+		description:  "tasks",
+		buckets:      durationBuckets,
+		metricFilter: make(map[string]bool),
 	}
 
 	for _, opt := range opts {
@@ -31,6 +33,9 @@ func setupConfig(durationBuckets []float64, opts ...ObserverOption) config {
 	}
 	if cfg.description == "" {
 		cfg.description = "tasks"
+	}
+	if len(cfg.metricFilter) == 0 {
+		cfg.metricFilter = defaultMetricFilter()
 	}
 
 	return cfg
@@ -100,5 +105,69 @@ func WithDescription(description string) ObserverOption {
 func WithConstLabels(labels prometheus.Labels) ObserverOption {
 	return func(cfg *config) {
 		cfg.constLabels = labels
+	}
+}
+
+// Metric names that can be enabled/disabled
+const (
+	MetricInFlight  = "inFlight"
+	MetricSuccesses = "successes"
+	MetricFailures  = "failures"
+	MetricErrors    = "errors"
+	MetricTimeouts  = "timeouts"
+	MetricPanics    = "panics"
+	MetricDurations = "durations"
+	MetricRetries   = "retries"
+)
+
+func defaultMetricFilter() map[string]bool {
+	return map[string]bool{
+		MetricInFlight:  true,
+		MetricSuccesses: true,
+		MetricFailures:  true,
+		MetricErrors:    true,
+		MetricTimeouts:  true,
+		MetricPanics:    true,
+		MetricDurations: true,
+		MetricRetries:   true,
+	}
+}
+
+// WithMetrics enables only the specified metrics for export.
+// If not called, all metrics are enabled by default.
+// Metrics that are not included will not be registered or exported.
+//
+// Example usage:
+//
+//	// Only export successes and failures
+//	observer := sentinel.NewObserver(
+//	    nil,
+//	    sentinel.WithMetrics(
+//	        sentinel.MetricSuccesses,
+//	        sentinel.MetricFailures,
+//	    ),
+//	)
+//
+//	// Export all metrics except durations
+//	observer := sentinel.NewObserver(
+//	    nil,
+//	    sentinel.WithMetrics(
+//	        sentinel.MetricInFlight,
+//	        sentinel.MetricSuccesses,
+//	        sentinel.MetricFailures,
+//	        sentinel.MetricErrors,
+//	        sentinel.MetricTimeouts,
+//	        sentinel.MetricPanics,
+//	        sentinel.MetricRetries,
+//	    ),
+//	)
+func WithMetrics(metricNames ...string) ObserverOption {
+	return func(cfg *config) {
+		if cfg.metricFilter == nil {
+			cfg.metricFilter = make(map[string]bool)
+		}
+		for _, name := range metricNames {
+			cfg.metricFilter[name] = true
+		}
 	}
 }

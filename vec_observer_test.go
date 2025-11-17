@@ -24,10 +24,16 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
 
-		child1 := vecObserver.Fork("api", "main")
-		child2 := vecObserver.Fork("db", "users")
+		child1, err := vecObserver.WithLabels("api", "main")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
+		child2, err := vecObserver.WithLabels("db", "users")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
 
-		err := child1.Run(func() error {
+		err = child1.Run(func() error {
 			return nil
 		})
 		if err != nil {
@@ -79,9 +85,18 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
 
-		child1 := vecObserver.Fork("api", "main")
-		child2 := vecObserver.Fork("db", "users")
-		child3 := vecObserver.Fork("cache", "hot")
+		child1, err := vecObserver.WithLabels("api", "main")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
+		child2, err := vecObserver.WithLabels("db", "users")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
+		child3, err := vecObserver.WithLabels("cache", "hot")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
 
 		child1.Run(func() error { return nil })
 		child1.Run(func() error { return nil })
@@ -120,9 +135,18 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
 
-		child1 := vecObserver.Fork("api")
-		child2 := vecObserver.Fork("api")
-		child3 := vecObserver.Fork("api")
+		child1, err := vecObserver.WithLabels("api")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
+		child2, err := vecObserver.WithLabels("api")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
+		child3, err := vecObserver.WithLabels("api")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
 
 		child1.Run(func() error { return nil })
 		child2.Run(func() error { return nil })
@@ -149,10 +173,16 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
 
-		child1 := vecObserver.Fork("api")
-		child2 := vecObserver.Fork("db")
+		child1, err := vecObserver.WithLabels("api")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
+		child2, err := vecObserver.WithLabels("db")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
 
-		err := child1.Run(func() error {
+		err = child1.Run(func() error {
 			panic("test panic")
 		})
 		if err == nil {
@@ -198,21 +228,20 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
 
-		child1 := vecObserver.Fork("api")
-		child2 := vecObserver.Fork("db")
+		child1, err := vecObserver.WithLabels("api")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
+		child2, err := vecObserver.WithLabels("db")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
 
 		child1.UseConfig(ObserverConfig{
 			MaxRetries: 2,
-			RetryStrategy: func(attempt int) time.Duration {
-				return 10 * time.Millisecond
-			},
 		})
-
 		child2.UseConfig(ObserverConfig{
 			MaxRetries: 1,
-			RetryStrategy: func(attempt int) time.Duration {
-				return 10 * time.Millisecond
-			},
 		})
 
 		attemptCount1 := 0
@@ -268,8 +297,14 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
 
-		child1 := vecObserver.Fork("api")
-		child2 := vecObserver.Fork("db")
+		child1, err := vecObserver.WithLabels("api")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
+		child2, err := vecObserver.WithLabels("db")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
 
 		child1.UseConfig(ObserverConfig{
 			Timeout: 50 * time.Millisecond,
@@ -335,8 +370,14 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
 
-		child1 := vecObserver.Fork("api")
-		child2 := vecObserver.Fork("db")
+		child1, err := vecObserver.WithLabels("api")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
+		child2, err := vecObserver.WithLabels("db")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
 
 		child1.RunFunc(func(ctx context.Context) error {
 			time.Sleep(50 * time.Millisecond)
@@ -387,14 +428,20 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
 
-		child1 := vecObserver.ForkWith(prometheus.Labels{
+		child1, err := vecObserver.With(prometheus.Labels{
 			"service":     "api",
 			"environment": "production",
 		})
-		child2 := vecObserver.ForkWith(prometheus.Labels{
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
+		child2, err := vecObserver.With(prometheus.Labels{
 			"service":     "api",
 			"environment": "staging",
 		})
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
 
 		child1.Run(func() error { return nil })
 		child2.Run(func() error { return errors.New("users") })
@@ -406,16 +453,11 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 			t.Errorf("child2 failures: expected 1, got %f", got)
 		}
 
-		if got := testutil.ToFloat64(vecObserver.metrics.successesVec.With(prometheus.Labels{
-			"service":     "api",
-			"environment": "production",
-		})); got != 1 {
+		time.Sleep(10 * time.Millisecond)
+		if got := testutil.ToFloat64(vecObserver.metrics.successesVec.WithLabelValues("api", "production")); got != 1 {
 			t.Errorf("vecMetrics[api,production] successes: expected 1, got %f", got)
 		}
-		if got := testutil.ToFloat64(vecObserver.metrics.failuresVec.With(prometheus.Labels{
-			"service":     "api",
-			"environment": "staging",
-		})); got != 1 {
+		if got := testutil.ToFloat64(vecObserver.metrics.failuresVec.WithLabelValues("api", "staging")); got != 1 {
 			t.Errorf("vecMetrics[api,staging] failures: expected 1, got %f", got)
 		}
 	})
@@ -432,7 +474,10 @@ func TestVecObserver_Describe(t *testing.T) {
 		vecObserver.MustRegister(registry)
 
 		// Create a forked observer and run a task to ensure metrics are initialized
-		child := vecObserver.Fork("api")
+		child, err := vecObserver.WithLabels("api")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
 		child.Run(func() error {
 			return nil
 		})
@@ -492,7 +537,10 @@ func TestVecObserver_Describe(t *testing.T) {
 		vecObserver.MustRegister(registry)
 
 		// Create a forked observer and run a task to ensure metrics are initialized
-		child := vecObserver.Fork("api", "production")
+		child, err := vecObserver.WithLabels("api", "production")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
 		child.Run(func() error {
 			return nil
 		})
@@ -557,7 +605,10 @@ func TestVecObserver_Collect(t *testing.T) {
 		vecObserver.MustRegister(registry)
 
 		// Create a forked observer and run a task to ensure metrics are initialized
-		child := vecObserver.Fork("api")
+		child, err := vecObserver.WithLabels("api")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
 		child.Run(func() error {
 			return nil
 		})
@@ -618,7 +669,10 @@ func TestVecObserver_Collect(t *testing.T) {
 		vecObserver.MustRegister(registry)
 
 		// Create a forked observer and run a task to ensure metrics are initialized
-		child := vecObserver.Fork("api", "production")
+		child, err := vecObserver.WithLabels("api", "production")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
 		child.Run(func() error {
 			return nil
 		})
@@ -676,7 +730,10 @@ func TestVecObserver_Collect(t *testing.T) {
 		t.Parallel()
 
 		vecObserver := NewVecObserver([]float64{0.1, 0.5, 1, 2, 5}, []string{"service"})
-		child := vecObserver.Fork("api")
+		child, err := vecObserver.WithLabels("api")
+		if err != nil {
+			t.Fatalf("Failed to create forked observer: %v", err)
+		}
 		child.Run(func() error {
 			return nil
 		})
