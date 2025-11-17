@@ -4,8 +4,8 @@ services:
   workerloop:
     build:
       context: ../..
-      dockerfile: examples/workerloop/Dockerfile
-    container_name: workerloop-app
+      dockerfile: examples/vec-observer/Dockerfile
+    container_name: vec-observer-app
     ports:
       - "8080:8080"
     networks:

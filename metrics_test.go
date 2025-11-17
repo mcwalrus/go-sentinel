@@ -112,38 +112,36 @@ func TestMetricUpdates(t *testing.T) {
 	m.MustRegister(registry)
 
 	// Increment metrics
-	m.Successes.Inc()
-	m.Errors.Inc()
-	m.Errors.Inc()
-	m.Timeouts.Inc()
-	m.Panics.Inc()
-	m.Retries.Inc()
-	m.InFlight.Inc()
-	m.InFlight.Inc()
-	m.InFlight.Dec()
+	m.successes.Inc()
+	m.errors.Inc()
+	m.timeouts.Inc()
+	m.panics.Inc()
+	m.retries.Inc()
+	m.inFlight.Inc()
+	m.inFlight.Dec()
 
 	// Observe metrics
-	m.Durations.Observe(0.05)
-	m.Durations.Observe(0.5)
-	m.Durations.Observe(5.0)
+	m.durations.Observe(0.05)
+	m.durations.Observe(0.5)
+	m.durations.Observe(5.0)
 
 	// Verify metrics
-	if got := testutil.ToFloat64(m.Successes); got != 1 {
+	if got := testutil.ToFloat64(m.successes); got != 1 {
 		t.Errorf("Expected Successes=1, got %f", got)
 	}
-	if got := testutil.ToFloat64(m.Errors); got != 2 {
+	if got := testutil.ToFloat64(m.errors); got != 2 {
 		t.Errorf("Expected Errors=2, got %f", got)
 	}
-	if got := testutil.ToFloat64(m.Timeouts); got != 1 {
+	if got := testutil.ToFloat64(m.timeouts); got != 1 {
 		t.Errorf("Expected Timeouts=1, got %f", got)
 	}
-	if got := testutil.ToFloat64(m.Panics); got != 1 {
+	if got := testutil.ToFloat64(m.panics); got != 1 {
 		t.Errorf("Expected Panics=1, got %f", got)
 	}
-	if got := testutil.ToFloat64(m.Retries); got != 1 {
+	if got := testutil.ToFloat64(m.retries); got != 1 {
 		t.Errorf("Expected Retries=1, got %f", got)
 	}
-	if got := testutil.ToFloat64(m.InFlight); got != 1 {
+	if got := testutil.ToFloat64(m.inFlight); got != 1 {
 		t.Errorf("Expected InFlight=1, got %f", got)
 	}
 	// For histograms, we need to get the sample count differently
