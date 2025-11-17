@@ -191,7 +191,7 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 3,
-			Control: control,
+			Control:    control,
 		})
 
 		// Function that always fails
@@ -239,7 +239,7 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 3,
-			Control: control,
+			Control:    control,
 		})
 
 		// Function that always fails
@@ -334,7 +334,7 @@ func TestObserver_ControlWithCircuitImplementations(t *testing.T) {
 
 		// Create a signal channel
 		signalCh := make(chan struct{}, 1)
-		control := circuit.OnDone(signalCh)
+		control := circuit.WhenDone(signalCh)
 
 		observer.UseConfig(ObserverConfig{
 			Control: control,
@@ -391,7 +391,7 @@ func TestObserver_ControlWithCircuitImplementations(t *testing.T) {
 
 		// Create a done channel
 		doneCh := make(chan struct{})
-		control := circuit.OnDone(doneCh)
+		control := circuit.WhenDone(doneCh)
 
 		observer.UseConfig(ObserverConfig{
 			Control: control,

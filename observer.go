@@ -47,6 +47,7 @@ type Observer struct {
 	metrics       metrics
 	runner        ObserverConfig
 	control       circuit.Control
+	limiter       limiter
 	labelValues   []string
 	recoverPanics bool
 }
@@ -127,16 +128,24 @@ func (o *Observer) MustRegister(registry prometheus.Registerer) {
 //		Timeout:    10 * time.Second,
 //		MaxRetries: 3,
 //		RetryStrategy: retry.Exponential(100 * time.Millisecond),
+//		RetryBreaker: circuit.OnPanic(),
+//		MaxConcurrency: 10, // Limit to 10 concurrent executions
 //	})
 func (o *Observer) UseConfig(config ObserverConfig) {
 	o.m.Lock()
 	o.runner = config
 	o.control = config.Control
+	if config.MaxConcurrency > 0 {
+		o.limiter = make(limiter, config.MaxConcurrency)
+	} else {
+		o.limiter = nil
+	}
 	o.m.Unlock()
 }
 
 // DisablePanicRecovery sets whether panic recovery should be disabled for the observer.
 // Recovery is enabled by default, meaning panics are caught and converted to errors.
+// When disabled, panics will propagate normally and may crash the program.
 func (o *Observer) DisablePanicRecovery(disable bool) {
 	o.m.Lock()
 	o.recoverPanics = !disable
@@ -170,6 +179,7 @@ func (o *Observer) Run(fn func() error) error {
 	o.m.RLock()
 	cfg := o.runner
 	control := o.control
+	limiter := o.limiter
 	o.m.RUnlock()
 
 	task := &implTask{
@@ -179,13 +189,7 @@ func (o *Observer) Run(fn func() error) error {
 		},
 	}
 
-	if control != nil {
-		if safeControl(control, circuit.PhaseNewRequest) {
-			return &ErrControlBreaker{}
-		}
-	}
-
-	return o.observe(task)
+	return o.observe(limiter, control, task)
 }
 
 // RunFunc executes fn and records metrics according to the observer's configuration.
@@ -205,6 +209,7 @@ func (o *Observer) Run(fn func() error) error {
 //	observer.UseConfig(sentinel.ObserverConfig{
 //		Timeout: 10 * time.Second,
 //	})
+//
 //	err := observer.RunFunc(func(ctx context.Context) error {
 //		// Your task logic here with timeout support
 //		select {
@@ -214,6 +219,9 @@ func (o *Observer) Run(fn func() error) error {
 //			return nil
 //		}
 //	})
+//	if err != nil {
+//		log.Printf("Task failed: %v", err)
+//	}
 func (o *Observer) RunFunc(fn func(ctx context.Context) error) error {
 	if o == nil {
 		panic("observer: not configured")
@@ -221,25 +229,55 @@ func (o *Observer) RunFunc(fn func(ctx context.Context) error) error {
 	o.m.RLock()
 	cfg := o.runner
 	control := o.control
+	limiter := o.limiter
 	o.m.RUnlock()
 
 	task := &implTask{
 		cfg: cfg,
 		fn:  fn,
 	}
+
+	return o.observe(limiter, control, task)
+}
+
+// observe is the main entry point for observing a task.
+// It acquires the limiter slot if set and checks control for new request phase
+// before executing the task. If the control returns true, it returns an error.
+func (o *Observer) observe(limiter limiter, control circuit.Control, task *implTask) error {
+	var releaseLimiter func()
+
+	// Acquire limiter slot if set
+	if limiter != nil {
+		acquired := limiter.acquire()
+		select {
+		case <-acquired:
+		default:
+			o.metrics.pending.Inc()
+			<-acquired
+			o.metrics.pending.Dec()
+		}
+		releaseLimiter = func() { limiter.release() }
+	}
+
+	// Check control on new request phase
 	if control != nil {
 		if safeControl(control, circuit.PhaseNewRequest) {
+			if releaseLimiter != nil {
+				releaseLimiter()
+			}
+			o.metrics.errors.Inc()
+			o.metrics.failures.Inc()
 			return &ErrControlBreaker{}
 		}
 	}
 
-	return o.observe(task)
-}
+	if releaseLimiter != nil {
+		defer releaseLimiter()
+	}
 
-// observe is the main entry point for observing a task.
-func (o *Observer) observe(task *implTask) (err error) {
 	o.metrics.inFlight.Inc()
 	defer o.metrics.inFlight.Dec()
+
 	return o.execute(task)
 }
 
@@ -383,7 +421,7 @@ func (o *Observer) execute(task *implTask) error {
 			}
 
 			// Try retries recursively
-			err2 := o.observe(retryTask)
+			err2 := o.execute(retryTask)
 			if err2 != nil {
 				return errors.Join(err, err2)
 			} else {

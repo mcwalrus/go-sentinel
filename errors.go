@@ -7,6 +7,9 @@ import (
 )
 
 // ErrControlBreaker is the error returned when a control breaker is triggered.
+// This occurs when ObserverConfig.Control returns true, preventing task execution
+// before it even begins (during PhaseNewRequest) or stopping retry attempts
+// (during PhaseRetry).
 type ErrControlBreaker struct{}
 
 func (e *ErrControlBreaker) Error() string {
@@ -41,16 +44,22 @@ func (e RecoveredPanic) Error() string {
 	return "observer: panic recovery made during function execution"
 }
 
+// Value returns the original panic value that was recovered.
+// This is the value that was passed to panic() when the panic occurred.
+func (e RecoveredPanic) Value() any {
+	return e.panic
+}
+
+// Callers returns the program counters of the call stack at the time of panic.
+// This can be used with runtime.CallersFrames to inspect the call stack.
 func (e RecoveredPanic) Callers() []uintptr {
 	return e.callers
 }
 
+// Stack returns the stack trace captured at the time of panic recovery.
+// The stack trace is formatted as a byte slice, similar to debug.Stack().
 func (e RecoveredPanic) Stack() []byte {
 	return e.stack
-}
-
-func (e RecoveredPanic) Value() any {
-	return e.panic
 }
 
 // IsPanicError checks if the given error was caused by a panic that was recovered

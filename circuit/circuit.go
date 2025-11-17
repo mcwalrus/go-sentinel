@@ -19,17 +19,34 @@ import (
 type Breaker func(err error) bool
 
 // After stops retries when total elapsed time since breaker creation exceeds d.
+// This is useful for implementing time-based circuit breaking, ensuring retries
+// don't continue past a certain duration.
+//
+// Example usage:
+//
+//	breaker := circuit.After(30 * time.Second)
+//	observer.UseConfig(sentinel.ObserverConfig{
+//		MaxRetries:  5,
+//		RetryBreaker: breaker,
+//	})
 func After(d time.Duration) Breaker {
 	start := time.Now()
-	return func(err error) bool {
-		_ = err
+	return func(_ error) bool {
 		return time.Since(start) > d
 	}
 }
 
 // OnPanic stops attempts to run tasks when the last error originated by Go panic().
-// It can detect sentinel.ErrRecoveredPanic without importing the sentinel package
-// by matching a interface that satisfies the same method set.
+// This is useful when you want to stop retrying after a panic occurs, as panics
+// typically indicate programming errors that won't be resolved by retrying.
+//
+// Example usage:
+//
+//	breaker := circuit.OnPanic()
+//	observer.UseConfig(sentinel.ObserverConfig{
+//		MaxRetries:  3,
+//		RetryBreaker: breaker,
+//	})
 func OnPanic() Breaker {
 	type panicError interface {
 		error
@@ -38,17 +55,5 @@ func OnPanic() Breaker {
 	return func(err error) bool {
 		var target panicError
 		return errors.As(err, &target)
-	}
-}
-
-// Any returns a breaker that stops when any of the provided breakers match.
-func AnyBreaker(bs ...Breaker) Breaker {
-	return func(err error) bool {
-		for _, b := range bs {
-			if b != nil && b(err) {
-				return true
-			}
-		}
-		return false
 	}
 }

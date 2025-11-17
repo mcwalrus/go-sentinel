@@ -12,7 +12,6 @@ import (
 )
 
 func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
-	t.Parallel()
 
 	t.Run("forked observers record metrics individually", func(t *testing.T) {
 		t.Parallel()
@@ -453,7 +452,6 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 			t.Errorf("child2 failures: expected 1, got %f", got)
 		}
 
-		time.Sleep(10 * time.Millisecond)
 		if got := testutil.ToFloat64(vecObserver.metrics.successesVec.WithLabelValues("api", "production")); got != 1 {
 			t.Errorf("vecMetrics[api,production] successes: expected 1, got %f", got)
 		}
@@ -754,6 +752,313 @@ func TestVecObserver_Collect(t *testing.T) {
 
 		if len(metrics) == 0 {
 			t.Error("Expected to collect at least one metric after task execution")
+		}
+	})
+}
+
+func TestVecObserver_Reset(t *testing.T) {
+	t.Parallel()
+
+	t.Run("child observers continue to work after Reset", func(t *testing.T) {
+		t.Parallel()
+
+		vecObserver := NewVecObserver(
+			[]float64{0.1, 0.5, 1, 2, 5},
+			[]string{"service", "environment"},
+		)
+		registry := prometheus.NewRegistry()
+		vecObserver.MustRegister(registry)
+
+		// Create child observers before recording any metrics
+		child1, err := vecObserver.WithLabels("api", "production")
+		if err != nil {
+			t.Fatalf("Failed to create child observer: %v", err)
+		}
+		child2, err := vecObserver.WithLabels("db", "staging")
+		if err != nil {
+			t.Fatalf("Failed to create child observer: %v", err)
+		}
+
+		// Record some metrics using child observers
+		err = child1.Run(func() error {
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("Expected no error, got %v", err)
+		}
+
+		err = child1.Run(func() error {
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("Expected no error, got %v", err)
+		}
+
+		err = child2.Run(func() error {
+			return errors.New("database error")
+		})
+		if err == nil {
+			t.Fatal("Expected error, got nil")
+		}
+
+		// Verify metrics have values before reset (via Vec)
+		if got := testutil.ToFloat64(vecObserver.metrics.successesVec.WithLabelValues("api", "production")); got != 2 {
+			t.Errorf("Before reset: expected 2 successes for api/production, got %f", got)
+		}
+		if got := testutil.ToFloat64(vecObserver.metrics.failuresVec.WithLabelValues("db", "staging")); got != 1 {
+			t.Errorf("Before reset: expected 1 failure for db/staging, got %f", got)
+		}
+
+		// Reset the VecObserver
+		vecObserver.Reset()
+
+		// Verify Vec metrics are cleared after reset
+		if got := testutil.ToFloat64(vecObserver.metrics.successesVec.WithLabelValues("api", "production")); got != 0 {
+			t.Errorf("After reset: expected 0 successes for api/production via Vec, got %f", got)
+		}
+		if got := testutil.ToFloat64(vecObserver.metrics.failuresVec.WithLabelValues("db", "staging")); got != 0 {
+			t.Errorf("After reset: expected 0 failures for db/staging via Vec, got %f", got)
+		}
+
+		// Use the same child observers to record new metrics - they should still work functionally
+		// Note: Child observers hold references to old metric instances that were removed from the Vec.
+		// They can still record metrics (won't panic), but those metrics won't be visible via Vec queries
+		// until new metric instances are created.
+		err = child1.Run(func() error {
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("After reset: child1.Run() failed with %v - child observer should still work functionally", err)
+		}
+
+		err = child2.Run(func() error {
+			return errors.New("new error")
+		})
+		if err == nil {
+			t.Fatal("After reset: child2.Run() expected error, got nil")
+		}
+
+		// After Reset(), child observers record to old metric instances that are no longer tracked by the Vec.
+		// Querying the Vec creates new instances, so metrics recorded by old child observers won't be visible.
+		// This demonstrates that child observers work functionally but their metrics aren't tracked after Reset().
+		if got := testutil.ToFloat64(vecObserver.metrics.successesVec.WithLabelValues("api", "production")); got != 0 {
+			t.Errorf("After reset and recording: expected 0 successes via Vec (old child observer metrics not tracked), got %f", got)
+		}
+		if got := testutil.ToFloat64(vecObserver.metrics.failuresVec.WithLabelValues("db", "staging")); got != 0 {
+			t.Errorf("After reset and recording: expected 0 failures via Vec (old child observer metrics not tracked), got %f", got)
+		}
+
+		// However, creating new child observers after Reset() will work correctly
+		newChild1, err := vecObserver.WithLabels("api", "production")
+		if err != nil {
+			t.Fatalf("Failed to create new child observer after reset: %v", err)
+		}
+
+		err = newChild1.Run(func() error {
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("New child observer after reset failed: %v", err)
+		}
+
+		// New child observers' metrics are visible via Vec
+		if got := testutil.ToFloat64(vecObserver.metrics.successesVec.WithLabelValues("api", "production")); got != 1 {
+			t.Errorf("After reset with new child observer: expected 1 success via Vec, got %f", got)
+		}
+	})
+
+	t.Run("Reset clears all label combinations", func(t *testing.T) {
+		t.Parallel()
+
+		vecObserver := NewVecObserver(
+			nil,
+			[]string{"service"},
+		)
+		registry := prometheus.NewRegistry()
+		vecObserver.MustRegister(registry)
+
+		// Create multiple child observers with different labels
+		child1, _ := vecObserver.WithLabels("api")
+		child2, _ := vecObserver.WithLabels("db")
+		child3, _ := vecObserver.WithLabels("cache")
+
+		// Record metrics for each
+		_ = child1.Run(func() error { return nil })
+		_ = child1.Run(func() error { return nil })
+		_ = child2.Run(func() error { return errors.New("error") })
+		_ = child3.Run(func() error { return nil })
+
+		// Verify all have values via Vec
+		if got := testutil.ToFloat64(vecObserver.metrics.successesVec.WithLabelValues("api")); got != 2 {
+			t.Errorf("Before reset: api successes expected 2, got %f", got)
+		}
+		if got := testutil.ToFloat64(vecObserver.metrics.failuresVec.WithLabelValues("db")); got != 1 {
+			t.Errorf("Before reset: db failures expected 1, got %f", got)
+		}
+		if got := testutil.ToFloat64(vecObserver.metrics.successesVec.WithLabelValues("cache")); got != 1 {
+			t.Errorf("Before reset: cache successes expected 1, got %f", got)
+		}
+
+		// Reset
+		vecObserver.Reset()
+
+		// Verify all are cleared via Vec
+		if got := testutil.ToFloat64(vecObserver.metrics.successesVec.WithLabelValues("api")); got != 0 {
+			t.Errorf("After reset: api successes expected 0, got %f", got)
+		}
+		if got := testutil.ToFloat64(vecObserver.metrics.failuresVec.WithLabelValues("db")); got != 0 {
+			t.Errorf("After reset: db failures expected 0, got %f", got)
+		}
+		if got := testutil.ToFloat64(vecObserver.metrics.successesVec.WithLabelValues("cache")); got != 0 {
+			t.Errorf("After reset: cache successes expected 0, got %f", got)
+		}
+
+		// Old child observers can still be called but their metrics won't be tracked
+		_ = child1.Run(func() error { return nil })
+		_ = child2.Run(func() error { return nil })
+		_ = child3.Run(func() error { return errors.New("error") })
+
+		// Old child observers' metrics aren't visible via Vec
+		if got := testutil.ToFloat64(vecObserver.metrics.successesVec.WithLabelValues("api")); got != 0 {
+			t.Errorf("After reset: old child observer metrics not tracked, expected 0, got %f", got)
+		}
+
+		// Create new child observers after reset - these will work correctly
+		newChild1, _ := vecObserver.WithLabels("api")
+		newChild2, _ := vecObserver.WithLabels("db")
+		newChild3, _ := vecObserver.WithLabels("cache")
+
+		_ = newChild1.Run(func() error { return nil })
+		_ = newChild2.Run(func() error { return nil })
+		_ = newChild3.Run(func() error { return errors.New("error") })
+
+		// New child observers' metrics are visible via Vec
+		if got := testutil.ToFloat64(vecObserver.metrics.successesVec.WithLabelValues("api")); got != 1 {
+			t.Errorf("After reset with new child observer: api successes expected 1, got %f", got)
+		}
+		if got := testutil.ToFloat64(vecObserver.metrics.successesVec.WithLabelValues("db")); got != 1 {
+			t.Errorf("After reset with new child observer: db successes expected 1, got %f", got)
+		}
+		if got := testutil.ToFloat64(vecObserver.metrics.failuresVec.WithLabelValues("cache")); got != 1 {
+			t.Errorf("After reset with new child observer: cache failures expected 1, got %f", got)
+		}
+	})
+
+	t.Run("Reset clears duration histograms", func(t *testing.T) {
+		t.Parallel()
+
+		vecObserver := NewVecObserver(
+			[]float64{0.01, 0.1, 1, 10},
+			[]string{"service"},
+		)
+		registry := prometheus.NewRegistry()
+		vecObserver.MustRegister(registry)
+
+		child, _ := vecObserver.WithLabels("api")
+
+		// Record a duration
+		_ = child.RunFunc(func(ctx context.Context) error {
+			time.Sleep(50 * time.Millisecond)
+			return nil
+		})
+
+		// Verify histogram has data
+		families, err := registry.Gather()
+		if err != nil {
+			t.Fatalf("Failed to gather metrics: %v", err)
+		}
+
+		var beforeResetCount uint64
+		for _, family := range families {
+			if *family.Name == "sentinel_durations_seconds" {
+				for _, metric := range family.Metric {
+					if len(metric.Label) == 1 && metric.Label[0].GetValue() == "api" && metric.Histogram != nil {
+						beforeResetCount = metric.Histogram.GetSampleCount()
+					}
+				}
+			}
+		}
+
+		if beforeResetCount == 0 {
+			t.Error("Expected histogram to have at least one sample before reset")
+		}
+
+		// Reset
+		vecObserver.Reset()
+
+		// Verify histogram is cleared
+		families, err = registry.Gather()
+		if err != nil {
+			t.Fatalf("Failed to gather metrics: %v", err)
+		}
+
+		var afterResetCount uint64
+		for _, family := range families {
+			if *family.Name == "sentinel_durations_seconds" {
+				for _, metric := range family.Metric {
+					if len(metric.Label) == 1 && metric.Label[0].GetValue() == "api" && metric.Histogram != nil {
+						afterResetCount = metric.Histogram.GetSampleCount()
+					}
+				}
+			}
+		}
+
+		if afterResetCount != 0 {
+			t.Errorf("After reset: expected histogram sample count to be 0, got %d", afterResetCount)
+		}
+
+		// Old child observer can still be called but its metrics won't be tracked
+		_ = child.RunFunc(func(ctx context.Context) error {
+			time.Sleep(30 * time.Millisecond)
+			return nil
+		})
+
+		// Old child observer's metrics aren't visible after reset
+		families, err = registry.Gather()
+		if err != nil {
+			t.Fatalf("Failed to gather metrics: %v", err)
+		}
+
+		var oldChildCount uint64
+		for _, family := range families {
+			if *family.Name == "sentinel_durations_seconds" {
+				for _, metric := range family.Metric {
+					if len(metric.Label) == 1 && metric.Label[0].GetValue() == "api" && metric.Histogram != nil {
+						oldChildCount = metric.Histogram.GetSampleCount()
+					}
+				}
+			}
+		}
+
+		if oldChildCount != 0 {
+			t.Errorf("After reset: old child observer metrics not tracked, expected 0, got %d", oldChildCount)
+		}
+
+		// Create new child observer after reset - this will work correctly
+		newChild, _ := vecObserver.WithLabels("api")
+		_ = newChild.RunFunc(func(ctx context.Context) error {
+			time.Sleep(30 * time.Millisecond)
+			return nil
+		})
+
+		families, err = registry.Gather()
+		if err != nil {
+			t.Fatalf("Failed to gather metrics: %v", err)
+		}
+
+		var newCount uint64
+		for _, family := range families {
+			if *family.Name == "sentinel_durations_seconds" {
+				for _, metric := range family.Metric {
+					if len(metric.Label) == 1 && metric.Label[0].GetValue() == "api" && metric.Histogram != nil {
+						newCount = metric.Histogram.GetSampleCount()
+					}
+				}
+			}
+		}
+
+		if newCount != 1 {
+			t.Errorf("After reset with new child observer: expected histogram sample count to be 1, got %d", newCount)
 		}
 	})
 }

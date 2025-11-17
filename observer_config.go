@@ -9,8 +9,9 @@ import (
 )
 
 type ObserverConfig struct {
-	// Timeout sets a context deadline tasks passed to [Observer.RunFunc].
-	// The Observer records timeout occurrences via metrics when enabled.
+	// Timeout sets a context deadline for functions passed to [Observer.RunFunc].
+	// The observer records timeout occurrences under the "timeouts" metric when enabled.
+	// The timeout is applied per iterative attempt to run the function.
 	Timeout time.Duration
 
 	// MaxRetries specifies the number of retry attempts for tasks on errors. If a task
@@ -19,8 +20,8 @@ type ObserverConfig struct {
 	MaxRetries int
 
 	// RetryStrategy is a handler which returns wait durations between retry attempts.
-	// The first call to the handler will provide retryCount at 0. Subsequent calls will
-	// increment retryCount. By default, no wait strategy is applied.
+	// The first retry attempt will call the handler with retryCount=1. By default,
+	// no wait strategy is applied (immediate retry).
 	RetryStrategy retry.WaitFunc
 
 	// RetryBreaker is a handler that skips following retry attempts for a task when
@@ -34,4 +35,10 @@ type ObserverConfig struct {
 	// to manage or avoid new task executions on shutdown signals, or handling of specific
 	// errors. When nil, all requests and retries are allowed.
 	Control circuit.Control
+
+	// MaxConcurrency limits the number of concurrent task executions. When set to a value
+	// greater than 0, the observer will use a semaphore to limit concurrent executions.
+	// This is useful for rate limiting or preventing resource exhaustion from too many
+	// concurrent operations.
+	MaxConcurrency int
 }

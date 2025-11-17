@@ -118,6 +118,7 @@ const (
 	MetricPanics    = "panics"
 	MetricDurations = "durations"
 	MetricRetries   = "retries"
+	MetricPending   = "pending"
 )
 
 func defaultMetricFilter() map[string]bool {
@@ -130,6 +131,7 @@ func defaultMetricFilter() map[string]bool {
 		MetricPanics:    true,
 		MetricDurations: true,
 		MetricRetries:   true,
+		MetricPending:   true,
 	}
 }
 

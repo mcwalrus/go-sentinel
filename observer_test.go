@@ -89,6 +89,7 @@ func TestObserver_DefaultConfig(t *testing.T) {
 		"sentinel_panics_total",
 		"sentinel_timeouts_total",
 		"sentinel_retries_total",
+		"sentinel_pending_total",
 	}
 
 	families, err := registry.Gather()
@@ -1759,8 +1760,8 @@ func TestHandlerPanicRecovery(t *testing.T) {
 
 		Verify(t, observer, metricsCounts{
 			Successes: 0,
-			Failures:  0, // Task never executed
-			Errors:    0,
+			Failures:  1, // Task never executed
+			Errors:    1, // Control panic error
 			Timeouts:  0,
 			Panics:    0,
 			Retries:   0,
@@ -2044,8 +2045,8 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 
 		Verify(t, observer, metricsCounts{
 			Successes: 0,
-			Failures:  1,
-			Errors:    1,
+			Failures:  1, // Failed to execute task
+			Errors:    1, // Control handler causes error
 			Timeouts:  0,
 			Panics:    0,
 			Retries:   0,
@@ -2349,5 +2350,399 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 			Panics:    0,
 			Retries:   1, // One retry before panic stops further retries
 		})
+	})
+}
+
+func TestObserver_PendingAndInFlightMetrics(t *testing.T) {
+	t.Parallel()
+
+	t.Run("immediate acquisition does not increment pending", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		observer.UseConfig(ObserverConfig{
+			MaxConcurrency: 10, // Large limit, should acquire immediately
+		})
+
+		err := observer.RunFunc(func(ctx context.Context) error {
+			return nil
+		})
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+
+		pending := testutil.ToFloat64(observer.metrics.pending)
+		if pending != 0 {
+			t.Errorf("Expected Pending=0 for immediate acquisition, got %f", pending)
+		}
+
+		inFlight := testutil.ToFloat64(observer.metrics.inFlight)
+		if inFlight != 0 {
+			t.Errorf("Expected InFlight=0 after completion, got %f", inFlight)
+		}
+	})
+
+	t.Run("blocking acquisition increments pending", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		observer.UseConfig(ObserverConfig{
+			MaxConcurrency: 2, // Small limit to force blocking
+		})
+
+		// Start two tasks that will hold the limiter slots
+		blocker1 := make(chan struct{})
+		blocker2 := make(chan struct{})
+		var wg sync.WaitGroup
+
+		wg.Add(2)
+		// Start two tasks that block
+		go func() {
+			defer wg.Done()
+			_ = observer.RunFunc(func(ctx context.Context) error {
+				<-blocker1
+				return nil
+			})
+		}()
+		go func() {
+			defer wg.Done()
+			_ = observer.RunFunc(func(ctx context.Context) error {
+				<-blocker2
+				return nil
+			})
+		}()
+
+		// Wait for both to acquire slots
+		time.Sleep(50 * time.Millisecond)
+
+		// Now start a third task that should be pending
+		pendingDone := make(chan struct{})
+		go func() {
+			defer close(pendingDone)
+			_ = observer.RunFunc(func(ctx context.Context) error {
+				time.Sleep(10 * time.Millisecond)
+				return nil
+			})
+		}()
+
+		// Give it time to start and check pending from outside
+		time.Sleep(30 * time.Millisecond)
+		pendingCount := testutil.ToFloat64(observer.metrics.pending)
+
+		// Verify pending was incremented (should be 1 while waiting)
+		if pendingCount == 0 {
+			t.Errorf("Expected Pending>0 while waiting for limiter slot, got %f", pendingCount)
+		}
+
+		// Release blockers
+		close(blocker1)
+		close(blocker2)
+		wg.Wait()
+		<-pendingDone
+
+		// Verify pending returns to 0
+		finalPending := testutil.ToFloat64(observer.metrics.pending)
+		if finalPending != 0 {
+			t.Errorf("Expected Pending=0 after completion, got %f", finalPending)
+		}
+	})
+
+	t.Run("concurrent tasks with limiter", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		const maxConcurrency = 3
+		const numTasks = 10
+		observer.UseConfig(ObserverConfig{
+			MaxConcurrency: maxConcurrency,
+		})
+
+		startBarrier := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(numTasks)
+
+		// Track metrics during execution
+		var maxPending, maxInFlight float64
+		var mu sync.Mutex
+
+		// Start all tasks concurrently
+		for i := 0; i < numTasks; i++ {
+			go func() {
+				defer wg.Done()
+				_ = observer.RunFunc(func(ctx context.Context) error {
+					<-startBarrier
+					// Check metrics while executing
+					mu.Lock()
+					pending := testutil.ToFloat64(observer.metrics.pending)
+					inFlight := testutil.ToFloat64(observer.metrics.inFlight)
+					if pending > maxPending {
+						maxPending = pending
+					}
+					if inFlight > maxInFlight {
+						maxInFlight = inFlight
+					}
+					mu.Unlock()
+					time.Sleep(20 * time.Millisecond)
+					return nil
+				})
+			}()
+		}
+
+		// Wait for tasks to start and acquire limiter slots
+		time.Sleep(50 * time.Millisecond)
+
+		// Release all tasks
+		close(startBarrier)
+		wg.Wait()
+
+		// Verify final state
+		finalPending := testutil.ToFloat64(observer.metrics.pending)
+		if finalPending != 0 {
+			t.Errorf("Expected Pending=0 after all tasks complete, got %f", finalPending)
+		}
+
+		finalInFlight := testutil.ToFloat64(observer.metrics.inFlight)
+		if finalInFlight != 0 {
+			t.Errorf("Expected InFlight=0 after all tasks complete, got %f", finalInFlight)
+		}
+
+		// Verify we had some pending at some point (since numTasks > maxConcurrency)
+		if maxPending == 0 {
+			t.Error("Expected MaxPending>0 when numTasks > maxConcurrency, got 0")
+		}
+
+		// Verify inFlight never exceeded maxConcurrency
+		if maxInFlight > float64(maxConcurrency) {
+			t.Errorf("Expected MaxInFlight<=%d, got %f", maxConcurrency, maxInFlight)
+		}
+
+		// Verify all tasks succeeded
+		successes := testutil.ToFloat64(observer.metrics.successes)
+		if successes != numTasks {
+			t.Errorf("Expected Successes=%d, got %f", numTasks, successes)
+		}
+	})
+
+	t.Run("pending decreases when slot becomes available", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		observer.UseConfig(ObserverConfig{
+			MaxConcurrency: 1, // Only one slot
+		})
+
+		// First task holds the slot
+		task1Done := make(chan struct{})
+		go func() {
+			defer close(task1Done)
+			_ = observer.RunFunc(func(ctx context.Context) error {
+				time.Sleep(100 * time.Millisecond)
+				return nil
+			})
+		}()
+
+		// Wait for first task to acquire
+		time.Sleep(20 * time.Millisecond)
+
+		// Second task should be pending
+		task2Done := make(chan struct{})
+		go func() {
+			defer close(task2Done)
+			_ = observer.RunFunc(func(ctx context.Context) error {
+				time.Sleep(10 * time.Millisecond)
+				return nil
+			})
+		}()
+
+		// Wait for task2 to start and be pending
+		time.Sleep(30 * time.Millisecond)
+
+		// Check pending from outside while task2 is waiting
+		pendingBefore := testutil.ToFloat64(observer.metrics.pending)
+		if pendingBefore == 0 {
+			t.Errorf("Expected PendingBefore>0 while task2 waits, got %f", pendingBefore)
+		}
+
+		// Wait for task1 to finish, which should allow task2 to acquire
+		<-task1Done
+
+		// Give task2 time to acquire and check pending again
+		time.Sleep(20 * time.Millisecond)
+		pendingAfter := testutil.ToFloat64(observer.metrics.pending)
+
+		// Wait for task2 to complete
+		<-task2Done
+
+		// Verify pending decreased after acquisition
+		if pendingAfter != 0 {
+			t.Errorf("Expected PendingAfter=0 after acquisition, got %f", pendingAfter)
+		}
+
+		// Final pending should be 0
+		finalPending := testutil.ToFloat64(observer.metrics.pending)
+		if finalPending != 0 {
+			t.Errorf("Expected FinalPending=0, got %f", finalPending)
+		}
+	})
+
+	t.Run("inFlight tracks executing tasks correctly", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		observer.UseConfig(ObserverConfig{
+			MaxConcurrency: 5,
+		})
+
+		const numTasks = 8
+		startBarrier := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(numTasks)
+
+		// Start tasks
+		for i := 0; i < numTasks; i++ {
+			go func() {
+				defer wg.Done()
+				_ = observer.RunFunc(func(ctx context.Context) error {
+					<-startBarrier
+					time.Sleep(30 * time.Millisecond)
+					return nil
+				})
+			}()
+		}
+
+		// Wait for tasks to start
+		time.Sleep(50 * time.Millisecond)
+
+		// Check inFlight - should be at most maxConcurrency
+		inFlight := testutil.ToFloat64(observer.metrics.inFlight)
+		if inFlight > 5 {
+			t.Errorf("Expected InFlight<=5 (maxConcurrency), got %f", inFlight)
+		}
+		if inFlight == 0 {
+			t.Error("Expected InFlight>0 when tasks are executing, got 0")
+		}
+
+		// Release and wait for completion
+		close(startBarrier)
+		wg.Wait()
+
+		// Verify inFlight returns to 0
+		finalInFlight := testutil.ToFloat64(observer.metrics.inFlight)
+		if finalInFlight != 0 {
+			t.Errorf("Expected InFlight=0 after completion, got %f", finalInFlight)
+		}
+	})
+
+	t.Run("no limiter means no pending tracking", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		observer.UseConfig(ObserverConfig{
+			MaxConcurrency: 0, // No limiter
+		})
+
+		const numTasks = 10
+		var wg sync.WaitGroup
+		wg.Add(numTasks)
+
+		// Start many concurrent tasks
+		for i := 0; i < numTasks; i++ {
+			go func() {
+				defer wg.Done()
+				_ = observer.RunFunc(func(ctx context.Context) error {
+					time.Sleep(10 * time.Millisecond)
+					return nil
+				})
+			}()
+		}
+
+		wg.Wait()
+
+		// Pending should always be 0 when no limiter
+		pending := testutil.ToFloat64(observer.metrics.pending)
+		if pending != 0 {
+			t.Errorf("Expected Pending=0 when no limiter, got %f", pending)
+		}
+
+		// But inFlight should still track
+		inFlight := testutil.ToFloat64(observer.metrics.inFlight)
+		if inFlight != 0 {
+			t.Errorf("Expected InFlight=0 after completion, got %f", inFlight)
+		}
+	})
+
+	t.Run("pending and inFlight relationship", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		observer.UseConfig(ObserverConfig{
+			MaxConcurrency: 2,
+		})
+
+		// Start 2 tasks that hold slots
+		blocker := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			_ = observer.RunFunc(func(ctx context.Context) error {
+				<-blocker
+				return nil
+			})
+		}()
+		go func() {
+			defer wg.Done()
+			_ = observer.RunFunc(func(ctx context.Context) error {
+				<-blocker
+				return nil
+			})
+		}()
+
+		// Wait for them to acquire
+		time.Sleep(30 * time.Millisecond)
+
+		// Start 3 more tasks (should have 2 inFlight, 3 pending)
+		wg.Add(3)
+		for i := 0; i < 3; i++ {
+			go func() {
+				defer wg.Done()
+				_ = observer.RunFunc(func(ctx context.Context) error {
+					time.Sleep(20 * time.Millisecond)
+					return nil
+				})
+			}()
+		}
+
+		// Wait a bit for them to start
+		time.Sleep(30 * time.Millisecond)
+
+		// Check metrics
+		inFlight := testutil.ToFloat64(observer.metrics.inFlight)
+		pending := testutil.ToFloat64(observer.metrics.pending)
+
+		// Should have 2 inFlight (maxConcurrency)
+		if inFlight != 2 {
+			t.Errorf("Expected InFlight=2 (maxConcurrency), got %f", inFlight)
+		}
+
+		// Should have some pending (at least 3, possibly more if timing)
+		if pending == 0 {
+			t.Error("Expected Pending>0 when tasks are waiting, got 0")
+		}
+
+		// Release blockers
+		close(blocker)
+		wg.Wait()
+
+		// Verify final state
+		finalInFlight := testutil.ToFloat64(observer.metrics.inFlight)
+		finalPending := testutil.ToFloat64(observer.metrics.pending)
+		if finalInFlight != 0 {
+			t.Errorf("Expected FinalInFlight=0, got %f", finalInFlight)
+		}
+		if finalPending != 0 {
+			t.Errorf("Expected FinalPending=0, got %f", finalPending)
+		}
 	})
 }

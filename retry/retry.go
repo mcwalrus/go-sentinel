@@ -8,9 +8,8 @@ import (
 	"time"
 )
 
-// WaitFunc defines a fuction to return wait durations from a specific retry
-// attempt count. Retries start from 1 and increment and should increment with
-// each call.
+// WaitFunc defines a function to return wait durations from a specific retry
+// attempt count. Retries start from 1 and increment with each call.
 type WaitFunc func(retries int) time.Duration
 
 // Immediate returns a WaitFunc that implements immediate retry with no delay.
@@ -21,6 +20,7 @@ func Immediate() WaitFunc {
 }
 
 // Linear returns a WaitFunc that implements linear backoff.
+// Each retry waits for wait * retryCount duration.
 func Linear(wait time.Duration) WaitFunc {
 	return func(retries int) time.Duration {
 		if retries <= 0 {
@@ -31,6 +31,7 @@ func Linear(wait time.Duration) WaitFunc {
 }
 
 // Exponential returns a WaitFunc that implements exponential backoff.
+// Each retry waits for factor * 2^retryCount duration.
 func Exponential(factor time.Duration) WaitFunc {
 	return func(retries int) time.Duration {
 		if retries <= 0 {
@@ -47,8 +48,9 @@ func Exponential(factor time.Duration) WaitFunc {
 //
 //	strategy := retry.UseDelays(
 //		[]time.Duration{
-//			100*time.Millisecond, 150*time.Millisecond, 250*time.Millisecond,
-//			400*time.Millisecond, 500*time.Millisecond, 1000*time.Millisecond,
+//			100*time.Millisecond, 150*time.Millisecond,
+//			250*time.Millisecond, 500*time.Millisecond,
+//			1000*time.Millisecond, 3000*time.Millisecond,
 //		},
 //	)
 func UseDelays(delays []time.Duration) WaitFunc {

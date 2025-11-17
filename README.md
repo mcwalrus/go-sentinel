@@ -15,6 +15,7 @@ Default configurations will automatically export the following Prometheus metric
 | Metric | Type | Description |
 |--------|------|-------------|
 | `sentinel_in_flight` | Gauge | Active number of running tasks |
+| `sentinel_pending_total` | Gauge | Active number of pending tasks |
 | `sentinel_successes_total` | Counter | Total successful tasks |
 | `sentinel_failures_total` | Counter | Total failed tasks |
 | `sentinel_errors_total` | Counter | Total errors over all attempts |
@@ -383,6 +384,50 @@ func main() {
 Prometheus metrics will be exposed with names `myapp_workers_...` on host _localhost:8080/metrics_.
 
 ## Advanced Usage
+
+
+### Concurrency Limits
+
+Manage the observer to control the number of tasks that can executing concurrently:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "sync"
+    "time"
+
+    sentinel "github.com/mcwalrus/go-sentinel"
+)
+
+func main() {
+    // New observer
+    observer := sentinel.NewObserver(nil)
+
+    // Set concurrency limit
+    observer.UseConfig(sentinel.ObserverConfig{
+        MaxConcurrency: 5,
+    })
+    // Run concurrent routines 
+    var wg sync.WaitGroup
+    for i := 0; i < 20; i++ {
+        go func (id int) {
+            defer wg.Done()
+            _ = observer.RunFunc(func(ctx context.Context) error {
+                fmt.Printf("Task %d executing...", id)
+                time.Sleep(100 * time.Millisecond)
+                return nil
+            })
+        }(i)
+    }
+    // Wait for tasks completion
+    wg.Wait()
+}
+```
+
+The metric `sentinel_pending_total` tracks the number of tasks waiting for a concurrency slot. 
 
 ### Labeled Observers
 

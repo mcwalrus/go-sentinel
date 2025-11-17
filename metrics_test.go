@@ -188,6 +188,7 @@ func TestMetricLabels(t *testing.T) {
 				"panics_total":   "panics_total",
 				"timeouts_total": "timeouts_total",
 				"retries_total":  "retries_total",
+				"pending_total":  "pending_total",
 			},
 		},
 		{
@@ -206,6 +207,7 @@ func TestMetricLabels(t *testing.T) {
 				"panics_total":      "panics_total",
 				"timeouts_total":    "timeouts_total",
 				"retries_total":     "retries_total",
+				"pending_total":     "pending_total",
 				"durations_seconds": "durations_seconds",
 			},
 		},
@@ -224,6 +226,7 @@ func TestMetricLabels(t *testing.T) {
 				"panics_total":   "myapp_workers_panics_total",
 				"timeouts_total": "myapp_workers_timeouts_total",
 				"retries_total":  "myapp_workers_retries_total",
+				"pending_total":  "myapp_workers_pending_total",
 			},
 		},
 		{
@@ -242,6 +245,7 @@ func TestMetricLabels(t *testing.T) {
 				"panics_total":      "myapp_workers_panics_total",
 				"timeouts_total":    "myapp_workers_timeouts_total",
 				"retries_total":     "myapp_workers_retries_total",
+				"pending_total":     "myapp_workers_pending_total",
 				"durations_seconds": "myapp_workers_durations_seconds",
 			},
 		},
@@ -260,6 +264,7 @@ func TestMetricLabels(t *testing.T) {
 				"panics_total":   "api_panics_total",
 				"timeouts_total": "api_timeouts_total",
 				"retries_total":  "api_retries_total",
+				"pending_total":  "api_pending_total",
 			},
 		},
 	}
@@ -329,6 +334,7 @@ func TestMetricHelpText(t *testing.T) {
 			"durations_seconds": "Histogram of the observed durations of test operations",
 			"timeouts_total":    "Number of timeout errors from observed test operations",
 			"retries_total":     "Number of retry attempts from observed test operations",
+			"pending_total":     "Number of observed test operations pending concurrency limiter acquisition",
 		}
 
 		t.Log("Checking help text")
@@ -380,6 +386,7 @@ func TestMetricHelpText1(t *testing.T) {
 			"durations_seconds": "Histogram of the observed durations of tasks",
 			"timeouts_total":    "Number of timeout errors from observed tasks",
 			"retries_total":     "Number of retry attempts from observed tasks",
+			"pending_total":     "Number of observed tasks pending concurrency limiter acquisition",
 		}
 
 		t.Log("Checking help text")
