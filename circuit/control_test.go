@@ -8,7 +8,7 @@ func TestOnSignalAndDone(t *testing.T) {
 	t.Parallel()
 
 	sig := make(chan struct{}, 1)
-	bDone := WhenDone(sig)
+	bDone := WhenClosed(sig)
 	if bDone(PhaseNewRequest) {
 		t.Fatalf("should not trip before signal")
 	}

@@ -334,7 +334,7 @@ func TestObserver_ControlWithCircuitImplementations(t *testing.T) {
 
 		// Create a signal channel
 		signalCh := make(chan struct{}, 1)
-		control := circuit.WhenDone(signalCh)
+		control := circuit.WhenClosed(signalCh)
 
 		observer.UseConfig(ObserverConfig{
 			Control: control,
@@ -391,7 +391,7 @@ func TestObserver_ControlWithCircuitImplementations(t *testing.T) {
 
 		// Create a done channel
 		doneCh := make(chan struct{})
-		control := circuit.WhenDone(doneCh)
+		control := circuit.WhenClosed(doneCh)
 
 		observer.UseConfig(ObserverConfig{
 			Control: control,

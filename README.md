@@ -294,48 +294,6 @@ Tasks called with `MaxRetries=3` may be called up to _four times_ total.
 
 Use `sentinel.RetryCount(ctx)` to read the current retry attempt count within an observed function.
 
-### Circuit Breaker Support
-
-Configure circuit breaker to stop retries based on particular errors:
-
-```go
-package main
-
-import (
-    "errors"
-    "log"
-    "time"
-    
-    sentinel "github.com/mcwalrus/go-sentinel"
-    "github.com/mcwalrus/go-sentinel/circuit"
-    "github.com/mcwalrus/go-sentinel/retry"
-)
-
-var ErrCustom = errors.New("unrecoverable error")
-
-func main() {
-    observer := sentinel.NewObserver(nil)
-
-    // Configure circuit breaker
-    observer.UseConfig(sentinel.ObserverConfig{
-        MaxRetries: 5,
-        RetryBreaker: func(err error) bool {
-            return errors.Is(err, ErrCustom)
-        },
-    })
-    
-    // Task returns custom error
-    var count int
-    err := observer.Run(func() error {
-        count++
-        return ErrCustom
-    })
-    if err != nil && count == 1 {
-        log.Printf("Task stopped early: %v\n", err)
-    }
-}
-```
-
 ### Prometheus Integration
 
 Use template for integrating sentinel with a prometheus endpoint:
@@ -385,6 +343,87 @@ Prometheus metrics will be exposed with names `myapp_workers_...` on host _local
 
 ## Advanced Usage
 
+### Circuit Breaker
+
+Configure circuit breaker to stop retries based on particular errors:
+
+```go
+package main
+
+import (
+    "errors"
+    "log"
+    "time"
+    
+    sentinel "github.com/mcwalrus/go-sentinel"
+    "github.com/mcwalrus/go-sentinel/circuit"
+    "github.com/mcwalrus/go-sentinel/retry"
+)
+
+var ErrCustom = errors.New("unrecoverable error")
+
+func main() {
+    // New observer
+    observer := sentinel.NewObserver(nil)
+
+    // Configure circuit breaker
+    observer.UseConfig(sentinel.ObserverConfig{
+        MaxRetries: 5,
+        RetryBreaker: func(err error) bool {
+            return errors.Is(err, ErrCustom)
+        },
+    })
+    
+    // Task runs once on custom error
+    var count int
+    err := observer.Run(func() error {
+        count++
+        return ErrCustom
+    })
+    if err != nil && count == 1 {
+        log.Printf("Task stopped early: %v\n", err)
+    }
+}
+```
+
+### Control Handler
+
+Use a control handler to prevent task execution or retries, useful for graceful shutdown:
+
+```go
+package main
+
+import (
+    "context"
+
+    sentinel "github.com/mcwalrus/go-sentinel"
+    "github.com/mcwalrus/go-sentinel/circuit"
+)
+
+func main() {
+    // New observer
+    observer := sentinel.NewObserver(nil)
+    
+    // Configure control
+    done := make(chan struct{})
+    observer.UseConfig(sentinel.ObserverConfig{
+        Control: circuit.WhenClosed(done),
+    })
+
+    // Control to reject new requests
+    close(done)
+
+    // Expect early termination error
+    var count int
+    err := observer.Run(func() error {
+        count++
+        return nil
+    })
+    if err != nil && count == 0 {
+        log.Printf("error: %T\n", err)
+    }
+}
+```
 
 ### Concurrency Limits
 
@@ -410,19 +449,21 @@ func main() {
     observer.UseConfig(sentinel.ObserverConfig{
         MaxConcurrency: 5,
     })
+
     // Run concurrent routines 
     var wg sync.WaitGroup
     for i := 0; i < 20; i++ {
         go func (id int) {
             defer wg.Done()
-            _ = observer.RunFunc(func(ctx context.Context) error {
+            _ = observer.Run(func() error {
                 fmt.Printf("Task %d executing...", id)
                 time.Sleep(100 * time.Millisecond)
                 return nil
             })
         }(i)
     }
-    // Wait for tasks completion
+
+    // Wait for task completions
     wg.Wait()
 }
 ```

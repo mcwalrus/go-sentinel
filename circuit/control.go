@@ -37,11 +37,11 @@ type Control func(phase ExecutionPhase) (shouldStop bool)
 //
 //	done := make(chan struct{})
 //	observer.UseConfig(sentinel.ObserverConfig{
-//		Control: circuit.WhenDone(done),
+//		Control: circuit.WhenClosed(done),
 //	})
 //	// Later, when shutting down:
 //	close(done) // This will stop all new requests and retries
-func WhenDone(done <-chan struct{}) Control {
+func WhenClosed(done <-chan struct{}) Control {
 	return func(_ ExecutionPhase) bool {
 		select {
 		case <-done:
