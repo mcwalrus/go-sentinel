@@ -14,6 +14,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 
 	"github.com/mcwalrus/go-sentinel/circuit"
+	"github.com/mcwalrus/go-sentinel/retry"
 )
 
 type metricsCounts struct {
@@ -1666,5 +1667,152 @@ func TestObserver_Collect(t *testing.T) {
 				}
 			}
 		}
+	})
+}
+
+func TestHandlerPanicRecovery(t *testing.T) {
+	t.Parallel()
+
+	t.Run("retry strategy panic recovery", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		var i *int // nil pointer that will cause panic when dereferenced
+
+		observer.UseConfig(ObserverConfig{
+			MaxRetries: 1,
+			RetryStrategy: retry.WaitFunc(func(retryCount int) time.Duration {
+				// This will panic due to nil pointer dereference
+				return time.Duration(*i)
+			}),
+		})
+
+		// Should not panic, but should handle gracefully
+		err := observer.Run(func() error {
+			return errors.New("task failed")
+		})
+
+		// Should have attempted retry (with 0 wait time due to panic recovery default)
+		if err == nil {
+			t.Error("Expected error after retries, got nil")
+		}
+
+		Verify(t, observer, metricsCounts{
+			Successes: 0,
+			Failures:  1,
+			Errors:    2, // Initial error + retry error
+			Timeouts:  0,
+			Panics:    0, // Handler panics are recovered, not task panics
+			Retries:   1,
+		})
+	})
+
+	t.Run("retry breaker panic recovery", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		var i *int // nil pointer that will cause panic when dereferenced
+
+		observer.UseConfig(ObserverConfig{
+			MaxRetries: 3,
+			RetryBreaker: circuit.Breaker(func(err error) bool {
+				// This will panic due to nil pointer dereference
+				_ = *i
+				return false
+			}),
+		})
+
+		// Should not panic, but should stop retries due to panic recovery default (true)
+		err := observer.Run(func() error {
+			return errors.New("task failed")
+		})
+
+		// Should have stopped after first attempt due to breaker panic recovery
+		if err == nil {
+			t.Error("Expected error, got nil")
+		}
+
+		Verify(t, observer, metricsCounts{
+			Successes: 0,
+			Failures:  1,
+			Errors:    1, // Only initial error, breaker panic stops retries
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   0, // No retries because breaker panic defaults to stopping
+		})
+	})
+
+	t.Run("request control panic recovery", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		var i *int // nil pointer that will cause panic when dereferenced
+
+		observer.UseConfig(ObserverConfig{
+			Controls: ObserverControls{
+				RequestControl: circuit.Control(func() bool {
+					// This will panic due to nil pointer dereference
+					_ = *i
+					return false
+				}),
+			},
+		})
+
+		// Should not panic, but should stop execution due to panic recovery default (true)
+		err := observer.Run(func() error {
+			return nil
+		})
+
+		// Should return control breaker error due to panic recovery
+		var controlErr *ErrControlBreaker
+		if !errors.As(err, &controlErr) {
+			t.Errorf("Expected ErrControlBreaker, got %v", err)
+		}
+
+		Verify(t, observer, metricsCounts{
+			Successes: 0,
+			Failures:  0, // Task never executed
+			Errors:    0,
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   0,
+		})
+	})
+
+	t.Run("in-flight control panic recovery", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		var i *int // nil pointer that will cause panic when dereferenced
+
+		observer.UseConfig(ObserverConfig{
+			MaxRetries: 2,
+			Controls: ObserverControls{
+				InFlightControl: circuit.Control(func() bool {
+					// This will panic due to nil pointer dereference
+					_ = *i
+					return false
+				}),
+			},
+		})
+
+		// Should not panic, but should stop retries due to panic recovery default (true)
+		err := observer.Run(func() error {
+			return errors.New("task failed")
+		})
+
+		// Should have stopped retries after first attempt
+		if err == nil {
+			t.Error("Expected error, got nil")
+		}
+
+		Verify(t, observer, metricsCounts{
+			Successes: 0,
+			Failures:  1,
+			Errors:    1, // Only initial error, in-flight control panic stops retries
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   0, // No retries because control panic defaults to stopping
+		})
 	})
 }

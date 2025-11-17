@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mcwalrus/go-sentinel/circuit"
+	"github.com/mcwalrus/go-sentinel/retry"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -154,7 +156,7 @@ func (o *Observer) Run(fn func() error) error {
 	}
 
 	if controls.RequestControl != nil {
-		if controls.RequestControl() {
+		if safeRequestControl(controls.RequestControl) {
 			return &ErrControlBreaker{}
 		}
 	}
@@ -202,7 +204,7 @@ func (o *Observer) RunFunc(fn func(ctx context.Context) error) error {
 		fn:  fn,
 	}
 	if controls.RequestControl != nil {
-		if controls.RequestControl() {
+		if safeRequestControl(controls.RequestControl) {
 			return &ErrControlBreaker{}
 		}
 	}
@@ -215,6 +217,66 @@ func (o *Observer) observe(task *implTask) (err error) {
 	o.metrics.inFlight.Inc()
 	defer o.metrics.inFlight.Dec()
 	return o.execute(task)
+}
+
+// safeRetryStrategy calls the retry strategy handler with panic recovery.
+// If the handler panics, it returns 0 (immediate retry) as a safe default.
+func safeRetryStrategy(strategy retry.WaitFunc, retryCount int) (wait time.Duration) {
+	if strategy == nil {
+		return 0
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			wait = 0
+			_ = r
+		}
+	}()
+	return strategy(retryCount)
+}
+
+// safeRetryBreaker calls the retry breaker handler with panic recovery.
+// If the handler panics, it returns true (stop retries) as a safe default.
+func safeRetryBreaker(breaker circuit.Breaker, err error) (shouldStop bool) {
+	if breaker == nil {
+		return false
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			shouldStop = true
+			_ = r
+		}
+	}()
+	return breaker(err)
+}
+
+// safeRequestControl calls the request control handler with panic recovery.
+// If the handler panics, it returns true (stop execution) as a safe default.
+func safeRequestControl(control circuit.Control) (shouldStop bool) {
+	if control == nil {
+		return false
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			shouldStop = true
+			_ = r
+		}
+	}()
+	return control()
+}
+
+// safeInFlightControl calls the in-flight control handler with panic recovery.
+// If the handler panics, it returns true (stop retries) as a safe default.
+func safeInFlightControl(control circuit.Control) (shouldStop bool) {
+	if control == nil {
+		return false
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			shouldStop = true
+			_ = r
+		}
+	}()
+	return control()
 }
 
 // execute is the main entry point for executing a task.
@@ -275,7 +337,7 @@ func (o *Observer) execute(task *implTask) error {
 
 			// Try circuit breaker
 			if task.cfg.RetryBreaker != nil {
-				if task.cfg.RetryBreaker(err) {
+				if safeRetryBreaker(task.cfg.RetryBreaker, err) {
 					o.metrics.failures.Inc()
 					return err
 				}
@@ -283,7 +345,7 @@ func (o *Observer) execute(task *implTask) error {
 			// Try in-flight control
 			o.m.RLock()
 			if o.controls.InFlightControl != nil {
-				if o.controls.InFlightControl() {
+				if safeInFlightControl(o.controls.InFlightControl) {
 					o.m.RUnlock()
 					o.metrics.failures.Inc()
 					return err
@@ -295,7 +357,7 @@ func (o *Observer) execute(task *implTask) error {
 			task.retryCount += 1
 			o.metrics.retries.Inc()
 			if task.cfg.RetryStrategy != nil {
-				wait := task.cfg.RetryStrategy(task.retryCount)
+				wait := safeRetryStrategy(task.cfg.RetryStrategy, task.retryCount)
 				if wait > 0 {
 					time.Sleep(wait)
 				}
