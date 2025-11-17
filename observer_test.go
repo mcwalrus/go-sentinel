@@ -590,6 +590,89 @@ func TestObserve_RetryLogic(t *testing.T) {
 	})
 }
 
+func TestRetryCount(t *testing.T) {
+	t.Parallel()
+
+	t.Run("retry count in context", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		observer.UseConfig(ObserverConfig{
+			Timeout:    10 * time.Millisecond,
+			MaxRetries: 3,
+		})
+
+		var retryCounts []int
+		task := &testTask{
+			fn: func(ctx context.Context) error {
+				retryCount := RetryCount(ctx)
+				retryCounts = append(retryCounts, retryCount)
+				if retryCount < 2 {
+					return errors.New("retry needed")
+				}
+				return nil
+			},
+		}
+
+		err := observer.RunFunc(task.Execute)
+		if err != nil {
+			t.Errorf("Expected no error after successful retry, got %v", err)
+		}
+
+		// Should have 3 attempts: initial (0), first retry (1), second retry (2)
+		if len(retryCounts) != 3 {
+			t.Errorf("Expected 3 attempts, got %d", len(retryCounts))
+		}
+		if retryCounts[0] != 0 {
+			t.Errorf("Expected first attempt retry count to be 0, got %d", retryCounts[0])
+		}
+		if retryCounts[1] != 1 {
+			t.Errorf("Expected second attempt retry count to be 1, got %d", retryCounts[1])
+		}
+		if retryCounts[2] != 2 {
+			t.Errorf("Expected third attempt retry count to be 2, got %d", retryCounts[2])
+		}
+	})
+
+	t.Run("retry count without retries", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		observer.UseConfig(ObserverConfig{
+			Timeout:    10 * time.Millisecond,
+			MaxRetries: 0,
+		})
+
+		var retryCount int
+		task := &testTask{
+			fn: func(ctx context.Context) error {
+				retryCount = RetryCount(ctx)
+				return nil
+			},
+		}
+
+		err := observer.RunFunc(task.Execute)
+		if err != nil {
+			t.Errorf("Expected no error, got %v", err)
+		}
+
+		if retryCount != 0 {
+			t.Errorf("Expected retry count to be 0 for first attempt, got %d", retryCount)
+		}
+	})
+
+	t.Run("retry count with context without value", func(t *testing.T) {
+		t.Parallel()
+
+		// Test RetryCount with a context that doesn't have the retry count value
+		ctx := context.Background()
+		count := RetryCount(ctx)
+		if count != 0 {
+			t.Errorf("Expected RetryCount to return 0 for context without value, got %d", count)
+		}
+	})
+}
+
 func TestObserve_RetryStrategy(t *testing.T) {
 	t.Parallel()
 

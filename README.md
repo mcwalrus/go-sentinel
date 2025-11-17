@@ -281,7 +281,8 @@ func main() {
 
     // Fail every attempt
     err := observer.Run(func() error {
-        return errors.New("task failed")
+        retryCount := sentinel.RetryCount(ctx)
+        return fmt.Errorf("task failed: %d", retryCount)
     })
     
     // Unwrap join errors
@@ -349,9 +350,9 @@ Prometheus metrics will be exposed with names `myapp_workers_...` on host _local
 
 ## Advanced Usage
 
-### Forked Observers
+### Labeled Observers
 
-You can fork observers to provide different behaviour with shared underlying metrics:
+VecObserver enables creating multiple observers that share the same underlying metrics but are differentiated by Prometheus labels:
 
 ```go
 package main
@@ -366,87 +367,41 @@ import (
 )
 
 func main() {
-    // New observer
-    observer := sentinel.NewObserver(nil,
-        sentinel.WithNamespace("myapp"),
-        sentinel.WithSubsystem("processes"),
+    // Create VecObserver with label names
+    vecObserver := sentinel.NewVecObserver(
+        []float64{0.1, 0.5, 1, 2, 5},
+        []string{"service", "pipeline"},
     )
     
-    // Register base observer
+    // Register VecObserver metrics just once
     registry := prometheus.NewRegistry()
-    observer.MustRegister(registry)
+    vecObserver.MustRegister(registry)
 
-    // Fork observer
-    forkedObserver := observer.Fork()
+    // Create observers with different labels
+    mObserver, _ := vecObserver.WithLabels("api", "main")
+    bgObserver, _ := vecObserver.WithLabels("api", "background")
 
-    // Configurations set per observer
-    observer.UseConfig(sentinel.ObserverConfig{
+    // Set observer configurations
+    mObserver.UseConfig(sentinel.ObserverConfig{
         Timeout:    60 * time.Second,
         MaxRetries: 2,
     })
-    forkedObserver.UseConfig(sentinel.ObserverConfig{
+    bgObserver.UseConfig(sentinel.ObserverConfig{
         Timeout:    120 * time.Second,
         MaxRetries: 4,
     })
 
-    // Use observers ...
+    // Use observers
+    _ = prodObserver.Run(func() error {
+        return nil
+    })    
+    _ = stagingObserver.Run(func() error {
+        return nil
+    })
 }
 ```
 
-### Multiple Observers
-
-You can use multiple observers for different types of tasks with separate metrics:
-
-```go
-package main
-
-import (
-    "math/rand"
-    "net/http"
-    "time"
-
-    sentinel "github.com/mcwalrus/go-sentinel"
-    "github.com/mcwalrus/go-sentinel/retry"
-    "github.com/prometheus/client_golang/prometheus"
-    "github.com/prometheus/client_golang/prometheus/promhttp"
-)
-
-func main() {
-    // First observer
-    bgObserver := sentinel.NewObserver(
-        []float64{0.1, 0.5, 1, 2, 5, 10, 30, 60},
-        sentinel.WithNamespace("myapp"),
-        sentinel.WithSubsystem("background"),
-        sentinel.WithDescription("Background processing tasks"),
-    )
-
-    // Second observer
-    criticalObserver := sentinel.NewObserver(
-        []float64{0.01, 0.1, 0.5, 1, 5, 10, 30},
-        sentinel.WithNamespace("myapp"),
-        sentinel.WithSubsystem("critical_jobs"),
-        sentinel.WithDescription("Critical business operations"),
-    )
-
-    // Register observers
-    registry := prometheus.NewRegistry()
-    bgObserver.MustRegister(registry)
-    criticalObserver.MustRegister(registry)
-
-    // Set configurations
-    bgObserver.UseConfig(sentinel.ObserverConfig{
-        Timeout:       30 * time.Second,
-        MaxRetries:    3,
-    })
-    criticalObserver.UseConfig(sentinel.ObserverConfig{
-        Timeout:    5 * time.Second,
-        MaxRetries: 2,
-        RetryStrategy: retry.Exponential(500 * time.Millisecond),
-    })
-
-    // Use observers ...
-}
-```
+Using `VecObserver` instead of creating multiple `Observer`s would be recommended best practise for most cases.
 
 ## Contributing
 

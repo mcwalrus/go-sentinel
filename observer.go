@@ -14,6 +14,30 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// retryCountKey is the context key for storing the retry count.
+type retryCountKey struct{}
+
+// RetryCount returns the current retry count from the context.
+// Returns 0 if the retry count is not set in the context.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(nil)
+//	observer.UseConfig(sentinel.ObserverConfig{
+//		MaxRetries: 3,
+//	})
+//	_ = observer.RunFunc(func(ctx context.Context) error {
+//		retryCount := sentinel.RetryCount(ctx)
+//		log.Printf("Current retry count: %d\n", retryCount)
+//		return nil
+//	})
+func RetryCount(ctx context.Context) int {
+	if count, ok := ctx.Value(retryCountKey{}).(int); ok {
+		return count
+	}
+	return 0
+}
+
 // Observer monitors and measures task executions, collecting Prometheus metrics
 // for successes, failures, timeouts, panics, retries, and observed runtimes.
 // It provides methods to execute tasks with various ObserverConfig options.
@@ -289,6 +313,9 @@ func (o *Observer) execute(task *implTask) error {
 		ctx, cancel = context.WithTimeout(ctx, task.cfg.Timeout)
 		defer cancel()
 	}
+
+	// Add retry count to context
+	ctx = context.WithValue(ctx, retryCountKey{}, task.retryCount)
 
 	// Run task in closure
 	var panicValue any
