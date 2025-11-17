@@ -44,11 +44,11 @@ func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
 			t.Error("Function should not have been executed when Control returns true")
 		}
 
-		// Verify metrics - should have no successes, failures, or errors
+		// Verify metrics - Control preventing execution records error and failure
 		Verify(t, observer, metricsCounts{
 			Successes: 0,
-			Failures:  0,
-			Errors:    0,
+			Failures:  1,
+			Errors:    1,
 			Timeouts:  0,
 			Panics:    0,
 			Retries:   0,
@@ -84,11 +84,11 @@ func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
 			t.Error("Function should not have been executed when Control returns true")
 		}
 
-		// Verify metrics - should have no successes, failures, or errors
+		// Verify metrics - Control preventing execution records error and failure
 		Verify(t, observer, metricsCounts{
 			Successes: 0,
-			Failures:  0,
-			Errors:    0,
+			Failures:  1,
+			Errors:    1,
 			Timeouts:  0,
 			Panics:    0,
 			Retries:   0,
@@ -371,11 +371,11 @@ func TestObserver_ControlWithCircuitImplementations(t *testing.T) {
 			t.Error("Second execution should have been avoided")
 		}
 
-		// Verify metrics - should have 1 success, 0 failures
+		// Verify metrics - should have 1 success, 1 failure, 1 error (from second execution being prevented)
 		Verify(t, observer, metricsCounts{
 			Successes: 1,
-			Failures:  0,
-			Errors:    0,
+			Failures:  1,
+			Errors:    1,
 			Timeouts:  0,
 			Panics:    0,
 			Retries:   0,
@@ -428,11 +428,11 @@ func TestObserver_ControlWithCircuitImplementations(t *testing.T) {
 			t.Error("Second execution should have been avoided")
 		}
 
-		// Verify metrics - should have 1 success, 0 failures
+		// Verify metrics - should have 1 success, 1 failure, 1 error (from second execution being prevented)
 		Verify(t, observer, metricsCounts{
 			Successes: 1,
-			Failures:  0,
-			Errors:    0,
+			Failures:  1,
+			Errors:    1,
 			Timeouts:  0,
 			Panics:    0,
 			Retries:   0,
@@ -524,11 +524,11 @@ func TestObserver_ControlWithTimeout(t *testing.T) {
 			t.Error("Function should not have been executed")
 		}
 
-		// Verify metrics - should have no metrics since execution was avoided
+		// Verify metrics - Control preventing execution records error and failure
 		Verify(t, observer, metricsCounts{
 			Successes: 0,
-			Failures:  0,
-			Errors:    0,
+			Failures:  1,
+			Errors:    1,
 			Timeouts:  0,
 			Panics:    0,
 			Retries:   0,
@@ -604,11 +604,11 @@ func TestObserver_ControlConcurrency(t *testing.T) {
 			t.Errorf("Expected %d total results, got %d", numGoroutines, successCount+controlBreakerCount)
 		}
 
-		// Verify metrics
+		// Verify metrics - Control preventing execution records error and failure for each prevented execution
 		Verify(t, observer, metricsCounts{
 			Successes: float64(successCount),
-			Failures:  0,
-			Errors:    0,
+			Failures:  float64(controlBreakerCount),
+			Errors:    float64(controlBreakerCount),
 			Timeouts:  0,
 			Panics:    0,
 			Retries:   0,

@@ -114,11 +114,12 @@ func TestMetricUpdates(t *testing.T) {
 	// Increment metrics
 	m.successes.Inc()
 	m.errors.Inc()
+	m.errors.Inc()
+
 	m.timeouts.Inc()
 	m.panics.Inc()
 	m.retries.Inc()
 	m.inFlight.Inc()
-	m.inFlight.Dec()
 
 	// Observe metrics
 	m.durations.Observe(0.05)

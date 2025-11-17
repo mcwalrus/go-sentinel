@@ -1957,10 +1957,11 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 			t.Errorf("Expected ErrControlBreaker, got %v", err)
 		}
 
+		// Control panic defaults to stopping execution, which records error and failure
 		Verify(t, observer, metricsCounts{
 			Successes: 0,
-			Failures:  0,
-			Errors:    0,
+			Failures:  1,
+			Errors:    1,
 			Timeouts:  0,
 			Panics:    0,
 			Retries:   0,
@@ -1978,8 +1979,8 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 			MaxRetries: 3,
 			Control: circuit.Control(func(phase circuit.ExecutionPhase) bool {
 				callCount++
-				if callCount == 2 {
-					// Panic on second check (before second retry)
+				if callCount == 3 {
+					// Panic on third check: PhaseNewRequest (callCount=1), PhaseRetry before first retry (callCount=2), PhaseRetry before second retry (callCount=3)
 					_ = *i
 				}
 				return false
@@ -2318,8 +2319,8 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 			MaxRetries: 2,
 			Control: circuit.Control(func(phase circuit.ExecutionPhase) bool {
 				checkCount++
-				if checkCount == 2 {
-					// Panic on second check (before second retry)
+				if checkCount == 3 {
+					// Panic on third check: PhaseNewRequest (checkCount=1), PhaseRetry before first retry (checkCount=2), PhaseRetry before second retry (checkCount=3)
 					_ = *i
 				}
 				return false // Allow retries initially
