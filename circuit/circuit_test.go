@@ -9,8 +9,8 @@ import (
 
 type stubPanicErr struct{ v any }
 
-func (e *stubPanicErr) Error() string       { return "panic occurred" }
-func (e *stubPanicErr) RecoveredPanic() any { return e.v }
+func (e *stubPanicErr) Error() string { return "panic occurred" }
+func (e *stubPanicErr) Value() any    { return e.v }
 
 func TestOnPanic(t *testing.T) {
 	t.Parallel()

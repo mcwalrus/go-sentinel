@@ -9,23 +9,23 @@ func TestOnSignalAndDone(t *testing.T) {
 
 	sig := make(chan struct{}, 1)
 	bDone := OnDone(sig)
-	if bDone() {
+	if bDone(PhaseNewRequest) {
 		t.Fatalf("should not trip before signal")
 	}
 
 	sig <- struct{}{}
-	if !bDone() {
+	if !bDone(PhaseNewRequest) {
 		t.Fatalf("should trip after signal read")
 	}
-	if bDone() {
+	if bDone(PhaseNewRequest) {
 		t.Fatalf("should not trip after signal read")
 	}
 
 	close(sig)
-	if !bDone() {
+	if !bDone(PhaseNewRequest) {
 		t.Fatalf("should trip after chan closed")
 	}
-	if !bDone() {
+	if !bDone(PhaseNewRequest) {
 		t.Fatalf("should not trip after chan closed")
 	}
 }

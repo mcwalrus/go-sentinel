@@ -46,7 +46,7 @@ type Observer struct {
 	cfg           config
 	metrics       metrics
 	runner        ObserverConfig
-	controls      ObserverControls
+	control       circuit.Control
 	labelValues   []string
 	recoverPanics bool
 }
@@ -131,7 +131,7 @@ func (o *Observer) MustRegister(registry prometheus.Registerer) {
 func (o *Observer) UseConfig(config ObserverConfig) {
 	o.m.Lock()
 	o.runner = config
-	o.controls = config.Controls
+	o.control = config.Control
 	o.m.Unlock()
 }
 
@@ -169,7 +169,7 @@ func (o *Observer) Run(fn func() error) error {
 	}
 	o.m.RLock()
 	cfg := o.runner
-	controls := o.controls
+	control := o.control
 	o.m.RUnlock()
 
 	task := &implTask{
@@ -179,8 +179,8 @@ func (o *Observer) Run(fn func() error) error {
 		},
 	}
 
-	if controls.RequestControl != nil {
-		if safeRequestControl(controls.RequestControl) {
+	if control != nil {
+		if safeControl(control, circuit.PhaseNewRequest) {
 			return &ErrControlBreaker{}
 		}
 	}
@@ -220,15 +220,15 @@ func (o *Observer) RunFunc(fn func(ctx context.Context) error) error {
 	}
 	o.m.RLock()
 	cfg := o.runner
-	controls := o.controls
+	control := o.control
 	o.m.RUnlock()
 
 	task := &implTask{
 		cfg: cfg,
 		fn:  fn,
 	}
-	if controls.RequestControl != nil {
-		if safeRequestControl(controls.RequestControl) {
+	if control != nil {
+		if safeControl(control, circuit.PhaseNewRequest) {
 			return &ErrControlBreaker{}
 		}
 	}
@@ -273,9 +273,9 @@ func safeRetryBreaker(breaker circuit.Breaker, err error) (shouldStop bool) {
 	return breaker(err)
 }
 
-// safeRequestControl calls the request control handler with panic recovery.
+// safeControl calls the control handler with panic recovery.
 // If the handler panics, it returns true (stop execution) as a safe default.
-func safeRequestControl(control circuit.Control) (shouldStop bool) {
+func safeControl(control circuit.Control, phase circuit.ExecutionPhase) (shouldStop bool) {
 	if control == nil {
 		return false
 	}
@@ -285,22 +285,7 @@ func safeRequestControl(control circuit.Control) (shouldStop bool) {
 			_ = r
 		}
 	}()
-	return control()
-}
-
-// safeInFlightControl calls the in-flight control handler with panic recovery.
-// If the handler panics, it returns true (stop retries) as a safe default.
-func safeInFlightControl(control circuit.Control) (shouldStop bool) {
-	if control == nil {
-		return false
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			shouldStop = true
-			_ = r
-		}
-	}()
-	return control()
+	return control(phase)
 }
 
 // execute is the main entry point for executing a task.
@@ -327,7 +312,7 @@ func (o *Observer) execute(task *implTask) error {
 			}
 			if r := recover(); r != nil {
 				panicValue = r
-				err = &ErrRecoveredPanic{panic: r}
+				err = newRecoveredPanic(2, r)
 			}
 		}()
 		err = task.fn(ctx)
@@ -369,10 +354,10 @@ func (o *Observer) execute(task *implTask) error {
 					return err
 				}
 			}
-			// Try in-flight control
+			// Try control for retry phase
 			o.m.RLock()
-			if o.controls.InFlightControl != nil {
-				if safeInFlightControl(o.controls.InFlightControl) {
+			if o.control != nil {
+				if safeControl(o.control, circuit.PhaseRetry) {
 					o.m.RUnlock()
 					o.metrics.failures.Inc()
 					return err

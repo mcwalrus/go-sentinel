@@ -33,7 +33,7 @@ func After(d time.Duration) Breaker {
 func OnPanic() Breaker {
 	type panicError interface {
 		error
-		RecoveredPanic() any
+		Value() any
 	}
 	return func(err error) bool {
 		var target panicError

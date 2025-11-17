@@ -23,12 +23,10 @@ func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
 		observer.MustRegister(registry)
 
 		// Control that always returns true (should avoid execution)
-		control := func() bool { return true }
+		control := func(phase circuit.ExecutionPhase) bool { return true }
 
 		observer.UseConfig(ObserverConfig{
-			Controls: ObserverControls{
-				RequestControl: control,
-			},
+			Control: control,
 		})
 
 		// Track if the function was actually called
@@ -65,12 +63,10 @@ func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
 		observer.MustRegister(registry)
 
 		// Control that always returns true (should avoid execution)
-		control := func() bool { return true }
+		control := func(phase circuit.ExecutionPhase) bool { return true }
 
 		observer.UseConfig(ObserverConfig{
-			Controls: ObserverControls{
-				RequestControl: control,
-			},
+			Control: control,
 		})
 
 		// Track if the function was actually called
@@ -107,12 +103,10 @@ func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
 		observer.MustRegister(registry)
 
 		// Control that returns false (should allow execution)
-		control := func() bool { return false }
+		control := func(phase circuit.ExecutionPhase) bool { return false }
 
 		observer.UseConfig(ObserverConfig{
-			Controls: ObserverControls{
-				RequestControl: control,
-			},
+			Control: control,
 		})
 
 		// Track if the function was actually called
@@ -190,17 +184,14 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 
 		// Control that returns true after first attempt (should prevent retries)
 		attemptCount := 0
-		control := func() bool {
+		control := func(phase circuit.ExecutionPhase) bool {
 			attemptCount++
 			return attemptCount > 1 // Allow first attempt, prevent retries
 		}
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 3,
-			Controls: ObserverControls{
-				RequestControl:  control,
-				InFlightControl: control,
-			},
+			Control: control,
 		})
 
 		// Function that always fails
@@ -241,17 +232,14 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 
 		// Control that allows first 2 attempts but prevents the 3rd retry
 		attemptCount := 0
-		control := func() bool {
+		control := func(phase circuit.ExecutionPhase) bool {
 			attemptCount++
 			return attemptCount > 2 // Allow first 2 attempts, prevent 3rd
 		}
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 3,
-			Controls: ObserverControls{
-				RequestControl:  control,
-				InFlightControl: control,
-			},
+			Control: control,
 		})
 
 		// Function that always fails
@@ -291,7 +279,7 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 
 		// Control that prevents execution after first attempt
 		controlAttemptCount := 0
-		control := func() bool {
+		control := func(phase circuit.ExecutionPhase) bool {
 			controlAttemptCount++
 			return controlAttemptCount > 1
 		}
@@ -304,10 +292,7 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 		observer.UseConfig(ObserverConfig{
 			MaxRetries:   3,
 			RetryBreaker: retryBreaker,
-			Controls: ObserverControls{
-				RequestControl:  control,
-				InFlightControl: control,
-			},
+			Control:      control,
 		})
 
 		// Function that always fails
@@ -352,9 +337,7 @@ func TestObserver_ControlWithCircuitImplementations(t *testing.T) {
 		control := circuit.OnDone(signalCh)
 
 		observer.UseConfig(ObserverConfig{
-			Controls: ObserverControls{
-				RequestControl: control,
-			},
+			Control: control,
 		})
 
 		// First execution should succeed (no signal)
@@ -411,9 +394,7 @@ func TestObserver_ControlWithCircuitImplementations(t *testing.T) {
 		control := circuit.OnDone(doneCh)
 
 		observer.UseConfig(ObserverConfig{
-			Controls: ObserverControls{
-				RequestControl: control,
-			},
+			Control: control,
 		})
 
 		// First execution should succeed (channel not closed)
@@ -470,13 +451,11 @@ func TestObserver_ControlWithTimeout(t *testing.T) {
 		observer.MustRegister(registry)
 
 		// Control that allows execution
-		control := func() bool { return false }
+		control := func(phase circuit.ExecutionPhase) bool { return false }
 
 		observer.UseConfig(ObserverConfig{
 			Timeout: 100 * time.Millisecond,
-			Controls: ObserverControls{
-				RequestControl: control,
-			},
+			Control: control,
 		})
 
 		// Function that takes longer than timeout
@@ -518,13 +497,11 @@ func TestObserver_ControlWithTimeout(t *testing.T) {
 		observer.MustRegister(registry)
 
 		// Control that prevents execution
-		control := func() bool { return true }
+		control := func(phase circuit.ExecutionPhase) bool { return true }
 
 		observer.UseConfig(ObserverConfig{
 			Timeout: 100 * time.Millisecond,
-			Controls: ObserverControls{
-				RequestControl: control,
-			},
+			Control: control,
 		})
 
 		// Function that would timeout
@@ -572,7 +549,7 @@ func TestObserver_ControlConcurrency(t *testing.T) {
 		// Control that allows first few executions then prevents further ones
 		var mu sync.Mutex
 		executionCount := 0
-		control := func() bool {
+		control := func(phase circuit.ExecutionPhase) bool {
 			mu.Lock()
 			defer mu.Unlock()
 			executionCount++
@@ -580,9 +557,7 @@ func TestObserver_ControlConcurrency(t *testing.T) {
 		}
 
 		observer.UseConfig(ObserverConfig{
-			Controls: ObserverControls{
-				RequestControl: control,
-			},
+			Control: control,
 		})
 
 		// Run multiple goroutines concurrently
@@ -653,7 +628,7 @@ func TestObserver_ControlWithRetryStrategy(t *testing.T) {
 
 		// Control that allows first attempt but prevents retries
 		attemptCount := 0
-		control := func() bool {
+		control := func(phase circuit.ExecutionPhase) bool {
 			attemptCount++
 			return attemptCount > 1
 		}
@@ -666,10 +641,7 @@ func TestObserver_ControlWithRetryStrategy(t *testing.T) {
 		observer.UseConfig(ObserverConfig{
 			MaxRetries:    2,
 			RetryStrategy: retryStrategy,
-			Controls: ObserverControls{
-				RequestControl:  control,
-				InFlightControl: control,
-			},
+			Control:       control,
 		})
 
 		// Function that always fails

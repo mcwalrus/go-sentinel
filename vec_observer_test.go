@@ -98,10 +98,10 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 			t.Fatalf("Failed to create forked observer: %v", err)
 		}
 
-		child1.Run(func() error { return nil })
-		child1.Run(func() error { return nil })
-		child2.Run(func() error { return errors.New("db error") })
-		child3.Run(func() error { return nil })
+		_ = child1.Run(func() error { return nil })
+		_ = child1.Run(func() error { return nil })
+		_ = child2.Run(func() error { return errors.New("db error") })
+		_ = child3.Run(func() error { return nil })
 
 		if got := testutil.ToFloat64(vecObserver.metrics.successesVec.WithLabelValues("api", "main")); got != 2 {
 			t.Errorf("vecMetrics[api,success] successes: expected 2, got %f", got)
@@ -148,9 +148,9 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 			t.Fatalf("Failed to create forked observer: %v", err)
 		}
 
-		child1.Run(func() error { return nil })
-		child2.Run(func() error { return nil })
-		child3.Run(func() error { return errors.New("users") })
+		_ = child1.Run(func() error { return nil })
+		_ = child2.Run(func() error { return nil })
+		_ = child3.Run(func() error { return errors.New("users") })
 
 		if got := testutil.ToFloat64(vecObserver.metrics.successesVec.WithLabelValues("api")); got != 2 {
 			t.Errorf("vecMetrics[api] successes: expected 2, got %f", got)
@@ -379,12 +379,12 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 			t.Fatalf("Failed to create forked observer: %v", err)
 		}
 
-		child1.RunFunc(func(ctx context.Context) error {
+		_ = child1.RunFunc(func(ctx context.Context) error {
 			time.Sleep(50 * time.Millisecond)
 			return nil
 		})
 
-		child2.RunFunc(func(ctx context.Context) error {
+		_ = child2.RunFunc(func(ctx context.Context) error {
 			time.Sleep(150 * time.Millisecond)
 			return nil
 		})
@@ -443,8 +443,8 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 			t.Fatalf("Failed to create forked observer: %v", err)
 		}
 
-		child1.Run(func() error { return nil })
-		child2.Run(func() error { return errors.New("users") })
+		_ = child1.Run(func() error { return nil })
+		_ = child2.Run(func() error { return errors.New("users") })
 
 		if got := testutil.ToFloat64(child1.metrics.successes); got != 1 {
 			t.Errorf("child1 successes: expected 1, got %f", got)
@@ -478,7 +478,7 @@ func TestVecObserver_Describe(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create forked observer: %v", err)
 		}
-		child.Run(func() error {
+		_ = child.Run(func() error {
 			return nil
 		})
 
@@ -541,7 +541,7 @@ func TestVecObserver_Describe(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create forked observer: %v", err)
 		}
-		child.Run(func() error {
+		_ = child.Run(func() error {
 			return nil
 		})
 
@@ -609,7 +609,7 @@ func TestVecObserver_Collect(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create forked observer: %v", err)
 		}
-		child.Run(func() error {
+		_ = child.Run(func() error {
 			return nil
 		})
 
@@ -673,7 +673,7 @@ func TestVecObserver_Collect(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create forked observer: %v", err)
 		}
-		child.Run(func() error {
+		_ = child.Run(func() error {
 			return nil
 		})
 
@@ -734,7 +734,7 @@ func TestVecObserver_Collect(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create forked observer: %v", err)
 		}
-		child.Run(func() error {
+		_ = child.Run(func() error {
 			return nil
 		})
 

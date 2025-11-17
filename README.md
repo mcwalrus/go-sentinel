@@ -6,19 +6,11 @@
 [![GoDoc](https://godoc.org/github.com/mcwalrus/go-sentinel?status.svg)](https://godoc.org/github.com/mcwalrus/go-sentinel)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Sentinel wraps Go functions to automatically expose Prometheus metrics while supporting reliability patterns as a single library. Sentinel provides observers which wrap function execution to: recover panic occurrences as errors, provide configurable retry handling, and to track performance metrics - including successes, errors, panics, retries, timeouts, and execution durations. Sentinel exposes a lightweight interface designed to integrate immediately with your applications.
-
-## Features
-
-- 📊 **Prometheus Metrics**: Exposes pre-defined Prometheus metrics
-- 🧩 **Composable Pattern**: Describe observers with Prometheus metric labels
-- 🔁 **Retry Logic**: Configure retry handling with circuit breaker support
-- 🧯 **Panic Tollerant**: Safe panic recovery or standard panic propagation
-- ⏱️ **Context Timeout**: Handles deadlines for observed functions over retries
+Sentinel wraps Go functions to automatically expose Prometheus metrics with reliability handlers. For functions, the library will: recover panic occurances as errors, configure retry handling, and track metrics of successes, errors, panics, retries, timeouts, and execution durations. Sentinel is designed to be minimal, robust, and immediately integrate with existing applications.
 
 ## Metrics
 
-Standard configurations will automatically export the following Prometheus metrics:
+Default configurations will automatically export the following Prometheus metrics:
 
 | Metric | Type | Description |
 |--------|------|-------------|
@@ -171,8 +163,8 @@ func main() {
     }
 
     // Recover panic value
-    if rPanic, ok := sentinel.IsPanicError(err); ok {
-        log.Printf("panic value: %v\n", rPanic)
+    if r, ok := sentinel.IsPanicError(err); ok {
+        log.Printf("panic value: %v\n", r)
     }
 }
 ```
@@ -280,8 +272,7 @@ func main() {
 
     // Fail every attempt
     err := observer.Run(func() error {
-        retryCount := sentinel.RetryCount(ctx)
-        return fmt.Errorf("task failed: %d", retryCount)
+        return errors.New("task failed")
     })
     
     // Unwrap join errors
@@ -298,7 +289,51 @@ func main() {
 }
 ```
 
-Tasks called with `MaxRetries=3` may be called up to _four times_ total. Use `sentinel.RetryCount(ctx)` to read the current retry attempt count within an observed function.
+Tasks called with `MaxRetries=3` may be called up to _four times_ total. 
+
+Use `sentinel.RetryCount(ctx)` to read the current retry attempt count within an observed function.
+
+### Circuit Breaker Support
+
+Configure circuit breaker to stop retries based on particular errors:
+
+```go
+package main
+
+import (
+    "errors"
+    "log"
+    "time"
+    
+    sentinel "github.com/mcwalrus/go-sentinel"
+    "github.com/mcwalrus/go-sentinel/circuit"
+    "github.com/mcwalrus/go-sentinel/retry"
+)
+
+var ErrCustom = errors.New("unrecoverable error")
+
+func main() {
+    observer := sentinel.NewObserver(nil)
+
+    // Configure circuit breaker
+    observer.UseConfig(sentinel.ObserverConfig{
+        MaxRetries: 5,
+        RetryBreaker: func(err error) bool {
+            return errors.Is(err, ErrCustom)
+        },
+    })
+    
+    // Task returns custom error
+    var count int
+    err := observer.Run(func() error {
+        count++
+        return ErrCustom
+    })
+    if err != nil && count == 1 {
+        log.Printf("Task stopped early: %v\n", err)
+    }
+}
+```
 
 ### Prometheus Integration
 

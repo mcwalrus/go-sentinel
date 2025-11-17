@@ -1237,7 +1237,7 @@ func TestShortOnPanicRetryBreaker(t *testing.T) {
 			t.Errorf("Expected panic error, got nil")
 		}
 
-		var panicErr *ErrRecoveredPanic
+		var panicErr RecoveredPanic
 		if !errors.As(err, &panicErr) {
 			t.Errorf("Expected ErrRecoveredPanic, got %v", err)
 		}
@@ -1277,9 +1277,9 @@ func TestShortOnPanicRetryBreaker(t *testing.T) {
 			t.Errorf("Expected panic error, got nil")
 		}
 
-		var panicErr *ErrRecoveredPanic
+		var panicErr RecoveredPanic
 		if !errors.As(err, &panicErr) {
-			t.Errorf("Expected ErrRecoveredPanic, got %v", err)
+			t.Errorf("Expected RecoveredPanic, got %v", err)
 		}
 
 		if task.attemptCount != 3 {
@@ -1378,7 +1378,7 @@ func TestRetryBreaker_EdgeCases(t *testing.T) {
 			Timeout:    time.Second,
 			MaxRetries: 2,
 			RetryBreaker: func(err error) bool {
-				return errors.Is(err, &ErrRecoveredPanic{})
+				return errors.Is(err, RecoveredPanic{})
 			},
 		})
 
@@ -1623,7 +1623,7 @@ func TestObserver_Collect(t *testing.T) {
 		t.Parallel()
 
 		observer := NewObserver([]float64{0.1, 0.5, 1, 2, 5})
-		observer.Run(func() error {
+		_ = observer.Run(func() error {
 			return nil
 		})
 
@@ -1648,7 +1648,7 @@ func TestObserver_Collect(t *testing.T) {
 		// Verify that success metric has a value > 0
 		for metricStr, metric := range metrics {
 			if strings.Contains(metricStr, "sentinel_success_total") {
-				var m prometheus.Metric = metric
+				m := metric
 				dtoMetric := &dto.Metric{}
 				if err := m.Write(dtoMetric); err == nil {
 					if dtoMetric.Counter != nil && dtoMetric.Counter.Value != nil && *dtoMetric.Counter.Value > 0 {
@@ -1739,13 +1739,11 @@ func TestHandlerPanicRecovery(t *testing.T) {
 		var i *int // nil pointer that will cause panic when dereferenced
 
 		observer.UseConfig(ObserverConfig{
-			Controls: ObserverControls{
-				RequestControl: circuit.Control(func() bool {
-					// This will panic due to nil pointer dereference
-					_ = *i
-					return false
-				}),
-			},
+			Control: circuit.Control(func(phase circuit.ExecutionPhase) bool {
+				// This will panic due to nil pointer dereference
+				_ = *i
+				return false
+			}),
 		})
 
 		// Should not panic, but should stop execution due to panic recovery default (true)
@@ -1777,13 +1775,11 @@ func TestHandlerPanicRecovery(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 2,
-			Controls: ObserverControls{
-				InFlightControl: circuit.Control(func() bool {
-					// This will panic due to nil pointer dereference
-					_ = *i
-					return false
-				}),
-			},
+			Control: circuit.Control(func(phase circuit.ExecutionPhase) bool {
+				// This will panic due to nil pointer dereference
+				_ = *i
+				return false
+			}),
 		})
 
 		// Should not panic, but should stop retries due to panic recovery default (true)
@@ -1938,13 +1934,11 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 		taskExecuted := false
 
 		observer.UseConfig(ObserverConfig{
-			Controls: ObserverControls{
-				RequestControl: circuit.Control(func() bool {
-					// Panic before returning
-					_ = *i
-					return false
-				}),
-			},
+			Control: circuit.Control(func(phase circuit.ExecutionPhase) bool {
+				// Panic before returning
+				_ = *i
+				return false
+			}),
 		})
 
 		err := observer.Run(func() error {
@@ -1981,16 +1975,14 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 3,
-			Controls: ObserverControls{
-				InFlightControl: circuit.Control(func() bool {
-					callCount++
-					if callCount == 2 {
-						// Panic on second check (before second retry)
-						_ = *i
-					}
-					return false
-				}),
-			},
+			Control: circuit.Control(func(phase circuit.ExecutionPhase) bool {
+				callCount++
+				if callCount == 2 {
+					// Panic on second check (before second retry)
+					_ = *i
+				}
+				return false
+			}),
 		})
 
 		attempts := 0
@@ -2144,12 +2136,10 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 		taskExecuted := false
 
 		observer.UseConfig(ObserverConfig{
-			Controls: ObserverControls{
-				RequestControl: circuit.Control(func() bool {
-					_ = *i // Panic
-					return false
-				}),
-			},
+			Control: circuit.Control(func(phase circuit.ExecutionPhase) bool {
+				_ = *i // Panic
+				return false
+			}),
 		})
 
 		err := observer.RunFunc(func(ctx context.Context) error {
@@ -2325,16 +2315,14 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 2,
-			Controls: ObserverControls{
-				InFlightControl: circuit.Control(func() bool {
-					checkCount++
-					if checkCount == 2 {
-						// Panic on second check (before second retry)
-						_ = *i
-					}
-					return false // Allow retries initially
-				}),
-			},
+			Control: circuit.Control(func(phase circuit.ExecutionPhase) bool {
+				checkCount++
+				if checkCount == 2 {
+					// Panic on second check (before second retry)
+					_ = *i
+				}
+				return false // Allow retries initially
+			}),
 		})
 
 		attempts := 0

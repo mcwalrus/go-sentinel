@@ -1,6 +1,10 @@
 package sentinel
 
-import "errors"
+import (
+	"errors"
+	"runtime"
+	"runtime/debug"
+)
 
 // ErrControlBreaker is the error returned when a control breaker is triggered.
 type ErrControlBreaker struct{}
@@ -11,16 +15,41 @@ func (e *ErrControlBreaker) Error() string {
 
 // ErrRecoveredPanic is the error returned when a panic occurs and is recovered
 // by the [Observer]. The panic value can be retrieved from the error directly.
-type ErrRecoveredPanic struct {
-	panic any
+type RecoveredPanic struct {
+	panic   any
+	callers []uintptr
+	stack   []byte
 }
 
-func (e *ErrRecoveredPanic) Error() string {
+func newRecoveredPanic(skip int, value any) RecoveredPanic {
+	pcs := make([]uintptr, 64)
+	n := runtime.Callers(skip+2, pcs)
+	for n == len(pcs) {
+		pcs = make([]uintptr, len(pcs)*2)
+		n = runtime.Callers(skip+2, pcs)
+	}
+	pcs = pcs[:n]
+
+	return RecoveredPanic{
+		panic:   value,
+		callers: pcs,
+		stack:   debug.Stack(),
+	}
+}
+
+func (e RecoveredPanic) Error() string {
 	return "observer: panic recovery made during function execution"
 }
 
-// RecoveredPanic returns the original panic value that was recovered.
-func (e *ErrRecoveredPanic) RecoveredPanic() any {
+func (e RecoveredPanic) Callers() []uintptr {
+	return e.callers
+}
+
+func (e RecoveredPanic) Stack() []byte {
+	return e.stack
+}
+
+func (e RecoveredPanic) Value() any {
 	return e.panic
 }
 
@@ -39,7 +68,7 @@ func (e *ErrRecoveredPanic) RecoveredPanic() any {
 //		// Handle regular error
 //	}
 func IsPanicError(err error) (any, bool) {
-	var target = &ErrRecoveredPanic{}
+	var target = RecoveredPanic{}
 	ok := errors.As(err, &target)
 	return target.panic, ok
 }
