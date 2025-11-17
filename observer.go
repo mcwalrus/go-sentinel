@@ -21,7 +21,9 @@ type Observer struct {
 	metrics       metrics
 	runner        ObserverConfig
 	controls      ObserverControls
+	labelValues   []string
 	recoverPanics bool
+	parent        *VecObserver
 }
 
 // NewObserver configures a new Observer with duration buckets and optional configuration.

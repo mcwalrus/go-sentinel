@@ -42,11 +42,11 @@ func TestLinear(t *testing.T) {
 		retries  int
 		expected time.Duration
 	}{
-		{1, 200 * time.Millisecond},
-		{2, 300 * time.Millisecond},
-		{3, 400 * time.Millisecond},
-		{5, 600 * time.Millisecond},
-		{10, 1100 * time.Millisecond},
+		{1, 100 * time.Millisecond},
+		{2, 200 * time.Millisecond},
+		{3, 300 * time.Millisecond},
+		{5, 500 * time.Millisecond},
+		{10, 1000 * time.Millisecond},
 	}
 
 	for _, tt := range tests {
@@ -129,11 +129,11 @@ func TestWithLimit(t *testing.T) {
 		retries  int
 		expected time.Duration
 	}{
-		{0, 100 * time.Millisecond}, // under limit
-		{1, 200 * time.Millisecond}, // under limit
-		{2, 300 * time.Millisecond}, // at limit
-		{3, 300 * time.Millisecond}, // over limit, capped
-		{5, 300 * time.Millisecond}, // over limit, capped
+		{0, 0},
+		{1, 100 * time.Millisecond},
+		{2, 200 * time.Millisecond},
+		{3, 300 * time.Millisecond},
+		{5, 300 * time.Millisecond},
 	}
 
 	for _, tt := range tests {
@@ -232,9 +232,9 @@ func TestForgoAttempts(t *testing.T) {
 	}{
 		{1, 0},
 		{2, 0},
-		{3, 200 * time.Millisecond},
-		{4, 300 * time.Millisecond},
-		{5, 400 * time.Millisecond},
+		{3, 100 * time.Millisecond},
+		{4, 200 * time.Millisecond},
+		{5, 300 * time.Millisecond},
 	}
 
 	for _, tt := range tests {

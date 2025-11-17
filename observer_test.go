@@ -3,6 +3,7 @@ package sentinel
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 
 	"github.com/mcwalrus/go-sentinel/circuit"
 )
@@ -1407,5 +1409,262 @@ func TestRetryBreaker_EdgeCases(t *testing.T) {
 			Panics:    1,
 			Retries:   2,
 		})
+	})
+}
+
+func TestObserver_Describe(t *testing.T) {
+	t.Parallel()
+
+	t.Run("describes all metrics without duration buckets", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		ch := make(chan *prometheus.Desc, 10)
+
+		go func() {
+			observer.Describe(ch)
+			close(ch)
+		}()
+
+		descs := make(map[string]*prometheus.Desc)
+		for desc := range ch {
+			if desc != nil {
+				descs[desc.String()] = desc
+			}
+		}
+
+		expectedMetrics := []string{
+			"sentinel_in_flight",
+			"sentinel_success_total",
+			"sentinel_failures_total",
+			"sentinel_errors_total",
+			"sentinel_panics_total",
+			"sentinel_timeouts_total",
+			"sentinel_retries_total",
+		}
+
+		if len(descs) < len(expectedMetrics) {
+			t.Errorf("Expected at least %d metric descriptions, got %d", len(expectedMetrics), len(descs))
+		}
+
+		// Verify that descriptions contain expected metric names
+		descStrings := make([]string, 0, len(descs))
+		for descStr := range descs {
+			descStrings = append(descStrings, descStr)
+		}
+
+		for _, expectedName := range expectedMetrics {
+			found := false
+			for _, descStr := range descStrings {
+				if strings.Contains(descStr, expectedName) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("Expected to find description for metric %s", expectedName)
+			}
+		}
+	})
+
+	t.Run("describes all metrics with duration buckets", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver([]float64{0.1, 0.5, 1, 2, 5})
+		ch := make(chan *prometheus.Desc, 10)
+
+		go func() {
+			observer.Describe(ch)
+			close(ch)
+		}()
+
+		descs := make(map[string]*prometheus.Desc)
+		for desc := range ch {
+			if desc != nil {
+				descs[desc.String()] = desc
+			}
+		}
+
+		expectedMetrics := []string{
+			"sentinel_in_flight",
+			"sentinel_success_total",
+			"sentinel_failures_total",
+			"sentinel_errors_total",
+			"sentinel_panics_total",
+			"sentinel_timeouts_total",
+			"sentinel_retries_total",
+			"sentinel_durations_seconds",
+		}
+
+		if len(descs) < len(expectedMetrics) {
+			t.Errorf("Expected at least %d metric descriptions, got %d", len(expectedMetrics), len(descs))
+		}
+
+		descStrings := make([]string, 0, len(descs))
+		for descStr := range descs {
+			descStrings = append(descStrings, descStr)
+		}
+
+		for _, expectedName := range expectedMetrics {
+			found := false
+			for _, descStr := range descStrings {
+				if strings.Contains(descStr, expectedName) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("Expected to find description for metric %s", expectedName)
+			}
+		}
+	})
+}
+
+func TestObserver_Collect(t *testing.T) {
+	t.Parallel()
+
+	t.Run("collects all metrics without duration buckets", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		ch := make(chan prometheus.Metric, 10)
+
+		go func() {
+			observer.Collect(ch)
+			close(ch)
+		}()
+
+		metrics := make(map[string]prometheus.Metric)
+		for metric := range ch {
+			if metric != nil {
+				desc := metric.Desc()
+				metrics[desc.String()] = metric
+			}
+		}
+
+		expectedMetrics := []string{
+			"sentinel_in_flight",
+			"sentinel_success_total",
+			"sentinel_failures_total",
+			"sentinel_errors_total",
+			"sentinel_panics_total",
+			"sentinel_timeouts_total",
+			"sentinel_retries_total",
+		}
+
+		if len(metrics) < len(expectedMetrics) {
+			t.Errorf("Expected at least %d metrics, got %d", len(expectedMetrics), len(metrics))
+		}
+
+		metricStrings := make([]string, 0, len(metrics))
+		for metricStr := range metrics {
+			metricStrings = append(metricStrings, metricStr)
+		}
+
+		for _, expectedName := range expectedMetrics {
+			found := false
+			for _, metricStr := range metricStrings {
+				if strings.Contains(metricStr, expectedName) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("Expected to find metric %s", expectedName)
+			}
+		}
+	})
+
+	t.Run("collects all metrics with duration buckets", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver([]float64{0.1, 0.5, 1, 2, 5})
+		ch := make(chan prometheus.Metric, 10)
+
+		go func() {
+			observer.Collect(ch)
+			close(ch)
+		}()
+
+		metrics := make(map[string]prometheus.Metric)
+		for metric := range ch {
+			if metric != nil {
+				desc := metric.Desc()
+				metrics[desc.String()] = metric
+			}
+		}
+
+		expectedMetrics := []string{
+			"sentinel_in_flight",
+			"sentinel_success_total",
+			"sentinel_failures_total",
+			"sentinel_errors_total",
+			"sentinel_panics_total",
+			"sentinel_timeouts_total",
+			"sentinel_retries_total",
+			"sentinel_durations_seconds",
+		}
+
+		if len(metrics) < len(expectedMetrics) {
+			t.Errorf("Expected at least %d metrics, got %d", len(expectedMetrics), len(metrics))
+		}
+
+		metricStrings := make([]string, 0, len(metrics))
+		for metricStr := range metrics {
+			metricStrings = append(metricStrings, metricStr)
+		}
+
+		for _, expectedName := range expectedMetrics {
+			found := false
+			for _, metricStr := range metricStrings {
+				if strings.Contains(metricStr, expectedName) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("Expected to find metric %s", expectedName)
+			}
+		}
+	})
+
+	t.Run("collects metrics after task execution", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver([]float64{0.1, 0.5, 1, 2, 5})
+		observer.Run(func() error {
+			return nil
+		})
+
+		ch := make(chan prometheus.Metric, 10)
+		go func() {
+			observer.Collect(ch)
+			close(ch)
+		}()
+
+		metrics := make(map[string]prometheus.Metric)
+		for metric := range ch {
+			if metric != nil {
+				desc := metric.Desc()
+				metrics[desc.String()] = metric
+			}
+		}
+
+		if len(metrics) == 0 {
+			t.Error("Expected to collect at least one metric after task execution")
+		}
+
+		// Verify that success metric has a value > 0
+		for metricStr, metric := range metrics {
+			if strings.Contains(metricStr, "sentinel_success_total") {
+				var m prometheus.Metric = metric
+				dtoMetric := &dto.Metric{}
+				if err := m.Write(dtoMetric); err == nil {
+					if dtoMetric.Counter != nil && dtoMetric.Counter.Value != nil && *dtoMetric.Counter.Value > 0 {
+						return // Found success metric with value > 0
+					}
+				}
+			}
+		}
 	})
 }
