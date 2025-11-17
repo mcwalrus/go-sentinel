@@ -1156,99 +1156,6 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 			t.Errorf("Expected panic error, got %v", err)
 		}
 	})
-
-	// t.Run("with panic recovery from forked inherited observer", func(t *testing.T) {
-	// 	t.Parallel()
-
-	// 	observer := NewObserver(nil)
-	// 	observer.DisablePanicRecovery(true)
-	// 	forkedObserver := observer.Fork()
-
-	// 	fn := func(ctx context.Context) error {
-	// 		panic("test panic")
-	// 	}
-
-	// 	defer func() {
-	// 		if r := recover(); r == nil {
-	// 			t.Error("Expected panic to propagate when DisablePanicRecovery(true)")
-	// 		} else {
-	// 			Verify(t, observer, metricsCounts{
-	// 				Successes: 0,
-	// 				Failures:  1,
-	// 				Errors:    1,
-	// 				Timeouts:  0,
-	// 				Panics:    1,
-	// 				Retries:   0,
-	// 			})
-	// 		}
-	// 	}()
-
-	// 	err := forkedObserver.RunFunc(fn)
-	// 	if _, ok := IsPanicError(err); !ok {
-	// 		t.Errorf("Expected panic error, got nil")
-	// 	}
-	// })
-
-	// t.Run("with panic recovery from forked inherited observer maintained", func(t *testing.T) {
-	// 	t.Parallel()
-
-	// 	observer := NewObserver(nil)
-	// 	observer.DisablePanicRecovery(true)
-	// 	forkedObserver := observer.Fork()
-	// 	observer.DisablePanicRecovery(false)
-
-	// 	fn := func(ctx context.Context) error {
-	// 		panic("test panic")
-	// 	}
-
-	// 	// closure to catch panic
-	// 	func() {
-	// 		t.Log("Forked observer maintains panic recovery disabled")
-	// 		defer func() {
-	// 			if r := recover(); r == nil {
-	// 				t.Error("Expected panic to propagate when DisablePanicRecovery(true)")
-	// 			} else {
-	// 				Verify(t, observer, metricsCounts{
-	// 					Successes: 0,
-	// 					Failures:  1,
-	// 					Errors:    1,
-	// 					Timeouts:  0,
-	// 					Panics:    1,
-	// 					Retries:   0,
-	// 				})
-	// 			}
-	// 		}()
-
-	// 		err := forkedObserver.RunFunc(fn)
-	// 		if _, ok := IsPanicError(err); !ok {
-	// 			t.Errorf("Expected panic error, got nil")
-	// 		}
-	// 	}()
-
-	// 	// closure to catch panic
-	// 	func() {
-	// 		t.Log("Base observer has panic recovery enabled")
-	// 		defer func() {
-	// 			if r := recover(); r != nil {
-	// 				t.Error("Expected panic to not propagate when DisablePanicRecovery(false)")
-	// 			}
-	// 		}()
-
-	// 		err := observer.RunFunc(fn)
-	// 		if _, ok := IsPanicError(err); !ok {
-	// 			t.Errorf("Expected panic error, got nil")
-	// 		}
-
-	// 		Verify(t, observer, metricsCounts{
-	// 			Successes: 0,
-	// 			Failures:  2,
-	// 			Errors:    2,
-	// 			Timeouts:  0,
-	// 			Panics:    2,
-	// 			Retries:   0,
-	// 		})
-	// 	}()
-	// })
 }
 
 // failingTask is a test implementation of the Task interface.
@@ -1896,6 +1803,563 @@ func TestHandlerPanicRecovery(t *testing.T) {
 			Timeouts:  0,
 			Panics:    0,
 			Retries:   0, // No retries because control panic defaults to stopping
+		})
+	})
+}
+
+// TestHandlerPanicRecovery_Comprehensive provides comprehensive test cases
+// to validate panic recovery behavior for all handler types.
+func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
+	t.Parallel()
+
+	t.Run("retry strategy panic on first retry attempt", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		var i *int
+
+		observer.UseConfig(ObserverConfig{
+			MaxRetries: 2,
+			RetryStrategy: retry.WaitFunc(func(retryCount int) time.Duration {
+				if retryCount == 1 {
+					// Panic on first retry attempt
+					return time.Duration(*i)
+				}
+				return 100 * time.Millisecond
+			}),
+		})
+
+		attempts := 0
+		err := observer.Run(func() error {
+			attempts++
+			if attempts < 3 {
+				return errors.New("task failed")
+			}
+			return nil
+		})
+
+		// Should succeed after retries (panic recovery defaults to 0 wait)
+		if err != nil {
+			t.Errorf("Expected success after retries, got %v", err)
+		}
+
+		if attempts != 3 {
+			t.Errorf("Expected 3 attempts, got %d", attempts)
+		}
+
+		Verify(t, observer, metricsCounts{
+			Successes: 1,
+			Failures:  0,
+			Errors:    2,
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   2,
+		})
+	})
+
+	t.Run("retry strategy panic on all retry attempts", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		var i *int
+
+		observer.UseConfig(ObserverConfig{
+			MaxRetries: 2,
+			RetryStrategy: retry.WaitFunc(func(retryCount int) time.Duration {
+				// Always panic
+				return time.Duration(*i)
+			}),
+		})
+
+		attempts := 0
+		err := observer.Run(func() error {
+			attempts++
+			return errors.New("task failed")
+		})
+
+		// Should fail after all retries exhausted
+		if err == nil {
+			t.Error("Expected error after retries exhausted, got nil")
+		}
+
+		if attempts != 3 {
+			t.Errorf("Expected 3 attempts (initial + 2 retries), got %d", attempts)
+		}
+
+		Verify(t, observer, metricsCounts{
+			Successes: 0,
+			Failures:  1,
+			Errors:    3,
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   2,
+		})
+	})
+
+	t.Run("retry breaker panic with different error types", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		var i *int
+
+		observer.UseConfig(ObserverConfig{
+			MaxRetries: 3,
+			RetryBreaker: circuit.Breaker(func(err error) bool {
+				// Panic when checking error
+				_ = *i
+				return false
+			}),
+		})
+
+		err := observer.Run(func() error {
+			return errors.New("task failed")
+		})
+
+		// Should stop after first attempt due to breaker panic
+		if err == nil {
+			t.Error("Expected error, got nil")
+		}
+
+		Verify(t, observer, metricsCounts{
+			Successes: 0,
+			Failures:  1,
+			Errors:    1,
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   0,
+		})
+	})
+
+	t.Run("request control panic prevents task execution", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		var i *int
+		taskExecuted := false
+
+		observer.UseConfig(ObserverConfig{
+			Controls: ObserverControls{
+				RequestControl: circuit.Control(func() bool {
+					// Panic before returning
+					_ = *i
+					return false
+				}),
+			},
+		})
+
+		err := observer.Run(func() error {
+			taskExecuted = true
+			return nil
+		})
+
+		// Task should not execute due to control panic (defaults to true = stop)
+		if taskExecuted {
+			t.Error("Task should not have executed due to control panic")
+		}
+
+		var controlErr *ErrControlBreaker
+		if !errors.As(err, &controlErr) {
+			t.Errorf("Expected ErrControlBreaker, got %v", err)
+		}
+
+		Verify(t, observer, metricsCounts{
+			Successes: 0,
+			Failures:  0,
+			Errors:    0,
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   0,
+		})
+	})
+
+	t.Run("in-flight control panic on second retry attempt", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		var i *int
+		callCount := 0
+
+		observer.UseConfig(ObserverConfig{
+			MaxRetries: 3,
+			Controls: ObserverControls{
+				InFlightControl: circuit.Control(func() bool {
+					callCount++
+					if callCount == 2 {
+						// Panic on second check (before second retry)
+						_ = *i
+					}
+					return false
+				}),
+			},
+		})
+
+		attempts := 0
+		err := observer.Run(func() error {
+			attempts++
+			return errors.New("task failed")
+		})
+
+		// Should stop after first retry due to control panic on second check
+		if err == nil {
+			t.Error("Expected error, got nil")
+		}
+
+		if attempts != 2 {
+			t.Errorf("Expected 2 attempts (initial + 1 retry), got %d", attempts)
+		}
+
+		Verify(t, observer, metricsCounts{
+			Successes: 0,
+			Failures:  1,
+			Errors:    2,
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   1,
+		})
+	})
+
+	t.Run("multiple handlers with panics - retry strategy and breaker", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		var i *int
+
+		observer.UseConfig(ObserverConfig{
+			MaxRetries: 2,
+			RetryStrategy: retry.WaitFunc(func(retryCount int) time.Duration {
+				return time.Duration(*i) // Panic
+			}),
+			RetryBreaker: circuit.Breaker(func(err error) bool {
+				_ = *i // Panic
+				return false
+			}),
+		})
+
+		attempts := 0
+		err := observer.Run(func() error {
+			attempts++
+			return errors.New("task failed")
+		})
+
+		// Breaker panic should stop retries first (checked before strategy)
+		if err == nil {
+			t.Error("Expected error, got nil")
+		}
+
+		if attempts != 1 {
+			t.Errorf("Expected 1 attempt (breaker panic stops retries), got %d", attempts)
+		}
+
+		Verify(t, observer, metricsCounts{
+			Successes: 0,
+			Failures:  1,
+			Errors:    1,
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   0,
+		})
+	})
+
+	t.Run("handler panic does not affect successful task", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		var i *int
+
+		observer.UseConfig(ObserverConfig{
+			MaxRetries: 2,
+			RetryStrategy: retry.WaitFunc(func(retryCount int) time.Duration {
+				return time.Duration(*i) // Panic, but task succeeds so never called
+			}),
+		})
+
+		err := observer.Run(func() error {
+			return nil // Success on first attempt
+		})
+
+		// Should succeed without issues
+		if err != nil {
+			t.Errorf("Expected no error, got %v", err)
+		}
+
+		Verify(t, observer, metricsCounts{
+			Successes: 1,
+			Failures:  0,
+			Errors:    0,
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   0,
+		})
+	})
+
+	t.Run("retry strategy panic with successful retry", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		var i *int
+
+		observer.UseConfig(ObserverConfig{
+			MaxRetries: 2,
+			RetryStrategy: retry.WaitFunc(func(retryCount int) time.Duration {
+				if retryCount == 1 {
+					return time.Duration(*i) // Panic on first retry
+				}
+				return 10 * time.Millisecond
+			}),
+		})
+
+		attempts := 0
+		err := observer.Run(func() error {
+			attempts++
+			if attempts == 1 {
+				return errors.New("task failed")
+			}
+			return nil // Success on retry
+		})
+
+		// Should succeed after retry (panic recovery allows retry with 0 wait)
+		if err != nil {
+			t.Errorf("Expected success after retry, got %v", err)
+		}
+
+		if attempts != 2 {
+			t.Errorf("Expected 2 attempts, got %d", attempts)
+		}
+
+		Verify(t, observer, metricsCounts{
+			Successes: 1,
+			Failures:  0,
+			Errors:    1,
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   1,
+		})
+	})
+
+	t.Run("request control panic in RunFunc", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		var i *int
+		taskExecuted := false
+
+		observer.UseConfig(ObserverConfig{
+			Controls: ObserverControls{
+				RequestControl: circuit.Control(func() bool {
+					_ = *i // Panic
+					return false
+				}),
+			},
+		})
+
+		err := observer.RunFunc(func(ctx context.Context) error {
+			taskExecuted = true
+			return nil
+		})
+
+		// Task should not execute
+		if taskExecuted {
+			t.Error("Task should not have executed due to control panic")
+		}
+
+		var controlErr *ErrControlBreaker
+		if !errors.As(err, &controlErr) {
+			t.Errorf("Expected ErrControlBreaker, got %v", err)
+		}
+	})
+
+	t.Run("handler panics do not propagate to caller", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		var i *int
+
+		observer.UseConfig(ObserverConfig{
+			MaxRetries: 1,
+			RetryStrategy: retry.WaitFunc(func(retryCount int) time.Duration {
+				return time.Duration(*i) // Panic
+			}),
+		})
+
+		// Should not panic - recovery should handle it
+		panicked := false
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					panicked = true
+				}
+			}()
+			_ = observer.Run(func() error {
+				return errors.New("task failed")
+			})
+		}()
+
+		if panicked {
+			t.Error("Handler panic should not propagate to caller")
+		}
+	})
+
+	t.Run("retry breaker panic with nil error", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		var i *int
+
+		observer.UseConfig(ObserverConfig{
+			MaxRetries: 2,
+			RetryBreaker: circuit.Breaker(func(err error) bool {
+				// Panic even with nil error (shouldn't happen but test edge case)
+				_ = *i
+				return false
+			}),
+		})
+
+		// Task succeeds, breaker shouldn't be called, but if it is, panic recovery handles it
+		err := observer.Run(func() error {
+			return nil
+		})
+
+		if err != nil {
+			t.Errorf("Expected no error, got %v", err)
+		}
+
+		Verify(t, observer, metricsCounts{
+			Successes: 1,
+			Failures:  0,
+			Errors:    0,
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   0,
+		})
+	})
+
+	t.Run("concurrent execution with handler panics", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		var i *int
+
+		observer.UseConfig(ObserverConfig{
+			MaxRetries: 1,
+			RetryStrategy: retry.WaitFunc(func(retryCount int) time.Duration {
+				return time.Duration(*i) // Panic
+			}),
+		})
+
+		var wg sync.WaitGroup
+		taskErrors := make([]error, 10)
+
+		// Run 10 concurrent tasks
+		for j := 0; j < 10; j++ {
+			wg.Add(1)
+			go func(idx int) {
+				defer wg.Done()
+				taskErrors[idx] = observer.Run(func() error {
+					return errors.New("task failed")
+				})
+			}(j)
+		}
+
+		wg.Wait()
+
+		// All should complete without panicking
+		for idx, err := range taskErrors {
+			if err == nil {
+				t.Errorf("Goroutine %d: Expected error, got nil", idx)
+			}
+		}
+
+		// Verify metrics
+		Verify(t, observer, metricsCounts{
+			Successes: 0,
+			Failures:  10,
+			Errors:    20, // 10 initial + 10 retries
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   10,
+		})
+	})
+
+	t.Run("retry strategy panic with exponential backoff wrapper", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		var i *int
+
+		// Wrap exponential backoff with a panicking function
+		observer.UseConfig(ObserverConfig{
+			MaxRetries: 2,
+			RetryStrategy: retry.WaitFunc(func(retryCount int) time.Duration {
+				if retryCount == 1 {
+					return time.Duration(*i) // Panic
+				}
+				return retry.Exponential(10 * time.Millisecond)(retryCount)
+			}),
+		})
+
+		attempts := 0
+		err := observer.Run(func() error {
+			attempts++
+			if attempts < 3 {
+				return errors.New("task failed")
+			}
+			return nil
+		})
+
+		// Should succeed after retries
+		if err != nil {
+			t.Errorf("Expected success, got %v", err)
+		}
+
+		if attempts != 3 {
+			t.Errorf("Expected 3 attempts, got %d", attempts)
+		}
+	})
+
+	t.Run("in-flight control panic after successful retry check", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		var i *int
+		checkCount := 0
+
+		observer.UseConfig(ObserverConfig{
+			MaxRetries: 2,
+			Controls: ObserverControls{
+				InFlightControl: circuit.Control(func() bool {
+					checkCount++
+					if checkCount == 2 {
+						// Panic on second check (before second retry)
+						_ = *i
+					}
+					return false // Allow retries initially
+				}),
+			},
+		})
+
+		attempts := 0
+		err := observer.Run(func() error {
+			attempts++
+			return errors.New("task failed")
+		})
+
+		// Should stop after first retry attempt due to panic on second check
+		// Control is checked: before first retry (checkCount=1, no panic), before second retry (checkCount=2, panic)
+		if err == nil {
+			t.Error("Expected error, got nil")
+		}
+
+		if attempts != 2 {
+			t.Errorf("Expected 2 attempts (initial + 1 retry), got %d", attempts)
+		}
+
+		Verify(t, observer, metricsCounts{
+			Successes: 0,
+			Failures:  1,
+			Errors:    2, // Initial error + first retry error
+			Timeouts:  0,
+			Panics:    0,
+			Retries:   1, // One retry before panic stops further retries
 		})
 	})
 }
