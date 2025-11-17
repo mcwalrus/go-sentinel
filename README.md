@@ -6,16 +6,15 @@
 [![GoDoc](https://godoc.org/github.com/mcwalrus/go-sentinel?status.svg)](https://godoc.org/github.com/mcwalrus/go-sentinel)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Sentinel provides retry handling and performance metrics for your functions in Go applications. In long-running production services, it’s important to consider how panics are handled in routines. Sentinel offers an observer that wraps functions to recover panics as errors, define retry behavior, and track metrics - including successes, errors, panics, retries, timeouts, and execution durations. Sentinel exposes a lightweight interface designed to integrate immediately with your applications.
-
+Sentinel wraps Go functions to automatically expose Prometheus metrics while supporting reliability patterns as a single library. Sentinel provides observers which wrap function execution to: recover panic occurrences as errors, provide configurable retry handling, and to track performance metrics - including successes, errors, panics, retries, timeouts, and execution durations. Sentinel exposes a lightweight interface designed to integrate immediately with your applications.
 
 ## Features
 
-- 📊 **Prometheus Metrics**: Observe tasks through pre-defined metrics
-- 🧩 **Composable Pattern**: Multiple observers can be employed at once
-- 🔁 **Retry Logic**: Enables retry strategies with circuit breaking support
-- 🧯 **Panic Recovery**: Safe panic recovery or standard panic propagation
-- ⏱️ **Context Timeout**: Timeout support for handling task deadlines
+- 📊 **Prometheus Metrics**: Exposes pre-defined Prometheus metrics
+- 🧩 **Composable Pattern**: Describe observers with Prometheus metric labels
+- 🔁 **Retry Logic**: Configure retry handling with circuit breaker support
+- 🧯 **Panic Tollerant**: Safe panic recovery or standard panic propagation
+- ⏱️ **Context Timeout**: Handles deadlines for observed functions over retries
 
 ## Metrics
 
@@ -299,7 +298,7 @@ func main() {
 }
 ```
 
-Tasks called with `MaxRetries=3` may be called up to _four times_ total.
+Tasks called with `MaxRetries=3` may be called up to _four times_ total. Use `sentinel.RetryCount(ctx)` to read the current retry attempt count within an observed function.
 
 ### Prometheus Integration
 
