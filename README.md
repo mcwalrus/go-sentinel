@@ -12,17 +12,19 @@ Sentinel wraps Go functions to automatically expose Prometheus metrics with reli
 
 Default configurations will automatically export the following Prometheus metrics:
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `sentinel_in_flight` | Gauge | Active number of running tasks |
-| `sentinel_pending_total` | Gauge | Active number of pending tasks |
-| `sentinel_successes_total` | Counter | Total successful tasks |
-| `sentinel_failures_total` | Counter | Total failed tasks |
-| `sentinel_errors_total` | Counter | Total errors over all attempts |
-| `sentinel_panics_total` | Counter | Total panic occurrences |
-| `sentinel_durations_seconds` | Histogram | Task execution durations in buckets |
-| `sentinel_timeouts_total` | Counter | Total errors based on timeouts |
-| `sentinel_retries_total` | Counter | Total retry attempts for tasks |
+| Metric | Type | Description | Effective When |
+|--------|------|-------------|----------------|
+| `sentinel_in_flight` | Gauge | Active number of running tasks | - |
+| `sentinel_successes_total` | Counter | Total successful tasks | - |
+| `sentinel_failures_total` | Counter | Total failed tasks | - |
+| `sentinel_errors_total` | Counter | Total errors over all attempts | - |
+| `sentinel_panics_total` | Counter | Total panic occurrences | - |
+| `sentinel_timeouts_total` | Counter | Total errors based on timeouts | - |
+| `sentinel_durations_seconds` | Histogram | Task execution durations in buckets | durationBuckets is set |
+| `sentinel_pending_total` | Gauge | Active number of pending tasks | MaxConcurrency > 0 |
+| `sentinel_retries_total` | Counter | Total retry attempts for tasks | MaxRetries > 0 |
+
+Note, `-` reflects that configured metrics are always applicable.
 
 ## Installation
 
