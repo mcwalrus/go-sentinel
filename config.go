@@ -29,6 +29,10 @@ type config struct {
 
 	// ErrorLabeler maps errors to prometheus label sets for WithErrorLabels() support.
 	ErrorLabeler func(err error) prometheus.Labels
+
+	// maxConcurrency limits the number of goroutines in the async worker pool.
+	// Zero means unlimited.
+	maxConcurrency int
 }
 
 // setupConfig sets up the configuration
