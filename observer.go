@@ -247,6 +247,79 @@ func (o *Observer) RunFunc(fn func(ctx context.Context) error) error {
 	return o.observe(limiter, control, task)
 }
 
+// Submit enqueues fn in the Observer's worker pool for async execution.
+// All metrics (in_flight, success/error counters, durations) are recorded
+// when fn executes. The method returns immediately without waiting for fn
+// to complete. Panics in fn are captured by the pool and surface via Wait().
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(nil)
+//	observer.Submit(func() error {
+//		return doWork()
+//	})
+//	observer.Wait()
+func (o *Observer) Submit(fn func() error) {
+	if o == nil {
+		panic("observer: not configured")
+	}
+	o.m.RLock()
+	cfg := o.runner
+	control := o.control
+	limiter := o.limiter
+	o.m.RUnlock()
+
+	task := &implTask{
+		cfg: cfg,
+		fn: func(_ context.Context) error {
+			return fn()
+		},
+	}
+
+	o.pool.Go(func() {
+		_ = o.observe(limiter, control, task)
+	})
+}
+
+// SubmitFunc enqueues fn in the Observer's worker pool for async execution.
+// fn receives a context with a timeout applied if WithTimeout was configured.
+// All metrics (in_flight, success/error counters, durations) are recorded
+// when fn executes. The method returns immediately without waiting for fn
+// to complete. Panics in fn are captured by the pool and surface via Wait().
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(nil)
+//	observer.UseConfig(sentinel.ObserverConfig{Timeout: 5 * time.Second})
+//	observer.SubmitFunc(func(ctx context.Context) error {
+//		select {
+//		case <-ctx.Done():
+//			return ctx.Err()
+//		default:
+//			return doWork()
+//		}
+//	})
+//	observer.Wait()
+func (o *Observer) SubmitFunc(fn func(ctx context.Context) error) {
+	if o == nil {
+		panic("observer: not configured")
+	}
+	o.m.RLock()
+	cfg := o.runner
+	control := o.control
+	limiter := o.limiter
+	o.m.RUnlock()
+
+	task := &implTask{
+		cfg: cfg,
+		fn:  fn,
+	}
+
+	o.pool.Go(func() {
+		_ = o.observe(limiter, control, task)
+	})
+}
+
 // observe is the main entry point for observing a task.
 // It acquires the limiter slot if set and checks control for new request phase
 // before executing the task. If the control returns true, it returns an error.
