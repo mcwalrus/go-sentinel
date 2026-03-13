@@ -10,6 +10,25 @@ type config struct {
 	buckets      []float64
 	constLabels  prometheus.Labels
 	metricFilter map[string]bool
+
+	// Per-metric enable flags for the composable metrics builder API.
+	// Zero value (false) means disabled; opt-in by default.
+	enableInFlight  bool
+	enableSuccess   bool
+	enableErrors    bool
+	enableFailures  bool
+	enablePanics    bool
+	enableRetries   bool
+	enableTimeouts  bool
+	enableDurations bool
+	enablePending   bool
+
+	// DurationBuckets holds histogram bucket boundaries for duration metrics.
+	// Replaces the durationBuckets constructor parameter in the composable API.
+	DurationBuckets []float64
+
+	// ErrorLabeler maps errors to prometheus label sets for WithErrorLabels() support.
+	ErrorLabeler func(err error) prometheus.Labels
 }
 
 // setupConfig sets up the configuration
