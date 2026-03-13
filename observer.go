@@ -12,6 +12,7 @@ import (
 	"github.com/mcwalrus/go-sentinel/circuit"
 	"github.com/mcwalrus/go-sentinel/retry"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sourcegraph/conc/pool"
 )
 
 // retryCountKey is the context key for storing the retry count.
@@ -48,6 +49,7 @@ type Observer struct {
 	runner        ObserverConfig
 	control       circuit.Control
 	limiter       limiter
+	pool          *pool.Pool
 	labelValues   []string
 	recoverPanics bool
 }
@@ -72,10 +74,15 @@ type Observer struct {
 //	)
 func NewObserver(durationBuckets []float64, opts ...ObserverOption) *Observer {
 	cfg := setupConfig(durationBuckets, opts...)
+	p := pool.New()
+	if cfg.maxConcurrency > 0 {
+		p = p.WithMaxGoroutines(cfg.maxConcurrency)
+	}
 	return &Observer{
 		m:             &sync.RWMutex{},
 		cfg:           cfg,
 		metrics:       newMetrics(cfg),
+		pool:          p,
 		recoverPanics: true,
 	}
 }
