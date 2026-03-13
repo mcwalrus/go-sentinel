@@ -3,10 +3,17 @@
 package retry
 
 import (
+	"context"
 	"crypto/rand"
 	"math/big"
 	"time"
 )
+
+// Retrier abstracts retry behavior. Implement this interface to provide custom
+// retry strategies including backoff, jitter, or circuit-breaking.
+type Retrier interface {
+	Do(ctx context.Context, fn func() error) error
+}
 
 // WaitFunc defines a function to return wait durations from a specific retry
 // attempt count. Retries start from 1 and increment with each call.
