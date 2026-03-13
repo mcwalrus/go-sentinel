@@ -761,7 +761,7 @@ func TestObserver_ErrorLabelerPanicRecovery(t *testing.T) {
 	t.Run("panicking ErrorLabeler does not crash; errors_total still increments", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil, WithErrorLabels(func(err error) prometheus.Labels {
+		observer := NewObserver(nil, WithErrorLabels(func(_ error) prometheus.Labels {
 			panic("labeler panic")
 		}))
 		registry := prometheus.NewRegistry()
@@ -789,7 +789,7 @@ func TestObserver_ErrorLabelerPanicRecovery(t *testing.T) {
 	t.Run("non-panicking ErrorLabeler does not increment panics_total", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil, WithErrorLabels(func(err error) prometheus.Labels {
+		observer := NewObserver(nil, WithErrorLabels(func(_ error) prometheus.Labels {
 			return prometheus.Labels{}
 		}))
 		registry := prometheus.NewRegistry()
