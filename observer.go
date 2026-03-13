@@ -81,13 +81,17 @@ func NewObserver(durationBuckets []float64, opts ...ObserverOption) *Observer {
 	if cfg.maxConcurrency > 0 {
 		p = p.WithMaxGoroutines(cfg.maxConcurrency)
 	}
-	return &Observer{
+	obs := &Observer{
 		m:             &sync.RWMutex{},
 		cfg:           cfg,
 		metrics:       newMetrics(cfg),
 		pool:          p,
 		recoverPanics: true,
 	}
+	if cfg.control != nil {
+		obs.control = cfg.control
+	}
+	return obs
 }
 
 // NewObserverDefault creates an Observer with in-flight, success, and error metrics enabled.
