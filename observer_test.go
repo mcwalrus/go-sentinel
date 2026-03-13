@@ -3070,3 +3070,71 @@ func TestObserver_SubmitQueueDepth(t *testing.T) {
 		}
 	})
 }
+
+func TestWait(t *testing.T) {
+	t.Run("returns nil when no tasks submitted", func(t *testing.T) {
+		observer := NewObserver(nil)
+		if err := observer.Wait(); err != nil {
+			t.Errorf("Expected nil, got %v", err)
+		}
+	})
+
+	t.Run("returns nil when all tasks succeed", func(t *testing.T) {
+		observer := NewObserver(nil)
+		for i := 0; i < 3; i++ {
+			observer.Submit(func() error { return nil })
+		}
+		if err := observer.Wait(); err != nil {
+			t.Errorf("Expected nil, got %v", err)
+		}
+	})
+
+	t.Run("returns error when a task fails", func(t *testing.T) {
+		observer := NewObserver(nil)
+		for i := 0; i < 2; i++ {
+			observer.Submit(func() error { return nil })
+		}
+		observer.Submit(func() error { return errors.New("task failed") })
+		if err := observer.Wait(); err == nil {
+			t.Error("Expected non-nil error, got nil")
+		}
+	})
+
+	t.Run("returns error wrapping panic value", func(t *testing.T) {
+		observer := NewObserver(nil)
+		observer.Submit(func() error {
+			panic("test panic")
+		})
+		err := observer.Wait()
+		if err == nil {
+			t.Fatal("Expected non-nil error from panicking task, got nil")
+		}
+		if _, ok := IsPanicError(err); !ok {
+			t.Errorf("Expected RecoveredPanic error, got %T: %v", err, err)
+		}
+	})
+
+	t.Run("pool is reusable after Wait returns", func(t *testing.T) {
+		observer := NewObserver(nil)
+		var count atomic.Int64
+
+		observer.Submit(func() error { count.Add(1); return nil })
+		if err := observer.Wait(); err != nil {
+			t.Fatalf("First Wait() returned error: %v", err)
+		}
+		if got := count.Load(); got != 1 {
+			t.Errorf("Expected 1 task after first Wait, got %d", got)
+		}
+
+		// Second batch
+		for i := 0; i < 3; i++ {
+			observer.Submit(func() error { count.Add(1); return nil })
+		}
+		if err := observer.Wait(); err != nil {
+			t.Fatalf("Second Wait() returned error: %v", err)
+		}
+		if got := count.Load(); got != 4 {
+			t.Errorf("Expected 4 total tasks after second Wait, got %d", got)
+		}
+	})
+}
