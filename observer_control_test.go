@@ -755,6 +755,97 @@ func TestObserver_ControlPanicRecovery(t *testing.T) {
 	})
 }
 
+func TestObserver_WithControlOption(t *testing.T) {
+	t.Parallel()
+
+	t.Run("WithControl(WhenClosed) stops Run after done is closed", func(t *testing.T) {
+		t.Parallel()
+
+		done := make(chan struct{})
+		observer := NewObserver(nil, WithControl(circuit.WhenClosed(done)))
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
+
+		// Before closing: task should run normally
+		executed := false
+		err := observer.Run(func() error {
+			executed = true
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("Expected no error before close, got: %v", err)
+		}
+		if !executed {
+			t.Error("Expected task to execute before done is closed")
+		}
+
+		// Close the done channel
+		close(done)
+
+		// After closing: Run should return ErrControlBreaker
+		executed = false
+		err = observer.Run(func() error {
+			executed = true
+			return nil
+		})
+		if !errors.Is(err, &ErrControlBreaker{}) {
+			t.Errorf("Expected ErrControlBreaker after close, got: %v", err)
+		}
+		if executed {
+			t.Error("Expected task NOT to execute after done is closed")
+		}
+	})
+
+	t.Run("NewObserver without WithControl runs normally", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
+
+		executed := false
+		err := observer.Run(func() error {
+			executed = true
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("Expected no error, got: %v", err)
+		}
+		if !executed {
+			t.Error("Expected task to execute")
+		}
+	})
+
+	t.Run("WithControl stops retries on PhaseRetry", func(t *testing.T) {
+		t.Parallel()
+
+		// Control that stops only on PhaseRetry
+		observer := NewObserver(nil, WithControl(func(phase circuit.ExecutionPhase) bool {
+			return phase == circuit.PhaseRetry
+		}))
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
+
+		callCount := 0
+		task := implTask{
+			cfg: ObserverConfig{MaxRetries: 3},
+			fn: func(_ context.Context) error {
+				callCount++
+				return errors.New("fail")
+			},
+		}
+		err := observer.observe(observer.limiter, observer.control, &task)
+
+		if err == nil {
+			t.Error("Expected error from failing task")
+		}
+		// Should execute once (PhaseNewRequest allowed) then stop on first PhaseRetry
+		if callCount != 1 {
+			t.Errorf("Expected 1 execution (no retries), got %d", callCount)
+		}
+	})
+}
+
 func TestObserver_ErrorLabelerPanicRecovery(t *testing.T) {
 	t.Parallel()
 

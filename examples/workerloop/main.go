@@ -14,6 +14,7 @@ import (
 	"time"
 
 	sentinel "github.com/mcwalrus/go-sentinel"
+	"github.com/mcwalrus/go-sentinel/circuit"
 	"github.com/mcwalrus/go-sentinel/retry"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -24,6 +25,7 @@ var (
 	registry     *prometheus.Registry
 	limitChan    chan struct{}
 	attemptCount int64
+	done         = make(chan struct{})
 )
 
 func init() {
@@ -32,6 +34,9 @@ func init() {
 		sentinel.WithNamespace("example"),
 		sentinel.WithSubsystem("workerloop"),
 		sentinel.WithDescription("Worker loop"),
+		// WithControl uses circuit.WhenClosed for graceful shutdown:
+		// closing the done channel stops new task executions and retries.
+		sentinel.WithControl(circuit.WhenClosed(done)),
 	)
 	registry = prometheus.NewRegistry()
 	ob.MustRegister(registry)
@@ -153,6 +158,8 @@ func main() {
 	go func() {
 		<-sigChan
 		log.Println("Shutdown signal received, stopping gracefully...")
+		// Close done to stop new tasks and retries via WithControl(circuit.WhenClosed(done)).
+		close(done)
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer shutdownCancel()
 		if err := metricsServer.Shutdown(shutdownCtx); err != nil {

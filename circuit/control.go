@@ -35,9 +35,9 @@ type Control func(phase ExecutionPhase) (shouldStop bool)
 // Example usage:
 //
 //	done := make(chan struct{})
-//	observer.UseConfig(sentinel.ObserverConfig{
-//		Control: circuit.WhenClosed(done),
-//	})
+//	observer := sentinel.NewObserver(nil,
+//	    sentinel.WithControl(circuit.WhenClosed(done)),
+//	)
 //	// Later, when shutting down:
 //	close(done) // This will stop all new requests and retries
 func WhenClosed(done <-chan struct{}) Control {

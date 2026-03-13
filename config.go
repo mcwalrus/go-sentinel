@@ -1,6 +1,20 @@
 package sentinel
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"github.com/mcwalrus/go-sentinel/circuit"
+	"github.com/prometheus/client_golang/prometheus"
+)
+
+// ControlFunc is a function that receives the execution phase and returns true to stop execution.
+// Use [circuit.WhenClosed] to create a ControlFunc for graceful shutdown.
+//
+// Example usage:
+//
+//	done := make(chan struct{})
+//	observer := sentinel.NewObserver(nil,
+//	    sentinel.WithControl(circuit.WhenClosed(done)),
+//	)
+type ControlFunc = circuit.Control
 
 // config defines the configuration for a [Observer].
 type config struct {
@@ -33,6 +47,9 @@ type config struct {
 	// maxConcurrency limits the number of goroutines in the async worker pool.
 	// Zero means unlimited.
 	maxConcurrency int
+
+	// control is the execution control handler set via WithControl().
+	control ControlFunc
 }
 
 // setupConfig sets up the configuration
@@ -309,5 +326,27 @@ func WithMaxConcurrency(n int) ObserverOption {
 		if n > 0 {
 			cfg.maxConcurrency = n
 		}
+	}
+}
+
+// WithControl sets an execution control handler that can reject new requests or retry attempts.
+// Use [circuit.WhenClosed] for graceful shutdown.
+//
+// The control function receives the [circuit.ExecutionPhase] and returns true to stop execution.
+// When set, the control is checked before each new request ([circuit.PhaseNewRequest]) and before
+// each retry attempt ([circuit.PhaseRetry]). If control returns true, the execution is stopped
+// and [ErrControlBreaker] is returned.
+//
+// Example usage:
+//
+//	done := make(chan struct{})
+//	observer := sentinel.NewObserver(nil,
+//	    sentinel.WithControl(circuit.WhenClosed(done)),
+//	)
+//	// Later, to gracefully stop accepting new tasks:
+//	close(done)
+func WithControl(fn ControlFunc) ObserverOption {
+	return func(cfg *config) {
+		cfg.control = fn
 	}
 }
