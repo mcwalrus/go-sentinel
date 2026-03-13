@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+set -e
+
+run_dependencies() {
+  echo "dependencies"
+  go mod tidy
+  go mod vendor
+}
+
+run_format() {
+  echo "format"
+  go fmt ./...
+}
+
+run_linter() {
+  echo "linter"
+  revive -formatter friendly ./...
+}
+
+run_vet() {
+  echo "vet: Examining code for suspicious constructs"
+  go vet ./...
+}
+
+run_error_checking() {
+  echo "error checking"
+  errcheck -ignoretests ./...
+}
+
+run_static_analysis() {
+  echo "static analysis"
+  staticcheck ./...
+}
+
+run_gosec() {
+  echo "gosec"
+  gosec -quiet ./...
+}
+
+run_gocycle() {
+  echo "gocycle"
+  gocyclo -over 10 .
+}
+
+for stage in dependencies format linter vet error_checking static_analysis gosec gocycle; do
+  "run_${stage}"
+done
+
+exit 0
