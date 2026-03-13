@@ -1,0 +1,478 @@
+formula = "choo-choo-ralph"
+# NOTE: We intentionally use 'task' instead of 'desc' because beads replaces
+# the root description with {{desc}} if a 'desc' variable is defined.
+# By using 'task', we keep control of the full orchestrator prompt.
+description = """
+# ORCHESTRATOR: {{title}}
+
+You coordinate child steps for this task.
+
+## Task
+**Category:** {{category}}
+
+{{task}}
+
+## Execution Loop
+
+1. **Find ready steps**: `bd ready --parent <your-id>`
+2. **For each ready step**, route by assignee prefix:
+   - `ralph-subagent-*`: Spawn a Task agent with the step's description (from `bd show <step-id>`)
+   - `ralph-inline-*`: Execute the step yourself following its description
+3. **Read what each step reports** and follow its instructions exactly
+4. **Close completed steps**: `bd close <step-id>`
+5. **Repeat** until no more steps
+
+## Commands
+- Check ready children: `bd ready --parent <your-id>`
+- View step details: `bd show <step-id>`
+- Close completed step: `bd close <step-id>`
+- Add progress note: `bd comments add <step-id> "..."`
+
+## Following Step Instructions
+
+Each step will report back with:
+- A STATUS (e.g., HEALTHY, PASS, FAIL, HEALTH_CHECK_FAILED)
+- Instructions for what you should do next
+
+**You must follow the step's instructions.** Steps may tell you to:
+- Proceed to the next step
+- Reopen a previous step with guidance
+- Create a bug bead and block
+- Mark yourself as blocked
+
+Do exactly what the step tells you. The step knows its domain.
+
+## Completion
+
+When all steps are done:
+
+1. **Add summary comment**:
+   ```bash
+   bd comments add <your-id> "[summary] Completed: <brief description>"
+   ```
+
+2. **Check for [GAP] comments** on yourself:
+   - Run `bd comments <your-id>` and look for `[GAP]` entries
+   - If any exist AND no gap-review step ran, add label: `bd label add <your-id> gaps`
+
+3. **Check for [LEARNING] comments** on yourself:
+   - Look for `[LEARNING]` entries in your comments
+   - If any exist AND no learning-capture step ran, add label: `bd label add <your-id> learnings`
+
+4. **Close yourself**: `bd close <your-id>`
+
+**IMPORTANT**: Complete this entire molecule (all applicable steps), then exit. Do NOT look for or grab another molecule after. This keeps changes small and commits atomic.
+
+If the molecule cannot complete (blocker, error, etc.), move the root bead back to `open` status before exiting.
+
+Your ID is in the bead data you received.
+"""
+version = 1
+type = "workflow"
+# NOTE: Root assignee set via --assignee flag during pour, not here
+
+# 'title' is a magic variable that gets substituted into the root's title
+# 'task' is our own variable for the task description (avoiding 'desc' which triggers replacement)
+[vars.title]
+description = "Short title for the task"
+required = true
+
+[vars.task]
+description = "Detailed description of what needs to be implemented"
+required = true
+
+[vars.category]
+description = "Task category: functional, style, infrastructure, or documentation"
+required = false
+default = "functional"
+
+[vars.auto_discovery]
+description = "Auto-create tasks for discovered gaps"
+default = "false"
+
+[vars.auto_learnings]
+description = "Auto-create/update skills for learnings"
+default = "false"
+
+[vars.capture_footer]
+description = "Common footer for capturing gaps and learnings"
+default = """
+## Capturing Gaps
+If you discover missing work that's clearly needed (validation, security, integration glue, missing API connections):
+```bash
+bd comments add <root-id> "[GAP] <title> - <description with file context>"
+```
+
+## Capturing Learnings
+If you encountered something noteworthy:
+- An error you struggled with and how you fixed it
+- A pattern you had to follow that wasn't documented
+- A library/component usage gotcha future agents should know
+- Something that might warrant a skill (e.g., "always use X when doing Y")
+
+```bash
+bd comments add <root-id> "[LEARNING] <description>"
+```
+
+Only add gaps/learnings for non-obvious issues that would help future agents.
+"""
+
+[[steps]]
+id = "bearings"
+title = "Get bearings for {{title}}"
+assignee = "ralph-subagent-bearings"
+labels = ["ralph-step", "bearings"]
+description = """
+# BEARINGS PHASE
+
+## Goal
+1. Verify the codebase is in a healthy state
+2. Understand the relevant code for this task
+
+## Task Context
+{{task}}
+
+## STEP 1: Health Check (MANDATORY)
+
+Before exploring for this task, verify the app is healthy:
+
+1. **Start dev server** (if not running) and verify it starts successfully
+2. **Run test suite** - Execute existing tests (check CLAUDE.md or package.json for commands)
+3. **Smoke test via dev-browser** - Navigate to the app and verify a core flow works
+   - Use the /dev-browser skill
+   - Pick a completed feature from recent work
+   - Verify it still functions correctly
+
+### If Health Check FAILS
+
+If ANY of these fail, you CANNOT proceed with this task. Report back to orchestrator:
+
+1. **Identify the cause** - Check git log for recent changes:
+   ```bash
+   git log --oneline -5
+   ```
+   Commits should reference bead IDs (e.g., "Refs: beads-xxx")
+
+2. **Document findings** - Add a comment to THIS bead with your investigation
+
+3. **Report to orchestrator** - Do NOT create bug beads or modify epic status yourself.
+   The orchestrator will handle creating bug beads and blocking.
+
+## STEP 2: Task-Specific Exploration
+
+Once health check passes:
+
+1. **Search for relevant code** - Use Grep/Glob to find related files
+2. **Read key files** - Understand existing patterns and conventions
+3. **Identify change locations** - Where will modifications be needed?
+4. **Note dependencies** - What other code might be affected?
+5. **Document findings** - Add a comment summarizing what you learned
+
+## Output to Orchestrator
+
+Add a comment to THIS bead with your findings, then report to orchestrator.
+
+**If health checks passed**:
+```
+STATUS: HEALTHY
+FILES: <key files that will be modified>
+PATTERNS: <existing patterns to follow>
+APPROACH: <recommended implementation approach>
+CONCERNS: <any concerns or questions>
+
+ACTION: Close this step and proceed to implement.
+```
+
+**If health checks failed**:
+```
+STATUS: HEALTH_CHECK_FAILED
+FAILURE: <what failed - dev server, tests, smoke test>
+ERROR: <error message or description>
+CAUSE: <likely cause from git log investigation>
+RELATED_EPIC: <bead-id from git log if found, or "unknown">
+
+ACTION: You must handle this health check failure:
+1. Check for existing bug beads: `bd list --type=bug --status=open`
+2. If no existing bug covers this, create one:
+   bd --no-daemon mol pour bug-fix \
+     --var title="Health check failure: <brief description>" \
+     --var task="<details from my report above>" \
+     --var related_epic="<RELATED_EPIC value>" \
+     --assignee ralph
+3. If RELATED_EPIC is a bead ID, link bug to it: `bd dep add <bug-id> <RELATED_EPIC>`
+4. Block current epic on the bug: `bd dep add <your-id> <bug-id>`
+5. Move current epic back to open: `bd update <your-id> --status open`
+6. Close this bearings step: `bd close <this-step-id>`
+7. Exit - do not continue with other steps
+```
+
+{{capture_footer}}
+"""
+
+[[steps]]
+id = "implement"
+title = "Implement {{title}}"
+assignee = "ralph-subagent-implement"
+labels = ["ralph-step", "implement"]
+needs = ["bearings"]
+description = """
+# IMPLEMENTATION PHASE
+
+## Goal
+Make the code changes to implement the feature/fix.
+
+## Task Context
+{{task}}
+
+## Instructions
+
+1. **Review bearings notes** - Check the bearings step's comments for context
+2. **Make focused changes** - Implement one thing at a time
+3. **Follow existing patterns** - Match the codebase style
+4. **Keep changes minimal** - Don't refactor unrelated code
+5. **Add necessary tests** - If the codebase has tests, add relevant ones
+
+## Best Practices
+- Use Edit tool for modifications (not Write for existing files)
+- Preserve existing formatting and conventions
+- Add comments for complex logic
+- Consider edge cases
+
+## Output to Orchestrator
+
+Add a comment to THIS bead summarizing what was changed, then report to orchestrator.
+
+```
+STATUS: DONE
+CHANGES: <files modified and what was changed>
+DECISIONS: <any implementation decisions made>
+VERIFY_NOTES: <anything the verify step should specifically check>
+
+ACTION: Close this step and proceed to verify.
+```
+
+{{capture_footer}}
+"""
+
+[[steps]]
+id = "verify"
+title = "Verify {{title}}"
+assignee = "ralph-subagent-verify"
+labels = ["ralph-step", "verify"]
+needs = ["implement"]
+description = """
+# VERIFICATION PHASE
+
+## Goal
+Validate that the implementation works correctly through automated AND manual verification.
+
+## Task Context
+{{task}}
+
+## Automated Checks
+
+1. **Run type checking** - Check CLAUDE.md or package.json for commands (e.g., `bun typecheck`)
+2. **Run tests** - Execute test suite (e.g., `bun test`)
+3. **Run linting** - If available, run the linter
+
+## UI Verification (if applicable)
+
+If this task involves UI changes, use the /dev-browser skill:
+
+1. Navigate to the affected page
+2. Follow any test steps from the task description
+3. Save screenshots to `.choo-choo-ralph/screenshots/` for verification
+4. Check for:
+   - Visual regressions (layout issues, overflow)
+   - Console errors
+   - White-on-white text or poor contrast
+   - Responsiveness issues
+
+## If Verification FAILS
+
+### Small Fixes (typos, minor issues)
+If the issue is trivial (typo, missing import, small syntax error):
+1. Fix it directly
+2. Re-run verification
+3. Continue if passes
+
+### Significant Issues (architectural, doesn't meet spec)
+If the issue requires substantial rework, report back to orchestrator with FAIL status.
+Do NOT reopen the implement step yourself - that's the orchestrator's job.
+
+## Checklist
+- [ ] Types pass
+- [ ] Tests pass (existing + new)
+- [ ] Linting passes
+- [ ] UI verification (if applicable)
+- [ ] Code review looks good
+
+## Output to Orchestrator
+
+Add a comment to THIS bead with verification results, then report to orchestrator.
+
+**If all checks pass**:
+```
+STATUS: PASS
+TYPES: pass
+TESTS: pass
+LINT: pass (or N/A)
+UI: pass (or N/A)
+SCREENSHOTS: <paths if applicable>
+
+ACTION: Close this step and proceed to commit.
+```
+
+**If checks fail (significant issues)**:
+```
+STATUS: FAIL
+TYPES: pass/fail
+TESTS: pass/fail
+LINT: pass/fail
+UI: pass/fail
+ISSUE: <what's wrong>
+SUGGESTION: <what implement should try differently>
+
+ACTION: You must handle this verification failure:
+1. Count `[attempt-N]` comments on your bead: `bd comments <your-id>`
+2. If < 3 attempts:
+   - Add attempt comment: `bd comments add <your-id> "[attempt-N] Implementation attempt N: FAIL - <ISSUE from above>"`
+   - Reopen implement step: `bd update <implement-step-id> --status open`
+   - Add guidance: `bd comments add <implement-step-id> "[REWORK] <SUGGESTION from above>"`
+   - Close this verify step: `bd close <this-step-id>`
+   - Wait for implement to complete, then verify again
+3. If >= 3 attempts:
+   - Add critical comment: `bd comments add <your-id> "[CRITICAL] Implementation failed after 3 attempts. Requires human review."`
+   - Block yourself: `bd update <your-id> --status blocked`
+   - Close this verify step: `bd close <this-step-id>`
+   - Exit
+```
+
+{{capture_footer}}
+"""
+
+[[steps]]
+id = "commit"
+title = "Commit {{title}}"
+assignee = "ralph-inline-commit"
+labels = ["ralph-step", "commit"]
+needs = ["verify"]
+description = """
+# COMMIT PHASE
+
+## Goal
+Create a clean git commit with the changes.
+
+## Task Context
+{{task}}
+
+## Instructions
+
+1. **Review changes** - Run `git diff` to see all modifications
+2. **Stage relevant files** - Only include files related to this task
+3. **Write commit message** - Follow conventional commits format
+4. **Create commit** - Use the commit skill or git directly
+
+## Commit Message Format
+```
+<type>(<scope>): <description>
+
+<body with details>
+
+Refs: <bead-id>
+```
+
+Types: feat, fix, refactor, docs, test, chore
+
+## Output to Orchestrator
+
+Add a comment with the commit details:
+```
+STATUS: DONE
+COMMIT: <commit hash>
+MESSAGE: <commit message summary>
+
+ACTION: Close this step and proceed to next steps (if any).
+```
+
+When complete, close this bead with `bd close <this-bead-id>`.
+"""
+
+[[steps]]
+id = "gap-review"
+title = "Review and pour discovered gaps"
+assignee = "ralph-inline-gap-review"
+labels = ["ralph-step", "gap-review"]
+needs = ["commit"]
+condition = "{{auto_discovery}}"
+description = """
+# GAP REVIEW PHASE
+
+## Goal
+Review [GAP] comments on the orchestrator and create new tasks.
+
+## Instructions
+
+1. **Get orchestrator comments**: `bd comments <your-parent-id>`
+
+2. **For each [GAP] comment**:
+   - Check `bd list --status=open` for existing coverage
+   - If not covered, pour a new formula:
+     ```bash
+     bd --no-daemon mol pour choo-choo-ralph \
+       --var title="<gap title>" \
+       --var task="<gap description>" \
+       --var category="infrastructure" \
+       --var auto_discovery="true" \
+       --assignee ralph
+     ```
+
+3. **Add label**: `bd label add <orchestrator-id> gaps-harvested`
+
+## Output
+Add a comment summarizing:
+- How many gaps were found
+- How many new tasks were created
+- Any gaps that were already covered
+
+When complete, close this bead with `bd close <this-bead-id>`.
+"""
+
+[[steps]]
+id = "learning-capture"
+title = "Capture learnings as skills"
+assignee = "ralph-inline-learning-capture"
+labels = ["ralph-step", "learning-capture"]
+needs = ["commit"]
+condition = "{{auto_learnings}}"
+description = """
+# LEARNING CAPTURE PHASE
+
+## Goal
+Review [LEARNING] comments and create/update skills.
+
+## Instructions
+
+1. **Get orchestrator comments**: `bd comments <your-parent-id>`
+
+2. **For each [LEARNING] comment**:
+   - Search existing skills in `.claude/skills/`
+   - If matching skill exists -> update that skill
+   - If no match and substantial -> create new skill
+   - If minor/folder-specific -> create folder CLAUDE.md
+
+3. **Add label**: `bd label add <orchestrator-id> learnings-harvested`
+
+## Skill Priority
+Prefer: skill > folder CLAUDE.md > root CLAUDE.md (rarely)
+
+Follow skill creation best practices from the skill-development skill.
+
+## Output
+Add a comment summarizing:
+- How many learnings were found
+- What skills were created/updated
+- What folder CLAUDE.md files were updated
+
+When complete, close this bead with `bd close <this-bead-id>`.
+"""

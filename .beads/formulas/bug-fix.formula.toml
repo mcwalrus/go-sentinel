@@ -1,0 +1,295 @@
+formula = "bug-fix"
+description = """
+# BUG FIX ORCHESTRATOR: {{title}}
+
+You coordinate child steps for this bug fix.
+
+## Bug Details
+{{task}}
+
+## Related Epic
+This bug may be related to: {{related_epic}}
+
+## Execution Loop
+
+1. **Find ready steps**: `bd ready --parent <your-id>`
+2. **For each ready step**, route by assignee prefix:
+   - `ralph-subagent-*`: Spawn a Task agent with the step's description (from `bd show <step-id>`)
+   - `ralph-inline-*`: Execute the step yourself following its description
+3. **Read what each step reports** and follow its instructions exactly
+4. **Close completed steps**: `bd close <step-id>`
+5. **Repeat** until no more steps
+
+## Commands
+- Check ready children: `bd ready --parent <your-id>`
+- View step details: `bd show <step-id>`
+- Close completed step: `bd close <step-id>`
+- Add progress note: `bd comments add <step-id> "..."`
+
+## Following Step Instructions
+
+Each step will report back with:
+- A STATUS (e.g., REPRODUCIBLE, CANNOT_REPRODUCE, PASS, FAIL)
+- Instructions for what you should do next
+
+**You must follow the step's instructions.** Steps may tell you to:
+- Proceed to the next step
+- Reopen a previous step with guidance
+- Close the bug as non-reproducible
+- Mark yourself as blocked
+
+Do exactly what the step tells you. The step knows its domain.
+
+## Completion
+
+When your work is done:
+
+1. **Review learning comments** - Check if any steps added `[diagnose]`, `[fix]`, or `[verify]` comments to your bead
+2. **Add summary comment**:
+   ```bash
+   bd comments add <your-id> "[summary] Fixed: <what>. Root cause: <cause>. Prevention: <if any>"
+   ```
+3. **Add learnings label** - If your summary includes prevention recommendations:
+   ```bash
+   bd label add <your-id> learnings
+   ```
+4. **Close yourself**: `bd close <your-id>`
+
+Your ID is in the bead data you received.
+"""
+version = 1
+type = "workflow"
+
+[vars.title]
+description = "Short title for the bug"
+required = true
+
+[vars.task]
+description = "Detailed description of what's broken and symptoms"
+required = true
+
+[vars.related_epic]
+description = "The bead ID of the epic that may be related to this bug"
+required = false
+
+[[steps]]
+id = "diagnose"
+title = "Diagnose {{title}}"
+assignee = "ralph-subagent-diagnose"
+labels = ["ralph-step", "diagnose"]
+description = """
+# DIAGNOSIS PHASE
+
+## Goal
+Understand the bug and find the root cause. Report findings back to orchestrator.
+
+## Bug Context
+{{task}}
+
+## Steps
+1. **Reproduce the issue** - Verify you can see the failure
+2. **Check git history** - What changed recently? (`git log --oneline -10`)
+3. **Trace the error** - Follow stack traces, error messages
+4. **Identify root cause** - What code is actually broken?
+5. **Document findings** - Add comment with analysis
+
+## Cannot Reproduce
+
+If after thorough investigation you CANNOT reproduce the issue:
+1. Run the failing check multiple times to confirm it's not flaky
+2. Check if environment differs from when bug was reported
+3. Verify the issue wasn't already fixed by another task
+
+## Output to Orchestrator
+
+Add a comment to THIS bead with your findings, then report to orchestrator.
+
+**If reproducible**:
+```
+STATUS: REPRODUCIBLE
+ROOT_CAUSE: <what's broken>
+FILES: <files that need to change>
+APPROACH: <recommended fix>
+
+ACTION: Close this step and proceed to fix.
+```
+
+**If not reproducible**:
+```
+STATUS: CANNOT_REPRODUCE
+INVESTIGATION: <what you tried>
+LIKELY_CAUSE: <flaky test / transient failure / already fixed>
+
+ACTION: You must handle this non-reproducible bug:
+1. Add comment to root: `bd comments add <root-id> "[cannot-reproduce] <investigation summary>"`
+2. Close this step: `bd close <this-step-id>`
+3. Close the bug: `bd close <root-id> --reason "Cannot reproduce after investigation"`
+4. Exit - do not continue with other steps
+```
+
+## Learnings (if applicable)
+If you discovered something noteworthy, add a comment to the ROOT/PARENT bead (not this step):
+- A pattern that led to this bug
+- A missing test that would have caught it
+- Something that should be in CLAUDE.md but isn't
+
+Use: `bd comments add <root-id> "[diagnose] <your learning>"`
+
+Only add learnings that would help prevent similar bugs in future.
+"""
+
+[[steps]]
+id = "fix"
+title = "Fix {{title}}"
+assignee = "ralph-subagent-fix"
+labels = ["ralph-step", "fix"]
+needs = ["diagnose"]
+description = """
+# FIX PHASE
+
+## Goal
+Make the code changes to fix the bug. Report what was changed back to orchestrator.
+
+## Bug Context
+{{task}}
+
+## Instructions
+1. **Review diagnosis** - Check the diagnose step's comments for context
+2. **Check for rework comments** - If this step was reopened, check for `[REWORK]` comments with guidance
+3. **Make minimal changes** - Fix only what's broken, don't refactor
+4. **Follow existing patterns** - Match the codebase style
+5. **Consider side effects** - Will this fix break anything else?
+
+## Output to Orchestrator
+
+Add a comment to THIS bead summarizing your changes:
+```
+STATUS: DONE
+CHANGES: <what was changed>
+RATIONALE: <why this fixes the issue>
+VERIFY_FOCUS: <specific things verify should check>
+
+ACTION: Close this step and proceed to verify.
+```
+
+## Learnings (if applicable)
+If you encountered something noteworthy, add a comment to the ROOT/PARENT bead (not this step):
+- A pattern you had to follow that wasn't documented
+- A gotcha that made the fix harder
+- Something that might warrant a skill
+
+Use: `bd comments add <root-id> "[fix] <your learning>"`
+
+Only add learnings for non-obvious issues. Routine fixes don't need a learning comment.
+"""
+
+[[steps]]
+id = "verify"
+title = "Verify {{title}}"
+assignee = "ralph-subagent-verify"
+labels = ["ralph-step", "verify"]
+needs = ["fix"]
+description = """
+# VERIFICATION PHASE
+
+## Goal
+Verify the bug is actually fixed. Report results back to orchestrator.
+
+## Bug Context
+{{task}}
+
+## Checks
+1. **Reproduce original issue** - Confirm it no longer occurs
+2. **Run type checking** - `bun typecheck` or equivalent
+3. **Run tests** - Full test suite
+4. **Run any smoke tests** - If applicable
+
+## Output to Orchestrator
+
+Add a comment to THIS bead with verification results.
+
+**If fix succeeded**:
+```
+STATUS: PASS
+VERIFICATION: <what was checked>
+RESULT: Bug no longer reproducible, all checks pass
+
+ACTION: You must record this success:
+1. Count `[attempt-N]` comments on root bead: `bd comments <root-id>`
+2. Add attempt comment: `bd comments add <root-id> "[attempt-N] Fix attempt N: PASS"`
+3. Close this step and proceed to commit.
+```
+
+**If fix failed**:
+```
+STATUS: FAIL
+ISSUE: <what's still broken or what new issue appeared>
+SUGGESTION: <what the fix step should try differently>
+
+ACTION: You must handle this verification failure:
+1. Count `[attempt-N]` comments on root bead: `bd comments <root-id>`
+2. If < 3 attempts:
+   - Add attempt comment: `bd comments add <root-id> "[attempt-N] Fix attempt N: FAIL - <ISSUE from above>"`
+   - Reopen fix step: `bd update <fix-step-id> --status open`
+   - Add guidance: `bd comments add <fix-step-id> "[REWORK] <SUGGESTION from above>"`
+   - Close this verify step: `bd close <this-step-id>`
+   - Wait for fix to complete, then verify again
+3. If >= 3 attempts:
+   - Add critical comment: `bd comments add <root-id> "[CRITICAL] Bug cannot be resolved after 3 attempts. Requires human intervention."`
+   - Block root: `bd update <root-id> --status blocked`
+   - Close this verify step: `bd close <this-step-id>`
+   - Exit
+```
+
+## Learnings (if applicable)
+If you encountered something noteworthy, add a comment to the ROOT/PARENT bead (not this step):
+- A test that should have existed but didn't
+- A verification pattern that caught something unexpected
+- UI/UX issues related to the bug
+
+Use: `bd comments add <root-id> "[verify] <your learning>"`
+
+Only add learnings for issues that future agents would benefit from knowing.
+"""
+
+[[steps]]
+id = "commit"
+title = "Commit {{title}}"
+assignee = "ralph-inline-commit"
+labels = ["ralph-step", "commit"]
+needs = ["verify"]
+description = """
+# COMMIT PHASE
+
+## Goal
+Create a clean git commit for the bug fix.
+
+## Commit Message Format
+```
+fix(<scope>): <description>
+
+<body explaining what was broken and how it was fixed>
+
+Related: {{related_epic}}
+Refs: <this-bead-id>
+```
+
+## Instructions
+1. **Review changes** - Run `git diff` to see all modifications
+2. **Stage relevant files** - Only include files related to this fix
+3. **Write commit message** - Follow conventional commits format
+4. **Create commit** - Use the commit skill or git directly
+
+## Output to Orchestrator
+
+Add a comment with the commit details:
+```
+STATUS: DONE
+COMMIT: <commit hash>
+MESSAGE: <commit message summary>
+
+ACTION: Close this step. All steps complete.
+```
+
+When complete, close this bead with `bd close <this-bead-id>`.
+"""
