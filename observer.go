@@ -164,7 +164,7 @@ func (o *Observer) MustRegister(registry prometheus.Registerer) {
 //		Timeout:    10 * time.Second,
 //		MaxRetries: 3,
 //		RetryStrategy: retry.Exponential(100 * time.Millisecond),
-//		RetryBreaker: circuit.OnPanic(),
+//		RetryBreaker: func(err error) bool { return isPanicError(err) },
 //		MaxConcurrency: 10, // Limit to 10 concurrent executions
 //	})
 func (o *Observer) UseConfig(config ObserverConfig) {
@@ -489,7 +489,7 @@ func safeRetryStrategy(strategy retry.WaitFunc, retryCount int) (wait time.Durat
 
 // safeRetryBreaker calls the retry breaker handler with panic recovery.
 // If the handler panics, it returns true (stop retries) as a safe default.
-func safeRetryBreaker(breaker circuit.Breaker, err error) (shouldStop bool) {
+func safeRetryBreaker(breaker func(err error) bool, err error) (shouldStop bool) {
 	if breaker == nil {
 		return false
 	}
