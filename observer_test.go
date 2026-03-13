@@ -1739,6 +1739,7 @@ func TestHandlerPanicRecovery(t *testing.T) {
 		observer := NewObserver(nil)
 		var i *int // nil pointer that will cause panic when dereferenced
 
+		executed := false
 		observer.UseConfig(ObserverConfig{
 			Control: circuit.Control(func(_ circuit.ExecutionPhase) bool {
 				// This will panic due to nil pointer dereference
@@ -1747,23 +1748,26 @@ func TestHandlerPanicRecovery(t *testing.T) {
 			}),
 		})
 
-		// Should not panic, but should stop execution due to panic recovery default (true)
+		// Should not panic; control panic defaults to allowing execution (false)
 		err := observer.Run(func() error {
+			executed = true
 			return nil
 		})
 
-		// Should return control breaker error due to panic recovery
-		var controlErr *ErrControlBreaker
-		if !errors.As(err, &controlErr) {
-			t.Errorf("Expected ErrControlBreaker, got %v", err)
+		// Task should execute and succeed; panics_total increments for the callback panic
+		if err != nil {
+			t.Errorf("Expected nil error when Control panics (allow execution), got %v", err)
+		}
+		if !executed {
+			t.Error("Task should have executed when Control panics")
 		}
 
 		Verify(t, observer, metricsCounts{
-			Successes: 0,
-			Failures:  1, // Task never executed
-			Errors:    1, // Control panic error
+			Successes: 1, // Task executed and succeeded
+			Failures:  0,
+			Errors:    0,
 			Timeouts:  0,
-			Panics:    0,
+			Panics:    1, // Control callback panic recorded
 			Retries:   0,
 		})
 	})
@@ -1783,12 +1787,12 @@ func TestHandlerPanicRecovery(t *testing.T) {
 			}),
 		})
 
-		// Should not panic, but should stop retries due to panic recovery default (true)
+		// Should not panic; control panic defaults to allowing execution (false) so all retries proceed
 		err := observer.Run(func() error {
 			return errors.New("task failed")
 		})
 
-		// Should have stopped retries after first attempt
+		// All 3 attempts run (initial + 2 retries), exhausting MaxRetries
 		if err == nil {
 			t.Error("Expected error, got nil")
 		}
@@ -1796,10 +1800,10 @@ func TestHandlerPanicRecovery(t *testing.T) {
 		Verify(t, observer, metricsCounts{
 			Successes: 0,
 			Failures:  1,
-			Errors:    1, // Only initial error, in-flight control panic stops retries
+			Errors:    3, // All 3 attempts failed (initial + 2 retries)
 			Timeouts:  0,
-			Panics:    0,
-			Retries:   0, // No retries because control panic defaults to stopping
+			Panics:    3, // One panic per control check (NewRequest + 2 PhaseRetry checks)
+			Retries:   2, // Both retries proceeded due to control panic allowing execution
 		})
 	})
 }
@@ -1927,7 +1931,7 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 		})
 	})
 
-	t.Run("request control panic prevents task execution", func(t *testing.T) {
+	t.Run("request control panic allows task execution", func(t *testing.T) {
 		t.Parallel()
 
 		observer := NewObserver(nil)
@@ -1947,28 +1951,27 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 			return nil
 		})
 
-		// Task should not execute due to control panic (defaults to true = stop)
-		if taskExecuted {
-			t.Error("Task should not have executed due to control panic")
+		// Control panic defaults to allowing execution (false = allow)
+		if !taskExecuted {
+			t.Error("Task should have executed when control panics (allow execution)")
 		}
 
-		var controlErr *ErrControlBreaker
-		if !errors.As(err, &controlErr) {
-			t.Errorf("Expected ErrControlBreaker, got %v", err)
+		if err != nil {
+			t.Errorf("Expected nil error when Control panics (allow execution), got %v", err)
 		}
 
-		// Control panic defaults to stopping execution, which records error and failure
+		// Control panic allows execution; panics_total incremented for callback panic
 		Verify(t, observer, metricsCounts{
-			Successes: 0,
-			Failures:  1,
-			Errors:    1,
+			Successes: 1,
+			Failures:  0,
+			Errors:    0,
 			Timeouts:  0,
-			Panics:    0,
+			Panics:    1, // Control callback panic recorded
 			Retries:   0,
 		})
 	})
 
-	t.Run("in-flight control panic on second retry attempt", func(t *testing.T) {
+	t.Run("in-flight control panic on second retry attempt allows further retries", func(t *testing.T) {
 		t.Parallel()
 
 		observer := NewObserver(nil)
@@ -1980,7 +1983,7 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 			Control: circuit.Control(func(_ circuit.ExecutionPhase) bool {
 				callCount++
 				if callCount == 3 {
-					// Panic on third check: PhaseNewRequest (callCount=1), PhaseRetry before first retry (callCount=2), PhaseRetry before second retry (callCount=3)
+					// Panic on third check; control panic defaults to allowing execution
 					_ = *i
 				}
 				return false
@@ -1993,22 +1996,22 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 			return errors.New("task failed")
 		})
 
-		// Should stop after first retry due to control panic on second check
+		// Control panic allows retries to continue; all 4 attempts run (initial + 3 retries)
 		if err == nil {
 			t.Error("Expected error, got nil")
 		}
 
-		if attempts != 2 {
-			t.Errorf("Expected 2 attempts (initial + 1 retry), got %d", attempts)
+		if attempts != 4 {
+			t.Errorf("Expected 4 attempts (initial + 3 retries), got %d", attempts)
 		}
 
 		Verify(t, observer, metricsCounts{
 			Successes: 0,
 			Failures:  1,
-			Errors:    2,
+			Errors:    4,
 			Timeouts:  0,
-			Panics:    0,
-			Retries:   1,
+			Panics:    1, // Third control check panicked
+			Retries:   3,
 		})
 	})
 
@@ -2130,7 +2133,7 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 		})
 	})
 
-	t.Run("request control panic in RunFunc", func(t *testing.T) {
+	t.Run("request control panic in RunFunc allows execution", func(t *testing.T) {
 		t.Parallel()
 
 		observer := NewObserver(nil)
@@ -2149,14 +2152,13 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 			return nil
 		})
 
-		// Task should not execute
-		if taskExecuted {
-			t.Error("Task should not have executed due to control panic")
+		// Control panic defaults to allowing execution
+		if !taskExecuted {
+			t.Error("Task should have executed when control panics (allow execution)")
 		}
 
-		var controlErr *ErrControlBreaker
-		if !errors.As(err, &controlErr) {
-			t.Errorf("Expected ErrControlBreaker, got %v", err)
+		if err != nil {
+			t.Errorf("Expected nil error when Control panics, got %v", err)
 		}
 	})
 
@@ -2308,7 +2310,7 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 		}
 	})
 
-	t.Run("in-flight control panic after successful retry check", func(t *testing.T) {
+	t.Run("in-flight control panic after successful retry check allows further retries", func(t *testing.T) {
 		t.Parallel()
 
 		observer := NewObserver(nil)
@@ -2320,7 +2322,7 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 			Control: circuit.Control(func(_ circuit.ExecutionPhase) bool {
 				checkCount++
 				if checkCount == 3 {
-					// Panic on third check: PhaseNewRequest (checkCount=1), PhaseRetry before first retry (checkCount=2), PhaseRetry before second retry (checkCount=3)
+					// Panic on third check; control panic defaults to allowing execution
 					_ = *i
 				}
 				return false // Allow retries initially
@@ -2333,23 +2335,22 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 			return errors.New("task failed")
 		})
 
-		// Should stop after first retry attempt due to panic on second check
-		// Control is checked: before first retry (checkCount=1, no panic), before second retry (checkCount=2, panic)
+		// Control panic allows retries; all 3 attempts run (initial + 2 retries)
 		if err == nil {
 			t.Error("Expected error, got nil")
 		}
 
-		if attempts != 2 {
-			t.Errorf("Expected 2 attempts (initial + 1 retry), got %d", attempts)
+		if attempts != 3 {
+			t.Errorf("Expected 3 attempts (initial + 2 retries), got %d", attempts)
 		}
 
 		Verify(t, observer, metricsCounts{
 			Successes: 0,
 			Failures:  1,
-			Errors:    2, // Initial error + first retry error
+			Errors:    3, // All 3 attempts failed
 			Timeouts:  0,
-			Panics:    0,
-			Retries:   1, // One retry before panic stops further retries
+			Panics:    1, // Third control check panicked
+			Retries:   2, // Both retries proceeded
 		})
 	})
 }
