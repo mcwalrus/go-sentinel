@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/mcwalrus/go-sentinel/circuit"
 )
@@ -674,6 +675,141 @@ func TestObserver_ControlWithRetryStrategy(t *testing.T) {
 			Timeouts:  0,
 			Panics:    0,
 			Retries:   0, // No retries due to Control
+		})
+	})
+}
+
+func TestObserver_ControlPanicRecovery(t *testing.T) {
+	t.Parallel()
+
+	t.Run("panicking Control allows execution and increments panics_total", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
+
+		// Control that always panics
+		observer.UseConfig(ObserverConfig{
+			Control: func(_ circuit.ExecutionPhase) bool {
+				panic("control panic")
+			},
+		})
+
+		executed := false
+		err := observer.Run(func() error {
+			executed = true
+			return nil
+		})
+
+		// Should not crash; task should execute normally (control panic → allow)
+		if err != nil {
+			t.Errorf("Expected no error when Control panics, got %v", err)
+		}
+		if !executed {
+			t.Error("Task should have executed when Control panics (allow execution)")
+		}
+
+		// panics_total should have incremented for the callback panic
+		if got := testutil.ToFloat64(observer.metrics.panics); got < 1 {
+			t.Errorf("Expected panics_total >= 1, got %f", got)
+		}
+	})
+
+	t.Run("panicking Control during retry allows retry and increments panics_total", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
+
+		// Control that panics on retry phase, allowing retries
+		observer.UseConfig(ObserverConfig{
+			MaxRetries: 2,
+			Control: func(phase circuit.ExecutionPhase) bool {
+				if phase == circuit.PhaseRetry {
+					panic("retry control panic")
+				}
+				return false
+			},
+		})
+
+		execCount := 0
+		err := observer.Run(func() error {
+			execCount++
+			if execCount < 3 {
+				return errors.New("transient error")
+			}
+			return nil
+		})
+
+		// Should eventually succeed after retries
+		if err != nil {
+			t.Errorf("Expected success after retries, got %v", err)
+		}
+
+		// panics_total should be incremented for each retry control panic
+		if got := testutil.ToFloat64(observer.metrics.panics); got < 1 {
+			t.Errorf("Expected panics_total >= 1 for retry control panics, got %f", got)
+		}
+	})
+}
+
+func TestObserver_ErrorLabelerPanicRecovery(t *testing.T) {
+	t.Parallel()
+
+	t.Run("panicking ErrorLabeler does not crash; errors_total still increments", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil, WithErrorLabels(func(err error) prometheus.Labels {
+			panic("labeler panic")
+		}))
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
+
+		err := observer.Run(func() error {
+			return errors.New("some error")
+		})
+
+		if err == nil {
+			t.Error("Expected error from failing task")
+		}
+
+		// errors_total should still increment even though labeler panicked
+		Verify(t, observer, metricsCounts{
+			Successes: 0,
+			Failures:  1,
+			Errors:    1,
+			Timeouts:  0,
+			Panics:    1, // panics_total incremented for labeler panic
+			Retries:   0,
+		})
+	})
+
+	t.Run("non-panicking ErrorLabeler does not increment panics_total", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil, WithErrorLabels(func(err error) prometheus.Labels {
+			return prometheus.Labels{}
+		}))
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
+
+		err := observer.Run(func() error {
+			return errors.New("some error")
+		})
+
+		if err == nil {
+			t.Error("Expected error from failing task")
+		}
+
+		Verify(t, observer, metricsCounts{
+			Successes: 0,
+			Failures:  1,
+			Errors:    1,
+			Timeouts:  0,
+			Panics:    0, // no panic in labeler
+			Retries:   0,
 		})
 	})
 }

@@ -347,7 +347,11 @@ func (o *Observer) observe(limiter limiter, control circuit.Control, task *implT
 
 	// Check control on new request phase
 	if control != nil {
-		if safeControl(control, circuit.PhaseNewRequest) {
+		shouldStop, panicked := safeControl(control, circuit.PhaseNewRequest)
+		if panicked {
+			o.metrics.panics.Inc()
+		}
+		if shouldStop {
 			if releaseLimiter != nil {
 				releaseLimiter()
 			}
@@ -398,18 +402,36 @@ func safeRetryBreaker(breaker circuit.Breaker, err error) (shouldStop bool) {
 }
 
 // safeControl calls the control handler with panic recovery.
-// If the handler panics, it returns true (stop execution) as a safe default.
-func safeControl(control circuit.Control, phase circuit.ExecutionPhase) (shouldStop bool) {
+// If the handler panics, it returns false (allow execution) as a safe default,
+// and signals that a panic occurred via the second return value.
+func safeControl(control circuit.Control, phase circuit.ExecutionPhase) (shouldStop bool, panicked bool) {
 	if control == nil {
-		return false
+		return false, false
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			shouldStop = true
+			shouldStop = false
+			panicked = true
 			_ = r
 		}
 	}()
-	return control(phase)
+	return control(phase), false
+}
+
+// safeErrorLabeler calls the error labeler with panic recovery.
+// If the labeler panics, it returns nil labels and signals that a panic occurred.
+func safeErrorLabeler(labeler func(err error) prometheus.Labels, err error) (labels prometheus.Labels, panicked bool) {
+	if labeler == nil {
+		return nil, false
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			labels = nil
+			panicked = true
+			_ = r
+		}
+	}()
+	return labeler(err), false
 }
 
 // execute is the main entry point for executing a task.
@@ -450,6 +472,14 @@ func (o *Observer) execute(task *implTask) error {
 			o.metrics.timeouts.Inc()
 		}
 
+		// Invoke error labeler if configured; fall back to plain increment if it panics
+		if o.cfg.ErrorLabeler != nil {
+			_, labelerPanicked := safeErrorLabeler(o.cfg.ErrorLabeler, err)
+			if labelerPanicked {
+				o.metrics.panics.Inc()
+			}
+		}
+
 		// Handle panics
 		if panicValue != nil {
 			o.metrics.panics.Inc()
@@ -481,7 +511,11 @@ func (o *Observer) execute(task *implTask) error {
 			// Try control for retry phase
 			o.m.RLock()
 			if o.control != nil {
-				if safeControl(o.control, circuit.PhaseRetry) {
+				shouldStop, panicked := safeControl(o.control, circuit.PhaseRetry)
+				if panicked {
+					o.metrics.panics.Inc()
+				}
+				if shouldStop {
 					o.m.RUnlock()
 					o.metrics.failures.Inc()
 					return err

@@ -224,3 +224,22 @@ func WithSuccessMetrics() ObserverOption {
 		cfg.enableSuccess = true
 	}
 }
+
+// WithErrorLabels sets a labeler function that maps errors to Prometheus label sets.
+// When a task fails, the labeler is called with the error to produce labels for the
+// errors_total metric. If the labeler panics, errors_total is incremented without
+// labels and panics_total is incremented to record the callback failure.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(
+//	    nil,
+//	    sentinel.WithErrorLabels(func(err error) prometheus.Labels {
+//	        return prometheus.Labels{"kind": classifyError(err)}
+//	    }),
+//	)
+func WithErrorLabels(labeler func(err error) prometheus.Labels) ObserverOption {
+	return func(cfg *config) {
+		cfg.ErrorLabeler = labeler
+	}
+}
