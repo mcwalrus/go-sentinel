@@ -546,6 +546,81 @@ func (o *Observer) execute(task *implTask) error {
 		defer cancel()
 	}
 
+	// If an observer-level Retrier is configured, delegate all retry orchestration to it.
+	// The Retrier calls the wrapped fn for each attempt (initial + retries).
+	if o.cfg.retrier != nil {
+		attempt := 0
+		err := o.cfg.retrier.Do(ctx, func() error {
+			currentAttempt := attempt
+			attempt++
+
+			if currentAttempt > 0 {
+				// Retry attempt: check control gate before proceeding.
+				o.m.RLock()
+				if o.control != nil {
+					shouldStop, panicked := safeControl(o.control, circuit.PhaseRetry)
+					if panicked {
+						o.metrics.panics.Inc()
+					}
+					if shouldStop {
+						o.m.RUnlock()
+						return &ErrControlBreaker{}
+					}
+				}
+				o.m.RUnlock()
+				o.metrics.retries.Inc()
+			}
+
+			retryCtx := context.WithValue(ctx, retryCountKey{}, currentAttempt)
+
+			var panicValue any
+			fnErr := func() (err error) {
+				start := time.Now()
+				defer func() {
+					if o.metrics.durations != nil {
+						o.metrics.durations.Observe(time.Since(start).Seconds())
+					}
+					if r := recover(); r != nil {
+						panicValue = r
+						err = newRecoveredPanic(2, r)
+					}
+				}()
+				return task.fn(retryCtx)
+			}()
+
+			if fnErr != nil {
+				o.metrics.errors.Inc()
+				if errors.Is(fnErr, context.DeadlineExceeded) {
+					o.metrics.timeouts.Inc()
+				}
+				if o.cfg.ErrorLabeler != nil {
+					_, labelerPanicked := safeErrorLabeler(o.cfg.ErrorLabeler, fnErr)
+					if labelerPanicked {
+						o.metrics.panics.Inc()
+					}
+				}
+				if panicValue != nil {
+					o.metrics.panics.Inc()
+					o.m.RLock()
+					if !o.recoverPanics {
+						o.m.RUnlock()
+						o.metrics.failures.Inc()
+						panic(panicValue) // re-throw
+					}
+					o.m.RUnlock()
+				}
+			}
+			return fnErr
+		})
+
+		if err != nil {
+			o.metrics.failures.Inc()
+		} else {
+			o.metrics.successes.Inc()
+		}
+		return err
+	}
+
 	// Add retry count to context
 	ctx = context.WithValue(ctx, retryCountKey{}, task.retryCount)
 

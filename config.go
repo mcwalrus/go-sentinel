@@ -2,6 +2,7 @@ package sentinel
 
 import (
 	"github.com/mcwalrus/go-sentinel/circuit"
+	"github.com/mcwalrus/go-sentinel/retry"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -50,6 +51,9 @@ type config struct {
 
 	// control is the execution control handler set via WithControl().
 	control ControlFunc
+
+	// retrier is the observer-level retry handler set via WithRetrier().
+	retrier retry.Retrier
 }
 
 // setupConfig sets up the configuration
@@ -369,5 +373,26 @@ func WithMaxConcurrency(n int) ObserverOption {
 func WithControl(fn ControlFunc) ObserverOption {
 	return func(cfg *config) {
 		cfg.control = fn
+	}
+}
+
+// WithRetrier sets an observer-level [retry.Retrier] that handles all retry logic
+// for tasks executed by this Observer. When set, it replaces the per-task
+// MaxRetries/RetryStrategy/RetryBreaker triplet in [ObserverConfig].
+//
+// If not set, tasks are executed without retries unless MaxRetries is configured
+// on the per-task [ObserverConfig].
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(nil,
+//	    sentinel.WithRetrier(retry.DefaultRetrier{
+//	        WaitStrategy: retry.Exponential(10 * time.Millisecond),
+//	        MaxRetries:   3,
+//	    }),
+//	)
+func WithRetrier(r retry.Retrier) ObserverOption {
+	return func(cfg *config) {
+		cfg.retrier = r
 	}
 }
