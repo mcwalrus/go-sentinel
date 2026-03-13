@@ -154,7 +154,6 @@ func defaultMetricFilter() map[string]bool {
 		MetricPanics:    true,
 		MetricDurations: true,
 		MetricRetries:   true,
-		MetricPending:   true,
 	}
 }
 
@@ -271,5 +270,44 @@ func WithTimeoutMetrics() ObserverOption {
 func WithErrorLabels(labeler func(err error) prometheus.Labels) ObserverOption {
 	return func(cfg *config) {
 		cfg.ErrorLabeler = labeler
+	}
+}
+
+// WithQueueMetrics enables the pending_total gauge metric for the Observer.
+// The pending_total gauge tracks the number of tasks waiting for a pool slot
+// when using [Observer.Submit] or [Observer.SubmitFunc] with [WithMaxConcurrency].
+// Without this option, pending_total is not registered or tracked.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(
+//	    nil,
+//	    sentinel.WithQueueMetrics(),
+//	    sentinel.WithMaxConcurrency(5),
+//	)
+func WithQueueMetrics() ObserverOption {
+	return func(cfg *config) {
+		cfg.enablePending = true
+		cfg.metricFilter[MetricPending] = true
+	}
+}
+
+// WithMaxConcurrency limits the number of concurrent goroutines in the async
+// worker pool used by [Observer.Submit] and [Observer.SubmitFunc]. When combined
+// with [WithQueueMetrics], tasks waiting for a pool slot are tracked by pending_total.
+// Zero or negative values are ignored (unlimited concurrency).
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(
+//	    nil,
+//	    sentinel.WithMaxConcurrency(10),
+//	    sentinel.WithQueueMetrics(),
+//	)
+func WithMaxConcurrency(n int) ObserverOption {
+	return func(cfg *config) {
+		if n > 0 {
+			cfg.maxConcurrency = n
+		}
 	}
 }
