@@ -109,7 +109,6 @@ func NewObserver(durationBuckets []float64, opts ...ObserverOption) *Observer {
 //	)
 func NewObserverDefault(opts ...ObserverOption) *Observer {
 	defaultOpts := []ObserverOption{
-		WithMetrics(MetricInFlight, MetricSuccesses, MetricErrors, MetricFailures),
 		WithInFlightMetrics(),
 		WithSuccessMetrics(),
 		WithErrorMetrics(),

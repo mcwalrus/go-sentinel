@@ -74,6 +74,38 @@ func setupConfig(durationBuckets []float64, opts ...ObserverOption) config {
 	if cfg.description == "" {
 		cfg.description = "tasks"
 	}
+
+	// Translate typed enable flags into metricFilter entries.
+	// This allows WithXxxMetrics() options to control which metrics are registered.
+	if cfg.enableInFlight {
+		cfg.metricFilter[MetricInFlight] = true
+	}
+	if cfg.enableSuccess {
+		cfg.metricFilter[MetricSuccesses] = true
+	}
+	if cfg.enableErrors {
+		cfg.metricFilter[MetricErrors] = true
+	}
+	if cfg.enableFailures {
+		cfg.metricFilter[MetricFailures] = true
+	}
+	if cfg.enablePanics {
+		cfg.metricFilter[MetricPanics] = true
+	}
+	if cfg.enableRetries {
+		cfg.metricFilter[MetricRetries] = true
+	}
+	if cfg.enableTimeouts {
+		cfg.metricFilter[MetricTimeouts] = true
+	}
+	if cfg.enableDurations {
+		cfg.metricFilter[MetricDurations] = true
+	}
+	if cfg.enablePending {
+		cfg.metricFilter[MetricPending] = true
+	}
+
+	// Fall back to all metrics only if neither WithMetrics() nor WithXxxMetrics() was used.
 	if len(cfg.metricFilter) == 0 {
 		cfg.metricFilter = defaultMetricFilter()
 	}
@@ -174,9 +206,12 @@ func defaultMetricFilter() map[string]bool {
 	}
 }
 
-// WithMetrics enables only the specified metrics for export.
+// WithMetrics enables only the specified metrics for export using string-based metric names.
 // If not called, all metrics are enabled by default.
 // Metrics that are not included will not be registered or exported.
+//
+// Deprecated: Use the typed WithXxxMetrics() options instead (e.g. WithInFlightMetrics(),
+// WithSuccessMetrics(), WithErrorMetrics()). WithMetrics() will be removed in a future release.
 //
 // Example usage:
 //
@@ -186,20 +221,6 @@ func defaultMetricFilter() map[string]bool {
 //	    sentinel.WithMetrics(
 //	        sentinel.MetricSuccesses,
 //	        sentinel.MetricFailures,
-//	    ),
-//	)
-//
-//	// Export all metrics except durations
-//	observer := sentinel.NewObserver(
-//	    nil,
-//	    sentinel.WithMetrics(
-//	        sentinel.MetricInFlight,
-//	        sentinel.MetricSuccesses,
-//	        sentinel.MetricFailures,
-//	        sentinel.MetricErrors,
-//	        sentinel.MetricTimeouts,
-//	        sentinel.MetricPanics,
-//	        sentinel.MetricRetries,
 //	    ),
 //	)
 func WithMetrics(metricNames ...string) ObserverOption {
