@@ -1,3 +1,4 @@
+// Package main runs a vector-observer example with sentinel and Prometheus metrics.
 package main
 
 import (
@@ -99,7 +100,7 @@ func main() {
 
 		// Simulate main tasks
 		go func() {
-			err := mObserver.RunFunc(func(ctx context.Context) error {
+			err := mObserver.RunFunc(func(_ context.Context) error {
 				time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
 				if rand.Float32() < 0.2 {
 					return errors.New("api production error")
@@ -113,7 +114,7 @@ func main() {
 
 		// Simulate background tasks
 		go func() {
-			err := bObserver.RunFunc(func(ctx context.Context) error {
+			err := bObserver.RunFunc(func(_ context.Context) error {
 				time.Sleep(time.Duration(rand.Intn(800)) * time.Millisecond)
 				if rand.Float32() < 0.3 {
 					return errors.New("api staging error")
@@ -128,7 +129,7 @@ func main() {
 		// Simulate database read-write tasks (less frequent)
 		if taskCount%3 == 0 {
 			go func() {
-				err := dbObserver.RunFunc(func(ctx context.Context) error {
+				err := dbObserver.RunFunc(func(_ context.Context) error {
 					time.Sleep(time.Duration(rand.Intn(300)) * time.Millisecond)
 					if rand.Float32() < 0.15 {
 						return errors.New("database production error")

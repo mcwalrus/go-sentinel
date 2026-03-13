@@ -54,7 +54,7 @@ type testTask struct {
 	success  bool
 	err      error
 	tryPanic bool
-	fn       func(ctx context.Context) error
+	fn       func(_ context.Context) error
 }
 
 func (t *testTask) Execute(ctx context.Context) error {
@@ -175,7 +175,7 @@ func TestObserver_UnconfiguredObserver(t *testing.T) {
 
 	t.Run("observer nil pointer", func(t *testing.T) {
 		t.Parallel()
-		var observer *Observer = nil
+		var observer *Observer
 
 		t.Run("Run", func(t *testing.T) {
 			t.Parallel()
@@ -186,7 +186,7 @@ func TestObserver_UnconfiguredObserver(t *testing.T) {
 		t.Run("RunFunc", func(t *testing.T) {
 			t.Parallel()
 			defer expectPanic(t, "observer.RunFunc")
-			_ = observer.RunFunc(func(ctx context.Context) error { return nil })
+			_ = observer.RunFunc(func(_ context.Context) error { return nil })
 		})
 	})
 
@@ -203,7 +203,7 @@ func TestObserver_UnconfiguredObserver(t *testing.T) {
 		t.Run("RunFunc", func(t *testing.T) {
 			t.Parallel()
 			defer expectPanic(t, "observer.RunFunc")
-			_ = observer.RunFunc(func(ctx context.Context) error { return nil })
+			_ = observer.RunFunc(func(_ context.Context) error { return nil })
 		})
 	})
 }
@@ -309,7 +309,7 @@ func TestObserve_ErrorHandling(t *testing.T) {
 
 	expectedErr := errors.New("task failed")
 	task := &testTask{
-		fn: func(ctx context.Context) error {
+		fn: func(_ context.Context) error {
 			return expectedErr
 		},
 	}
@@ -397,7 +397,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 		})
 
 		task := &testTask{
-			fn: func(ctx context.Context) error {
+			fn: func(_ context.Context) error {
 				panic("test panic")
 			},
 		}
@@ -426,7 +426,7 @@ func TestObserve_PanicRecovery(t *testing.T) {
 		})
 
 		task := &testTask{
-			fn: func(ctx context.Context) error {
+			fn: func(_ context.Context) error {
 				panic("test panic")
 			},
 		}
@@ -469,7 +469,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 
 		attemptCount := 0
 		task := &testTask{
-			fn: func(ctx context.Context) error {
+			fn: func(_ context.Context) error {
 				attemptCount++
 				if attemptCount == 1 {
 					return errors.New("first attempt fails")
@@ -511,7 +511,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 		attemptCount := 0
 		expectedErr := errors.New("persistent failure")
 		task := &testTask{
-			fn: func(ctx context.Context) error {
+			fn: func(_ context.Context) error {
 				attemptCount++
 				return expectedErr
 			},
@@ -562,7 +562,7 @@ func TestObserve_RetryLogic(t *testing.T) {
 
 		attemptCount := 0
 		task := &testTask{
-			fn: func(ctx context.Context) error {
+			fn: func(_ context.Context) error {
 				attemptCount++
 				if attemptCount == 3 {
 					return expectedErr
@@ -682,7 +682,7 @@ func TestObserve_RetryStrategy(t *testing.T) {
 	t.Run("retry strategy is called with correct parameters", func(t *testing.T) {
 		t.Parallel()
 
-		fn := func(ctx context.Context) error {
+		fn := func(_ context.Context) error {
 			return errors.New("always fails")
 		}
 
@@ -746,7 +746,7 @@ func TestObserve_InFlightMetrics(t *testing.T) {
 				defer wg.Done()
 
 				task := &testTask{
-					fn: func(ctx context.Context) error {
+					fn: func(_ context.Context) error {
 						<-startBarrier
 						time.Sleep(activeDuration)
 
@@ -811,7 +811,7 @@ func TestObserve_Concurrent(t *testing.T) {
 
 		executed := int32(0)
 		task := &testTask{
-			fn: func(ctx context.Context) error {
+			fn: func(_ context.Context) error {
 				defer wg.Done()
 				atomic.AddInt32(&executed, 1)
 				return nil
@@ -856,7 +856,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 		{
 			name: "successful task",
 			task: &testTask{
-				fn: func(ctx context.Context) error {
+				fn: func(_ context.Context) error {
 					return nil
 				},
 			},
@@ -876,7 +876,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 		{
 			name: "failed task",
 			task: &testTask{
-				fn: func(ctx context.Context) error {
+				fn: func(_ context.Context) error {
 					return errors.New("task failed")
 				},
 			},
@@ -896,7 +896,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 		{
 			name: "task with panic (recovered)",
 			task: &testTask{
-				fn: func(ctx context.Context) error {
+				fn: func(_ context.Context) error {
 					panic("test panic")
 				},
 			},
@@ -919,7 +919,7 @@ func TestObserve_MetricsRecording(t *testing.T) {
 				MaxRetries: 3,
 			},
 			task: &testTask{
-				fn: func(ctx context.Context) error {
+				fn: func(_ context.Context) error {
 					return errors.New("test error")
 				},
 			},
@@ -1108,7 +1108,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 
 		observer := NewObserver(nil)
 
-		fn := func(ctx context.Context) error {
+		fn := func(_ context.Context) error {
 			panic("test panic")
 		}
 
@@ -1133,7 +1133,7 @@ func TestObserver_TestPanicHandling(t *testing.T) {
 		observer := NewObserver(nil)
 		observer.DisablePanicRecovery(true)
 
-		fn := func(ctx context.Context) error {
+		fn := func(_ context.Context) error {
 			panic("test panic")
 		}
 
@@ -1168,7 +1168,7 @@ type failingTask struct {
 	panicOnAttempt   int
 }
 
-func (t *failingTask) Execute(ctx context.Context) error {
+func (t *failingTask) Execute(_ context.Context) error {
 	t.attemptCount++
 	if t.shouldPanic && t.attemptCount == t.panicOnAttempt {
 		panic("task panic")
@@ -1672,7 +1672,7 @@ func TestHandlerPanicRecovery(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 1,
-			RetryStrategy: retry.WaitFunc(func(retryCount int) time.Duration {
+			RetryStrategy: retry.WaitFunc(func(_ int) time.Duration {
 				// This will panic due to nil pointer dereference
 				return time.Duration(*i)
 			}),
@@ -1706,7 +1706,7 @@ func TestHandlerPanicRecovery(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 3,
-			RetryBreaker: circuit.Breaker(func(err error) bool {
+			RetryBreaker: circuit.Breaker(func(_ error) bool {
 				// This will panic due to nil pointer dereference
 				_ = *i
 				return false
@@ -1740,7 +1740,7 @@ func TestHandlerPanicRecovery(t *testing.T) {
 		var i *int // nil pointer that will cause panic when dereferenced
 
 		observer.UseConfig(ObserverConfig{
-			Control: circuit.Control(func(phase circuit.ExecutionPhase) bool {
+			Control: circuit.Control(func(_ circuit.ExecutionPhase) bool {
 				// This will panic due to nil pointer dereference
 				_ = *i
 				return false
@@ -1776,7 +1776,7 @@ func TestHandlerPanicRecovery(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 2,
-			Control: circuit.Control(func(phase circuit.ExecutionPhase) bool {
+			Control: circuit.Control(func(_ circuit.ExecutionPhase) bool {
 				// This will panic due to nil pointer dereference
 				_ = *i
 				return false
@@ -1862,7 +1862,7 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 2,
-			RetryStrategy: retry.WaitFunc(func(retryCount int) time.Duration {
+			RetryStrategy: retry.WaitFunc(func(_ int) time.Duration {
 				// Always panic
 				return time.Duration(*i)
 			}),
@@ -1901,7 +1901,7 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 3,
-			RetryBreaker: circuit.Breaker(func(err error) bool {
+			RetryBreaker: circuit.Breaker(func(_ error) bool {
 				// Panic when checking error
 				_ = *i
 				return false
@@ -1935,7 +1935,7 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 		taskExecuted := false
 
 		observer.UseConfig(ObserverConfig{
-			Control: circuit.Control(func(phase circuit.ExecutionPhase) bool {
+			Control: circuit.Control(func(_ circuit.ExecutionPhase) bool {
 				// Panic before returning
 				_ = *i
 				return false
@@ -1977,7 +1977,7 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 3,
-			Control: circuit.Control(func(phase circuit.ExecutionPhase) bool {
+			Control: circuit.Control(func(_ circuit.ExecutionPhase) bool {
 				callCount++
 				if callCount == 3 {
 					// Panic on third check: PhaseNewRequest (callCount=1), PhaseRetry before first retry (callCount=2), PhaseRetry before second retry (callCount=3)
@@ -2020,10 +2020,10 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 2,
-			RetryStrategy: retry.WaitFunc(func(retryCount int) time.Duration {
+			RetryStrategy: retry.WaitFunc(func(_ int) time.Duration {
 				return time.Duration(*i) // Panic
 			}),
-			RetryBreaker: circuit.Breaker(func(err error) bool {
+			RetryBreaker: circuit.Breaker(func(_ error) bool {
 				_ = *i // Panic
 				return false
 			}),
@@ -2062,7 +2062,7 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 2,
-			RetryStrategy: retry.WaitFunc(func(retryCount int) time.Duration {
+			RetryStrategy: retry.WaitFunc(func(_ int) time.Duration {
 				return time.Duration(*i) // Panic, but task succeeds so never called
 			}),
 		})
@@ -2138,13 +2138,13 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 		taskExecuted := false
 
 		observer.UseConfig(ObserverConfig{
-			Control: circuit.Control(func(phase circuit.ExecutionPhase) bool {
+			Control: circuit.Control(func(_ circuit.ExecutionPhase) bool {
 				_ = *i // Panic
 				return false
 			}),
 		})
 
-		err := observer.RunFunc(func(ctx context.Context) error {
+		err := observer.RunFunc(func(_ context.Context) error {
 			taskExecuted = true
 			return nil
 		})
@@ -2168,7 +2168,7 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 1,
-			RetryStrategy: retry.WaitFunc(func(retryCount int) time.Duration {
+			RetryStrategy: retry.WaitFunc(func(_ int) time.Duration {
 				return time.Duration(*i) // Panic
 			}),
 		})
@@ -2199,7 +2199,7 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 2,
-			RetryBreaker: circuit.Breaker(func(err error) bool {
+			RetryBreaker: circuit.Breaker(func(_ error) bool {
 				// Panic even with nil error (shouldn't happen but test edge case)
 				_ = *i
 				return false
@@ -2233,7 +2233,7 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 1,
-			RetryStrategy: retry.WaitFunc(func(retryCount int) time.Duration {
+			RetryStrategy: retry.WaitFunc(func(_ int) time.Duration {
 				return time.Duration(*i) // Panic
 			}),
 		})
@@ -2317,7 +2317,7 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 2,
-			Control: circuit.Control(func(phase circuit.ExecutionPhase) bool {
+			Control: circuit.Control(func(_ circuit.ExecutionPhase) bool {
 				checkCount++
 				if checkCount == 3 {
 					// Panic on third check: PhaseNewRequest (checkCount=1), PhaseRetry before first retry (checkCount=2), PhaseRetry before second retry (checkCount=3)
@@ -2365,7 +2365,7 @@ func TestObserver_PendingAndInFlightMetrics(t *testing.T) {
 			MaxConcurrency: 10, // Large limit, should acquire immediately
 		})
 
-		err := observer.RunFunc(func(ctx context.Context) error {
+		err := observer.RunFunc(func(_ context.Context) error {
 			return nil
 		})
 		if err != nil {
@@ -2400,14 +2400,14 @@ func TestObserver_PendingAndInFlightMetrics(t *testing.T) {
 		// Start two tasks that block
 		go func() {
 			defer wg.Done()
-			_ = observer.RunFunc(func(ctx context.Context) error {
+			_ = observer.RunFunc(func(_ context.Context) error {
 				<-blocker1
 				return nil
 			})
 		}()
 		go func() {
 			defer wg.Done()
-			_ = observer.RunFunc(func(ctx context.Context) error {
+			_ = observer.RunFunc(func(_ context.Context) error {
 				<-blocker2
 				return nil
 			})
@@ -2420,7 +2420,7 @@ func TestObserver_PendingAndInFlightMetrics(t *testing.T) {
 		pendingDone := make(chan struct{})
 		go func() {
 			defer close(pendingDone)
-			_ = observer.RunFunc(func(ctx context.Context) error {
+			_ = observer.RunFunc(func(_ context.Context) error {
 				time.Sleep(10 * time.Millisecond)
 				return nil
 			})
@@ -2470,7 +2470,7 @@ func TestObserver_PendingAndInFlightMetrics(t *testing.T) {
 		for i := 0; i < numTasks; i++ {
 			go func() {
 				defer wg.Done()
-				_ = observer.RunFunc(func(ctx context.Context) error {
+				_ = observer.RunFunc(func(_ context.Context) error {
 					<-startBarrier
 					// Check metrics while executing
 					mu.Lock()
@@ -2536,7 +2536,7 @@ func TestObserver_PendingAndInFlightMetrics(t *testing.T) {
 		task1Done := make(chan struct{})
 		go func() {
 			defer close(task1Done)
-			_ = observer.RunFunc(func(ctx context.Context) error {
+			_ = observer.RunFunc(func(_ context.Context) error {
 				time.Sleep(100 * time.Millisecond)
 				return nil
 			})
@@ -2549,7 +2549,7 @@ func TestObserver_PendingAndInFlightMetrics(t *testing.T) {
 		task2Done := make(chan struct{})
 		go func() {
 			defer close(task2Done)
-			_ = observer.RunFunc(func(ctx context.Context) error {
+			_ = observer.RunFunc(func(_ context.Context) error {
 				time.Sleep(10 * time.Millisecond)
 				return nil
 			})
@@ -2603,7 +2603,7 @@ func TestObserver_PendingAndInFlightMetrics(t *testing.T) {
 		for i := 0; i < numTasks; i++ {
 			go func() {
 				defer wg.Done()
-				_ = observer.RunFunc(func(ctx context.Context) error {
+				_ = observer.RunFunc(func(_ context.Context) error {
 					<-startBarrier
 					time.Sleep(30 * time.Millisecond)
 					return nil
@@ -2650,7 +2650,7 @@ func TestObserver_PendingAndInFlightMetrics(t *testing.T) {
 		for i := 0; i < numTasks; i++ {
 			go func() {
 				defer wg.Done()
-				_ = observer.RunFunc(func(ctx context.Context) error {
+				_ = observer.RunFunc(func(_ context.Context) error {
 					time.Sleep(10 * time.Millisecond)
 					return nil
 				})
@@ -2687,14 +2687,14 @@ func TestObserver_PendingAndInFlightMetrics(t *testing.T) {
 
 		go func() {
 			defer wg.Done()
-			_ = observer.RunFunc(func(ctx context.Context) error {
+			_ = observer.RunFunc(func(_ context.Context) error {
 				<-blocker
 				return nil
 			})
 		}()
 		go func() {
 			defer wg.Done()
-			_ = observer.RunFunc(func(ctx context.Context) error {
+			_ = observer.RunFunc(func(_ context.Context) error {
 				<-blocker
 				return nil
 			})
@@ -2708,7 +2708,7 @@ func TestObserver_PendingAndInFlightMetrics(t *testing.T) {
 		for i := 0; i < 3; i++ {
 			go func() {
 				defer wg.Done()
-				_ = observer.RunFunc(func(ctx context.Context) error {
+				_ = observer.RunFunc(func(_ context.Context) error {
 					time.Sleep(20 * time.Millisecond)
 					return nil
 				})

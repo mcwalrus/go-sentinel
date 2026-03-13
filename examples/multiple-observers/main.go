@@ -1,3 +1,4 @@
+// Package main runs a multiple-observers example with sentinel and Prometheus metrics.
 package main
 
 import (
@@ -216,7 +217,7 @@ func run() {
 				}
 				taskID++
 				go func() {
-					backgroundObserver.RunFunc(task.Execute)
+					_ = backgroundObserver.RunFunc(task.Execute)
 				}()
 			}
 
@@ -230,7 +231,7 @@ func run() {
 				}
 				taskID++
 				go func() {
-					criticalObserver.RunFunc(task.Execute)
+					_ = criticalObserver.RunFunc(task.Execute)
 				}()
 			}
 
@@ -244,7 +245,7 @@ func run() {
 				}
 				taskID++
 				go func() {
-					apiObserver.RunFunc(task.Execute)
+					_ = apiObserver.RunFunc(task.Execute)
 				}()
 			}
 
@@ -262,7 +263,7 @@ func run() {
 				task := &BackgroundTask{TaskID: fmt.Sprintf("bg-%04d", taskID)}
 				taskID++
 				go func() {
-					backgroundObserver.RunFunc(task.Execute)
+					_ = backgroundObserver.RunFunc(task.Execute)
 				}()
 			}
 
@@ -271,7 +272,7 @@ func run() {
 				task := &CriticalTask{TaskID: fmt.Sprintf("crit-%04d", taskID)}
 				taskID++
 				go func() {
-					criticalObserver.RunFunc(task.Execute)
+					_ = criticalObserver.RunFunc(task.Execute)
 				}()
 			}
 
@@ -280,7 +281,7 @@ func run() {
 				task := &APITask{TaskID: fmt.Sprintf("api-%04d", taskID)}
 				taskID++
 				go func() {
-					apiObserver.RunFunc(task.Execute)
+					_ = apiObserver.RunFunc(task.Execute)
 				}()
 			}
 		}

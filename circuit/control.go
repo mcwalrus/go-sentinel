@@ -29,9 +29,8 @@ const (
 //	}
 type Control func(phase ExecutionPhase) (shouldStop bool)
 
-// OnDone stops when the provided done channel is closed.
-// This can be used to represent a full-closed control signal, typically for graceful shutdown.
-// Once the channel is closed, all new requests and retries will be stopped.
+// WhenClosed returns a Control that stops when the provided done channel is closed.
+// Use it for graceful shutdown: once the channel is closed, all new requests and retries stop.
 //
 // Example usage:
 //

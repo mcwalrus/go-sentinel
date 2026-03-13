@@ -184,7 +184,7 @@ func (o *Observer) Run(fn func() error) error {
 
 	task := &implTask{
 		cfg: cfg,
-		fn: func(ctx context.Context) error {
+		fn: func(_ context.Context) error {
 			return fn() // ignore ctx
 		},
 	}
@@ -404,7 +404,7 @@ func (o *Observer) execute(task *implTask) error {
 			o.m.RUnlock()
 
 			// Wait retry duration
-			task.retryCount += 1
+			task.retryCount++
 			o.metrics.retries.Inc()
 			if task.cfg.RetryStrategy != nil {
 				wait := safeRetryStrategy(task.cfg.RetryStrategy, task.retryCount)
@@ -424,12 +424,10 @@ func (o *Observer) execute(task *implTask) error {
 			err2 := o.execute(retryTask)
 			if err2 != nil {
 				return errors.Join(err, err2)
-			} else {
-				return nil
 			}
-		} else {
-			o.metrics.failures.Inc()
+			return nil
 		}
+		o.metrics.failures.Inc()
 	} else {
 		o.metrics.successes.Inc()
 	}

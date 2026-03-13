@@ -14,7 +14,7 @@ type WaitFunc func(retries int) time.Duration
 
 // Immediate returns a WaitFunc that implements immediate retry with no delay.
 func Immediate() WaitFunc {
-	return func(retries int) time.Duration {
+	return func(_ int) time.Duration {
 		return 0
 	}
 }
@@ -57,11 +57,11 @@ func UseDelays(delays []time.Duration) WaitFunc {
 	return func(retries int) time.Duration {
 		if retries <= 0 {
 			return 0
-		} else if retries >= len(delays) {
-			return delays[len(delays)-1]
-		} else {
-			return delays[retries-1]
 		}
+		if retries >= len(delays) {
+			return delays[len(delays)-1]
+		}
+		return delays[retries-1]
 	}
 }
 

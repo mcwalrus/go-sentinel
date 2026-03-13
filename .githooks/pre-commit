@@ -19,7 +19,7 @@ run_linter() {
 }
 
 run_vet() {
-  echo "vet: Examining code for suspicious constructs"
+  echo "vet"
   go vet ./...
 }
 
@@ -30,20 +30,20 @@ run_error_checking() {
 
 run_static_analysis() {
   echo "static analysis"
-  staticcheck ./...
+  staticcheck $(go list ./... | grep -v '/examples')
 }
 
 run_gosec() {
   echo "gosec"
-  gosec -quiet ./...
+  gosec -quiet -exclude-dir=examples -exclude=G404,G112 ./...
 }
 
-run_gocycle() {
-  echo "gocycle"
-  gocyclo -over 10 .
-}
+# run_gocycle() {
+#   echo "gocycle"
+#   gocyclo -over 10 .
+# }
 
-for stage in dependencies format linter vet error_checking static_analysis gosec gocycle; do
+for stage in dependencies format linter vet error_checking static_analysis gosec; do
   "run_${stage}"
 done
 

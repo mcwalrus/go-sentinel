@@ -244,7 +244,7 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 		})
 
 		attemptCount1 := 0
-		err1 := child1.RunFunc(func(ctx context.Context) error {
+		err1 := child1.RunFunc(func(_ context.Context) error {
 			attemptCount1++
 			if attemptCount1 < 3 {
 				return errors.New("retryable error")
@@ -256,7 +256,7 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 		}
 
 		attemptCount2 := 0
-		err2 := child2.RunFunc(func(ctx context.Context) error {
+		err2 := child2.RunFunc(func(_ context.Context) error {
 			attemptCount2++
 			return errors.New("permanent error")
 		})
@@ -378,12 +378,12 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 			t.Fatalf("Failed to create forked observer: %v", err)
 		}
 
-		_ = child1.RunFunc(func(ctx context.Context) error {
+		_ = child1.RunFunc(func(_ context.Context) error {
 			time.Sleep(50 * time.Millisecond)
 			return nil
 		})
 
-		_ = child2.RunFunc(func(ctx context.Context) error {
+		_ = child2.RunFunc(func(_ context.Context) error {
 			time.Sleep(150 * time.Millisecond)
 			return nil
 		})
@@ -984,7 +984,7 @@ func TestVecObserver_Reset(t *testing.T) {
 		child, _ := vecObserver.WithLabels("api")
 
 		// Record a duration
-		_ = child.RunFunc(func(ctx context.Context) error {
+		_ = child.RunFunc(func(_ context.Context) error {
 			time.Sleep(50 * time.Millisecond)
 			return nil
 		})
@@ -1035,7 +1035,7 @@ func TestVecObserver_Reset(t *testing.T) {
 		}
 
 		// Old child observer can still be called but its metrics won't be tracked
-		_ = child.RunFunc(func(ctx context.Context) error {
+		_ = child.RunFunc(func(_ context.Context) error {
 			time.Sleep(30 * time.Millisecond)
 			return nil
 		})
@@ -1063,7 +1063,7 @@ func TestVecObserver_Reset(t *testing.T) {
 
 		// Create new child observer after reset - this will work correctly
 		newChild, _ := vecObserver.WithLabels("api")
-		_ = newChild.RunFunc(func(ctx context.Context) error {
+		_ = newChild.RunFunc(func(_ context.Context) error {
 			time.Sleep(30 * time.Millisecond)
 			return nil
 		})
