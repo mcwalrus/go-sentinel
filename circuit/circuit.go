@@ -11,6 +11,8 @@ import (
 // continue. The breaker will always expect an error to be provided. Provide your own
 // breaker by implementing the function signature.
 //
+// Deprecated: Use func(err error) bool directly in [sentinel.ObserverConfig.RetryBreaker].
+//
 // Example usage:
 //
 //	breaker := circuit.Breaker(func(err error) bool {
@@ -21,6 +23,8 @@ type Breaker func(err error) bool
 // After stops retries when total elapsed time since breaker creation exceeds d.
 // This is useful for implementing time-based circuit breaking, ensuring retries
 // don't continue past a certain duration.
+//
+// Deprecated: Use a plain func(err error) bool with time tracking in [sentinel.ObserverConfig.RetryBreaker].
 //
 // Example usage:
 //
@@ -39,6 +43,9 @@ func After(d time.Duration) Breaker {
 // OnPanic stops attempts to run tasks when the last error originated by Go panic().
 // This is useful when you want to stop retrying after a panic occurs, as panics
 // typically indicate programming errors that won't be resolved by retrying.
+//
+// Deprecated: Use [retry.OnPanic] instead, which returns a plain func(err error) bool
+// compatible with [sentinel.ObserverConfig.RetryBreaker].
 //
 // Example usage:
 //

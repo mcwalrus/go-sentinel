@@ -1189,7 +1189,7 @@ func TestShortOnPanicRetryBreaker(t *testing.T) {
 		observer.UseConfig(ObserverConfig{
 			Timeout:      time.Second,
 			MaxRetries:   3,
-			RetryBreaker: circuit.OnPanic(),
+			RetryBreaker: retry.OnPanic(),
 		})
 
 		task := &failingTask{
@@ -1224,7 +1224,7 @@ func TestShortOnPanicRetryBreaker(t *testing.T) {
 		observer.UseConfig(ObserverConfig{
 			Timeout:      time.Second,
 			MaxRetries:   5,
-			RetryBreaker: circuit.OnPanic(),
+			RetryBreaker: retry.OnPanic(),
 		})
 
 		task := &failingTask{
@@ -1264,7 +1264,7 @@ func TestShortOnPanicRetryBreaker(t *testing.T) {
 		observer.UseConfig(ObserverConfig{
 			Timeout:      time.Second,
 			MaxRetries:   5,
-			RetryBreaker: circuit.OnPanic(),
+			RetryBreaker: retry.OnPanic(),
 		})
 
 		task := &failingTask{
@@ -1304,7 +1304,7 @@ func TestShortOnPanicRetryBreaker(t *testing.T) {
 		observer.UseConfig(ObserverConfig{
 			Timeout:      time.Second,
 			MaxRetries:   3,
-			RetryBreaker: circuit.OnPanic(),
+			RetryBreaker: retry.OnPanic(),
 		})
 
 		task := &failingTask{
@@ -1705,11 +1705,11 @@ func TestHandlerPanicRecovery(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 3,
-			RetryBreaker: circuit.Breaker(func(_ error) bool {
+			RetryBreaker: func(_ error) bool {
 				// This will panic due to nil pointer dereference
 				_ = *i
 				return false
-			}),
+			},
 		})
 
 		// Should not panic, but should stop retries due to panic recovery default (true)
@@ -1904,11 +1904,11 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 3,
-			RetryBreaker: circuit.Breaker(func(_ error) bool {
+			RetryBreaker: func(_ error) bool {
 				// Panic when checking error
 				_ = *i
 				return false
-			}),
+			},
 		})
 
 		err := observer.Run(func() error {
@@ -2025,10 +2025,10 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 			RetryStrategy: retry.WaitFunc(func(_ int) time.Duration {
 				return time.Duration(*i) // Panic
 			}),
-			RetryBreaker: circuit.Breaker(func(_ error) bool {
+			RetryBreaker: func(_ error) bool {
 				_ = *i // Panic
 				return false
-			}),
+			},
 		})
 
 		attempts := 0
@@ -2200,11 +2200,11 @@ func TestHandlerPanicRecovery_Comprehensive(t *testing.T) {
 
 		observer.UseConfig(ObserverConfig{
 			MaxRetries: 2,
-			RetryBreaker: circuit.Breaker(func(_ error) bool {
+			RetryBreaker: func(_ error) bool {
 				// Panic even with nil error (shouldn't happen but test edge case)
 				_ = *i
 				return false
-			}),
+			},
 		})
 
 		// Task succeeds, breaker shouldn't be called, but if it is, panic recovery handles it

@@ -29,7 +29,7 @@ type ObserverConfig struct {
 	// returning true. The handler will be provided the error from the previous attempt.
 	// When nil, the observer will always attempt the next retry. This is useful to stop
 	// retries on particular errors.
-	RetryBreaker circuit.Breaker
+	RetryBreaker func(err error) bool
 
 	// Control receives the execution phase (PhaseNewRequest for new task executions, or
 	// PhaseRetry for retry attempts) and returns true to cancel execution. This is useful

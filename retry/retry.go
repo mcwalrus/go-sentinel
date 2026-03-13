@@ -5,6 +5,7 @@ package retry
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"math/big"
 	"time"
 )
@@ -13,6 +14,36 @@ import (
 // retry strategies including backoff, jitter, or circuit-breaking.
 type Retrier interface {
 	Do(ctx context.Context, fn func() error) error
+}
+
+// DefaultRetrier is a configurable Retrier that integrates retry strategies with
+// circuit-breaking. The Breaker field provides a stop condition based on the last
+// error: when it returns true, retries halt immediately.
+type DefaultRetrier struct {
+	// WaitStrategy defines how long to wait between retry attempts.
+	WaitStrategy WaitFunc
+
+	// MaxRetries specifies the maximum number of retry attempts.
+	MaxRetries int
+
+	// Breaker is an optional function that stops retries when it returns true.
+	// It receives the error from the previous attempt. When nil, retries continue
+	// until MaxRetries is exhausted.
+	Breaker func(err error) bool
+}
+
+// OnPanic returns a func(err error) bool that stops retries when the error
+// originated from a Go panic. Use this as ObserverConfig.RetryBreaker to avoid
+// retrying panic-induced failures.
+func OnPanic() func(err error) bool {
+	type panicError interface {
+		error
+		Value() any
+	}
+	return func(err error) bool {
+		var target panicError
+		return errors.As(err, &target)
+	}
 }
 
 // WaitFunc defines a function to return wait durations from a specific retry
