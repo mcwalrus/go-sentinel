@@ -282,9 +282,17 @@ func (o *Observer) Submit(fn func() error) {
 		},
 	}
 
-	o.pool.Go(func() {
-		_ = o.observe(limiter, control, task)
-	})
+	if o.cfg.enablePending && o.cfg.maxConcurrency > 0 {
+		o.metrics.pending.Inc()
+		o.pool.Go(func() {
+			o.metrics.pending.Dec()
+			_ = o.observe(limiter, control, task)
+		})
+	} else {
+		o.pool.Go(func() {
+			_ = o.observe(limiter, control, task)
+		})
+	}
 }
 
 // SubmitFunc enqueues fn in the Observer's worker pool for async execution.
@@ -321,9 +329,17 @@ func (o *Observer) SubmitFunc(fn func(ctx context.Context) error) {
 		fn:  fn,
 	}
 
-	o.pool.Go(func() {
-		_ = o.observe(limiter, control, task)
-	})
+	if o.cfg.enablePending && o.cfg.maxConcurrency > 0 {
+		o.metrics.pending.Inc()
+		o.pool.Go(func() {
+			o.metrics.pending.Dec()
+			_ = o.observe(limiter, control, task)
+		})
+	} else {
+		o.pool.Go(func() {
+			_ = o.observe(limiter, control, task)
+		})
+	}
 }
 
 // observe is the main entry point for observing a task.

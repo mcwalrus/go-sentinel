@@ -89,7 +89,6 @@ func TestObserver_DefaultConfig(t *testing.T) {
 		"sentinel_panics_total",
 		"sentinel_timeouts_total",
 		"sentinel_retries_total",
-		"sentinel_pending_total",
 	}
 
 	families, err := registry.Gather()
@@ -2943,5 +2942,131 @@ func TestSubmit_PanicPropagation(t *testing.T) {
 			Errors:   1,
 			Failures: 1,
 		})
+	})
+}
+
+func TestObserver_SubmitQueueDepth(t *testing.T) {
+	t.Parallel()
+
+	t.Run("pending_total tracks Submit queue when pool at capacity", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil,
+			WithQueueMetrics(),
+			WithMaxConcurrency(1),
+		)
+
+		// Use a channel to hold all tasks so they don't complete until we're ready
+		release := make(chan struct{})
+		const numTasks = 5
+
+		var allDone sync.WaitGroup
+		allDone.Add(numTasks)
+
+		for i := 0; i < numTasks; i++ {
+			go observer.Submit(func() error {
+				defer allDone.Done()
+				<-release
+				return nil
+			})
+		}
+
+		// Give goroutines time to call Submit (pending incremented) and block in pool.Go()
+		time.Sleep(50 * time.Millisecond)
+
+		// With maxConcurrency=1: 1 task running (pending decremented at goroutine start),
+		// up to 4 tasks waiting for pool slots (still incremented)
+		pending := testutil.ToFloat64(observer.metrics.pending)
+		if pending < 1 {
+			t.Errorf("Expected pending>=1 while tasks are queued, got %f", pending)
+		}
+
+		// Release all tasks - they complete quickly once unblocked
+		close(release)
+		allDone.Wait()
+
+		// Give time for final pending decrements to propagate
+		time.Sleep(10 * time.Millisecond)
+
+		// After all tasks done, pending should be 0
+		finalPending := testutil.ToFloat64(observer.metrics.pending)
+		if finalPending != 0 {
+			t.Errorf("Expected pending=0 after all tasks done, got %f", finalPending)
+		}
+	})
+
+	t.Run("pending_total not registered without WithQueueMetrics", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil, WithMaxConcurrency(1))
+		registry := prometheus.NewRegistry()
+		err := observer.Register(registry)
+		if err != nil {
+			t.Fatalf("Unexpected registration error: %v", err)
+		}
+
+		families, err := registry.Gather()
+		if err != nil {
+			t.Fatalf("Failed to gather metrics: %v", err)
+		}
+
+		for _, family := range families {
+			if *family.Name == "sentinel_pending_total" {
+				t.Error("Expected sentinel_pending_total to not be registered without WithQueueMetrics()")
+			}
+		}
+	})
+
+	t.Run("pending_total stays 0 without MaxConcurrency", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil, WithQueueMetrics())
+
+		release := make(chan struct{})
+		const numTasks = 5
+
+		for i := 0; i < numTasks; i++ {
+			go observer.Submit(func() error {
+				<-release
+				return nil
+			})
+		}
+
+		time.Sleep(50 * time.Millisecond)
+
+		// Without MaxConcurrency, pool has no limit - no tasks queue for pool slots
+		pending := testutil.ToFloat64(observer.metrics.pending)
+		if pending != 0 {
+			t.Errorf("Expected pending=0 without MaxConcurrency, got %f", pending)
+		}
+
+		close(release)
+		observer.pool.Wait()
+	})
+
+	t.Run("pending_total registered when WithQueueMetrics is set", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil, WithQueueMetrics(), WithMaxConcurrency(1))
+		registry := prometheus.NewRegistry()
+		err := observer.Register(registry)
+		if err != nil {
+			t.Fatalf("Unexpected registration error: %v", err)
+		}
+
+		families, err := registry.Gather()
+		if err != nil {
+			t.Fatalf("Failed to gather metrics: %v", err)
+		}
+
+		found := false
+		for _, family := range families {
+			if *family.Name == "sentinel_pending_total" {
+				found = true
+			}
+		}
+		if !found {
+			t.Error("Expected sentinel_pending_total to be registered with WithQueueMetrics()")
+		}
 	})
 }

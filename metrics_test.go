@@ -387,7 +387,6 @@ func TestMetricHelpText1(t *testing.T) {
 			"durations_seconds": "Histogram of the observed durations of tasks",
 			"timeouts_total":    "Number of timeout errors from observed tasks",
 			"retries_total":     "Number of retry attempts from observed tasks",
-			"pending_total":     "Number of observed tasks pending concurrency limiter acquisition",
 		}
 
 		t.Log("Checking help text")
