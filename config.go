@@ -192,3 +192,31 @@ func WithMetrics(metricNames ...string) ObserverOption {
 		}
 	}
 }
+
+// WithInFlightMetrics enables the in_flight gauge metric for the Observer.
+// The in_flight gauge tracks the number of tasks currently executing.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(
+//	    sentinel.WithInFlightMetrics(),
+//	)
+func WithInFlightMetrics() ObserverOption {
+	return func(cfg *config) {
+		cfg.enableInFlight = true
+	}
+}
+
+// WithSuccessMetrics enables the success_total counter metric for the Observer.
+// The success_total counter increments each time a task completes without error.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(
+//	    sentinel.WithSuccessMetrics(),
+//	)
+func WithSuccessMetrics() ObserverOption {
+	return func(cfg *config) {
+		cfg.enableSuccess = true
+	}
+}

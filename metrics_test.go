@@ -410,6 +410,36 @@ func TestMetricHelpText1(t *testing.T) {
 	})
 }
 
+func TestWithInFlightMetrics(t *testing.T) {
+	t.Parallel()
+
+	cfg := config{}
+	opt := WithInFlightMetrics()
+	opt(&cfg)
+
+	if !cfg.enableInFlight {
+		t.Error("WithInFlightMetrics() should set enableInFlight = true")
+	}
+	if cfg.enableSuccess {
+		t.Error("WithInFlightMetrics() should not affect enableSuccess")
+	}
+}
+
+func TestWithSuccessMetrics(t *testing.T) {
+	t.Parallel()
+
+	cfg := config{}
+	opt := WithSuccessMetrics()
+	opt(&cfg)
+
+	if !cfg.enableSuccess {
+		t.Error("WithSuccessMetrics() should set enableSuccess = true")
+	}
+	if cfg.enableInFlight {
+		t.Error("WithSuccessMetrics() should not affect enableInFlight")
+	}
+}
+
 func TestConfigEnableFlagsDefaultToFalse(t *testing.T) {
 	t.Parallel()
 
