@@ -2747,3 +2747,97 @@ func TestObserver_PendingAndInFlightMetrics(t *testing.T) {
 		}
 	})
 }
+
+func TestSubmit(t *testing.T) {
+	t.Run("executes all submitted tasks", func(t *testing.T) {
+		observer := NewObserver(nil)
+		var count atomic.Int64
+		for i := 0; i < 5; i++ {
+			observer.Submit(func() error {
+				count.Add(1)
+				return nil
+			})
+		}
+		observer.pool.Wait()
+		if got := count.Load(); got != 5 {
+			t.Errorf("Expected 5 tasks to execute, got %d", got)
+		}
+	})
+
+	t.Run("Wait blocks until all tasks complete", func(t *testing.T) {
+		observer := NewObserver(nil)
+		var count atomic.Int64
+		blocker := make(chan struct{})
+		for i := 0; i < 5; i++ {
+			observer.Submit(func() error {
+				<-blocker
+				count.Add(1)
+				return nil
+			})
+		}
+		close(blocker)
+		observer.pool.Wait()
+		if got := count.Load(); got != 5 {
+			t.Errorf("Expected 5 tasks after Wait, got %d", got)
+		}
+	})
+
+	t.Run("records success metrics", func(t *testing.T) {
+		observer := NewObserver(nil)
+		for i := 0; i < 3; i++ {
+			observer.Submit(func() error { return nil })
+		}
+		observer.pool.Wait()
+		if got := testutil.ToFloat64(observer.metrics.successes); got != 3 {
+			t.Errorf("Expected successes=3, got %f", got)
+		}
+	})
+
+	t.Run("records error metrics", func(t *testing.T) {
+		observer := NewObserver(nil)
+		observer.Submit(func() error { return errors.New("fail") })
+		observer.pool.Wait()
+		if got := testutil.ToFloat64(observer.metrics.errors); got != 1 {
+			t.Errorf("Expected errors=1, got %f", got)
+		}
+	})
+}
+
+func TestSubmitFunc(t *testing.T) {
+	t.Run("fn receives a context", func(t *testing.T) {
+		observer := NewObserver(nil)
+		ctxReceived := make(chan context.Context, 1)
+		observer.SubmitFunc(func(ctx context.Context) error {
+			ctxReceived <- ctx
+			return nil
+		})
+		observer.pool.Wait()
+		select {
+		case ctx := <-ctxReceived:
+			if ctx == nil {
+				t.Error("Expected non-nil context")
+			}
+		default:
+			t.Error("fn was not called")
+		}
+	})
+
+	t.Run("timeout fires for slow tasks", func(t *testing.T) {
+		observer := NewObserver(nil)
+		observer.UseConfig(ObserverConfig{Timeout: 50 * time.Millisecond})
+		var gotErr atomic.Value
+		observer.SubmitFunc(func(ctx context.Context) error {
+			select {
+			case <-ctx.Done():
+				gotErr.Store(ctx.Err())
+				return ctx.Err()
+			case <-time.After(200 * time.Millisecond):
+				return nil
+			}
+		})
+		observer.pool.Wait()
+		if err, ok := gotErr.Load().(error); !ok || !errors.Is(err, context.DeadlineExceeded) {
+			t.Errorf("Expected DeadlineExceeded, got %v", gotErr.Load())
+		}
+	})
+}
