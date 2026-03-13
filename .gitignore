@@ -38,3 +38,7 @@ TODO.md
 # Grafana
 **/grafana-*
 **/prometheus_*
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db
