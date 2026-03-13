@@ -225,6 +225,36 @@ func WithSuccessMetrics() ObserverOption {
 	}
 }
 
+// WithErrorMetrics enables the errors_total and failures_total counter metrics for the Observer.
+// The errors_total counter increments each time a task returns an error (including retries and panics).
+// The failures_total counter increments each time a task exhausts all retry attempts or fails permanently.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(
+//	    sentinel.WithErrorMetrics(),
+//	)
+func WithErrorMetrics() ObserverOption {
+	return func(cfg *config) {
+		cfg.enableErrors = true
+		cfg.enableFailures = true
+	}
+}
+
+// WithTimeoutMetrics enables the timeouts_total counter metric for the Observer.
+// The timeouts_total counter increments each time a task returns context.DeadlineExceeded.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(
+//	    sentinel.WithTimeoutMetrics(),
+//	)
+func WithTimeoutMetrics() ObserverOption {
+	return func(cfg *config) {
+		cfg.enableTimeouts = true
+	}
+}
+
 // WithErrorLabels sets a labeler function that maps errors to Prometheus label sets.
 // When a task fails, the labeler is called with the error to produce labels for the
 // errors_total metric. If the labeler panics, errors_total is incremented without

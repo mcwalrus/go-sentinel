@@ -440,6 +440,42 @@ func TestWithSuccessMetrics(t *testing.T) {
 	}
 }
 
+func TestWithErrorMetrics(t *testing.T) {
+	t.Parallel()
+
+	cfg := config{}
+	opt := WithErrorMetrics()
+	opt(&cfg)
+
+	if !cfg.enableErrors {
+		t.Error("WithErrorMetrics() should set enableErrors = true")
+	}
+	if !cfg.enableFailures {
+		t.Error("WithErrorMetrics() should set enableFailures = true")
+	}
+	if cfg.enableTimeouts {
+		t.Error("WithErrorMetrics() should not affect enableTimeouts")
+	}
+}
+
+func TestWithTimeoutMetrics(t *testing.T) {
+	t.Parallel()
+
+	cfg := config{}
+	opt := WithTimeoutMetrics()
+	opt(&cfg)
+
+	if !cfg.enableTimeouts {
+		t.Error("WithTimeoutMetrics() should set enableTimeouts = true")
+	}
+	if cfg.enableErrors {
+		t.Error("WithTimeoutMetrics() should not affect enableErrors")
+	}
+	if cfg.enableFailures {
+		t.Error("WithTimeoutMetrics() should not affect enableFailures")
+	}
+}
+
 func TestConfigEnableFlagsDefaultToFalse(t *testing.T) {
 	t.Parallel()
 
