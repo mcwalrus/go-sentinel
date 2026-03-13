@@ -52,6 +52,9 @@ type Observer struct {
 	pool          *pool.Pool
 	labelValues   []string
 	recoverPanics bool
+
+	poolErrsMu sync.Mutex
+	poolErrs   []error
 }
 
 // NewObserver configures a new Observer with duration buckets and optional configuration.
@@ -286,11 +289,19 @@ func (o *Observer) Submit(fn func() error) {
 		o.metrics.pending.Inc()
 		o.pool.Go(func() {
 			o.metrics.pending.Dec()
-			_ = o.observe(limiter, control, task)
+			if err := o.observe(limiter, control, task); err != nil {
+				o.poolErrsMu.Lock()
+				o.poolErrs = append(o.poolErrs, err)
+				o.poolErrsMu.Unlock()
+			}
 		})
 	} else {
 		o.pool.Go(func() {
-			_ = o.observe(limiter, control, task)
+			if err := o.observe(limiter, control, task); err != nil {
+				o.poolErrsMu.Lock()
+				o.poolErrs = append(o.poolErrs, err)
+				o.poolErrsMu.Unlock()
+			}
 		})
 	}
 }
@@ -333,13 +344,61 @@ func (o *Observer) SubmitFunc(fn func(ctx context.Context) error) {
 		o.metrics.pending.Inc()
 		o.pool.Go(func() {
 			o.metrics.pending.Dec()
-			_ = o.observe(limiter, control, task)
+			if err := o.observe(limiter, control, task); err != nil {
+				o.poolErrsMu.Lock()
+				o.poolErrs = append(o.poolErrs, err)
+				o.poolErrsMu.Unlock()
+			}
 		})
 	} else {
 		o.pool.Go(func() {
-			_ = o.observe(limiter, control, task)
+			if err := o.observe(limiter, control, task); err != nil {
+				o.poolErrsMu.Lock()
+				o.poolErrs = append(o.poolErrs, err)
+				o.poolErrsMu.Unlock()
+			}
 		})
 	}
+}
+
+// Wait blocks until all submitted tasks complete and returns any errors.
+// The observer is reusable after Wait returns.
+//
+// Errors from all submitted tasks are collected and returned as a joined error.
+// If no tasks were submitted, or all tasks succeeded, Wait returns nil.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(nil)
+//	observer.Submit(func() error { return doWork() })
+//	observer.Submit(func() error { return doMoreWork() })
+//	if err := observer.Wait(); err != nil {
+//		log.Printf("tasks failed: %v", err)
+//	}
+//	// observer is now reusable
+//	observer.Submit(func() error { return doNextBatch() })
+func (o *Observer) Wait() error {
+	if o == nil {
+		panic("observer: not configured")
+	}
+	o.pool.Wait()
+
+	// Collect errors and reset for next batch
+	o.poolErrsMu.Lock()
+	errs := o.poolErrs
+	o.poolErrs = nil
+	o.poolErrsMu.Unlock()
+
+	// Reset pool so it is reusable
+	o.m.Lock()
+	p := pool.New()
+	if o.cfg.maxConcurrency > 0 {
+		p = p.WithMaxGoroutines(o.cfg.maxConcurrency)
+	}
+	o.pool = p
+	o.m.Unlock()
+
+	return errors.Join(errs...)
 }
 
 // observe is the main entry point for observing a task.
