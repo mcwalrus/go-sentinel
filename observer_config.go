@@ -1,13 +1,14 @@
 package sentinel
 
 import (
-	_ "context"
+	_ "context" // for documentation references to context.Context
 	"time"
 
 	"github.com/mcwalrus/go-sentinel/circuit"
 	"github.com/mcwalrus/go-sentinel/retry"
 )
 
+// ObserverConfig configures observer behavior for timeouts, retries, concurrency, and control.
 type ObserverConfig struct {
 	// Timeout sets a context deadline for functions passed to [Observer.RunFunc].
 	// The observer records timeout occurrences under the "timeouts" metric when enabled.

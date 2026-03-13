@@ -16,8 +16,8 @@ func (e *ErrControlBreaker) Error() string {
 	return "observer: control breaker avoided task execution entirely"
 }
 
-// ErrRecoveredPanic is the error returned when a panic occurs and is recovered
-// by the [Observer]. The panic value can be retrieved from the error directly.
+// RecoveredPanic is the error type returned when a panic is recovered by the [Observer].
+// The panic value can be retrieved from the error directly.
 type RecoveredPanic struct {
 	panic   any
 	callers []uintptr

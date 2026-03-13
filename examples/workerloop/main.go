@@ -1,3 +1,4 @@
+// Package main runs a worker-loop example with sentinel observers and Prometheus metrics.
 package main
 
 import (
@@ -129,7 +130,7 @@ func run() {
 				TaskID: fmt.Sprintf("task-%04d", taskID),
 			}
 			taskID++
-			ob.RunFunc(task.Execute)
+			_ = ob.RunFunc(task.Execute)
 		}
 	}
 }
