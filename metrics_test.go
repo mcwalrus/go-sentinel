@@ -409,3 +409,43 @@ func TestMetricHelpText1(t *testing.T) {
 		}
 	})
 }
+
+func TestConfigEnableFlagsDefaultToFalse(t *testing.T) {
+	t.Parallel()
+
+	cfg := config{}
+
+	if cfg.enableInFlight {
+		t.Error("enableInFlight should default to false")
+	}
+	if cfg.enableSuccess {
+		t.Error("enableSuccess should default to false")
+	}
+	if cfg.enableErrors {
+		t.Error("enableErrors should default to false")
+	}
+	if cfg.enableFailures {
+		t.Error("enableFailures should default to false")
+	}
+	if cfg.enablePanics {
+		t.Error("enablePanics should default to false")
+	}
+	if cfg.enableRetries {
+		t.Error("enableRetries should default to false")
+	}
+	if cfg.enableTimeouts {
+		t.Error("enableTimeouts should default to false")
+	}
+	if cfg.enableDurations {
+		t.Error("enableDurations should default to false")
+	}
+	if cfg.enablePending {
+		t.Error("enablePending should default to false")
+	}
+	if cfg.DurationBuckets != nil {
+		t.Error("DurationBuckets should default to nil")
+	}
+	if cfg.ErrorLabeler != nil {
+		t.Error("ErrorLabeler should default to nil")
+	}
+}
