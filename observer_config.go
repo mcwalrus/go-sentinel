@@ -18,17 +18,26 @@ type ObserverConfig struct {
 	// MaxRetries specifies the number of retry attempts for tasks on errors. If a task
 	// fails for all attempts, the observer groups errors from multiple attempts using
 	// [errors.Join]. By default, no retries are performed.
+	//
+	// Deprecated: Use [sentinel.WithRetrier] with a [retry.DefaultRetrier] instead.
+	// When an observer-level Retrier is configured via WithRetrier(), MaxRetries is ignored.
 	MaxRetries int
 
 	// RetryStrategy is a handler which returns wait durations between retry attempts.
 	// The first retry attempt will call the handler with retryCount=1. By default,
 	// no wait strategy is applied (immediate retry).
+	//
+	// Deprecated: Use [sentinel.WithRetrier] with a [retry.DefaultRetrier] instead.
+	// When an observer-level Retrier is configured via WithRetrier(), RetryStrategy is ignored.
 	RetryStrategy retry.WaitFunc
 
 	// RetryBreaker is a handler that skips following retry attempts for a task when
 	// returning true. The handler will be provided the error from the previous attempt.
 	// When nil, the observer will always attempt the next retry. This is useful to stop
 	// retries on particular errors.
+	//
+	// Deprecated: Use [sentinel.WithRetrier] with a [retry.DefaultRetrier] instead.
+	// When an observer-level Retrier is configured via WithRetrier(), RetryBreaker is ignored.
 	RetryBreaker func(err error) bool
 
 	// Control receives the execution phase (PhaseNewRequest for new task executions, or

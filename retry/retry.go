@@ -32,6 +32,40 @@ type DefaultRetrier struct {
 	Breaker func(err error) bool
 }
 
+// Do executes fn, retrying on error up to MaxRetries times using the configured
+// WaitStrategy and Breaker. Returns nil on first success, or the joined errors
+// from all attempts if all fail. Respects ctx cancellation between retries.
+func (r DefaultRetrier) Do(ctx context.Context, fn func() error) error {
+	var errs []error
+	for attempt := 0; attempt <= r.MaxRetries; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return errors.Join(append(errs, err)...)
+		}
+		err := fn()
+		if err == nil {
+			return nil
+		}
+		errs = append(errs, err)
+		if attempt >= r.MaxRetries {
+			break
+		}
+		if r.Breaker != nil && r.Breaker(err) {
+			break
+		}
+		if r.WaitStrategy != nil {
+			wait := r.WaitStrategy(attempt + 1)
+			if wait > 0 {
+				select {
+				case <-time.After(wait):
+				case <-ctx.Done():
+					return errors.Join(append(errs, ctx.Err())...)
+				}
+			}
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // OnPanic returns a func(err error) bool that stops retries when the error
 // originated from a Go panic. Use this as ObserverConfig.RetryBreaker to avoid
 // retrying panic-induced failures.
