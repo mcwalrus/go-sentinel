@@ -2841,3 +2841,106 @@ func TestSubmitFunc(t *testing.T) {
 		}
 	})
 }
+
+func TestSubmit_PanicPropagation(t *testing.T) {
+	t.Run("panic in Submit task is recovered - process does not crash", func(t *testing.T) {
+		observer := NewObserver(nil)
+		observer.Submit(func() error {
+			panic("test panic")
+		})
+		observer.pool.Wait()
+		Verify(t, observer, metricsCounts{
+			Panics:   1,
+			Errors:   1,
+			Failures: 1,
+		})
+	})
+
+	t.Run("panics_total incremented for Submit panic", func(t *testing.T) {
+		observer := NewObserver(nil)
+		observer.Submit(func() error {
+			panic("test panic")
+		})
+		observer.pool.Wait()
+		if got := testutil.ToFloat64(observer.metrics.panics); got != 1 {
+			t.Errorf("Expected panics=1, got %f", got)
+		}
+	})
+
+	t.Run("mix of normal and panicking Submit tasks - normal tasks complete", func(t *testing.T) {
+		observer := NewObserver(nil)
+		var count atomic.Int64
+		for i := 0; i < 3; i++ {
+			observer.Submit(func() error {
+				count.Add(1)
+				return nil
+			})
+		}
+		observer.Submit(func() error {
+			panic("test panic")
+		})
+		observer.pool.Wait()
+		if got := count.Load(); got != 3 {
+			t.Errorf("Expected 3 normal tasks to complete, got %d", got)
+		}
+		Verify(t, observer, metricsCounts{
+			Successes: 3,
+			Panics:    1,
+			Errors:    1,
+			Failures:  1,
+		})
+	})
+
+	t.Run("panic with DisablePanicRecovery - conc pool captures and re-panics on pool.Wait()", func(t *testing.T) {
+		observer := NewObserver(nil)
+		observer.DisablePanicRecovery(true)
+		observer.Submit(func() error {
+			panic("test panic")
+		})
+		var caught bool
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					caught = true
+				}
+			}()
+			observer.pool.Wait()
+		}()
+		if !caught {
+			t.Error("Expected pool.Wait() to re-panic when DisablePanicRecovery is true")
+		}
+		// Metrics are recorded before the re-panic propagates
+		Verify(t, observer, metricsCounts{
+			Panics:   1,
+			Errors:   1,
+			Failures: 1,
+		})
+	})
+
+	t.Run("RecoveredPanic type consistent between sync and async paths", func(t *testing.T) {
+		// Sync path returns RecoveredPanic as an error
+		syncObs := NewObserver(nil)
+		syncErr := syncObs.Run(func() error {
+			panic("test panic")
+		})
+		if _, ok := IsPanicError(syncErr); !ok {
+			t.Error("Expected sync Run() to return RecoveredPanic error")
+		}
+
+		// Async path: panic internally produces RecoveredPanic but is discarded by Submit().
+		// Metrics are still recorded consistently with the sync path.
+		asyncObs := NewObserver(nil)
+		asyncObs.Submit(func() error {
+			panic("test panic")
+		})
+		asyncObs.pool.Wait()
+		if got := testutil.ToFloat64(asyncObs.metrics.panics); got != 1 {
+			t.Errorf("Async path: expected panics=1 (consistent with sync), got %f", got)
+		}
+		Verify(t, asyncObs, metricsCounts{
+			Panics:   1,
+			Errors:   1,
+			Failures: 1,
+		})
+	})
+}

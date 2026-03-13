@@ -153,6 +153,12 @@ func (o *Observer) UseConfig(config ObserverConfig) {
 // DisablePanicRecovery sets whether panic recovery should be disabled for the observer.
 // Recovery is enabled by default, meaning panics are caught and converted to errors.
 // When disabled, panics will propagate normally and may crash the program.
+//
+// Note: for async tasks submitted via [Observer.Submit] or [Observer.SubmitFunc],
+// disabling panic recovery causes the panic to escape the goroutine and be captured
+// by the underlying conc pool. The pool will re-panic when [pool.Wait] is called,
+// rather than crashing immediately. This differs from the synchronous path where
+// the panic propagates directly to the caller of Run or RunFunc.
 func (o *Observer) DisablePanicRecovery(disable bool) {
 	o.m.Lock()
 	o.recoverPanics = !disable
