@@ -3138,3 +3138,136 @@ func TestWait(t *testing.T) {
 		}
 	})
 }
+
+func TestNewObserverDefault_RegisteredMetrics(t *testing.T) {
+	t.Parallel()
+
+	observer := NewObserverDefault()
+	registry := prometheus.NewRegistry()
+	observer.MustRegister(registry)
+
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatalf("Failed to gather metrics: %v", err)
+	}
+
+	foundMetrics := make(map[string]bool)
+	for _, family := range families {
+		foundMetrics[*family.Name] = true
+	}
+
+	// These metrics should be registered
+	for _, name := range []string{
+		"sentinel_in_flight",
+		"sentinel_success_total",
+		"sentinel_errors_total",
+		"sentinel_failures_total",
+	} {
+		if !foundMetrics[name] {
+			t.Errorf("Expected metric %s to be registered", name)
+		}
+	}
+
+	// These metrics should NOT be registered
+	for _, name := range []string{
+		"sentinel_durations_seconds",
+		"sentinel_panics_total",
+		"sentinel_retries_total",
+		"sentinel_timeouts_total",
+		"sentinel_pending_total",
+	} {
+		if foundMetrics[name] {
+			t.Errorf("Expected metric %s to NOT be registered", name)
+		}
+	}
+
+	if len(families) != 4 {
+		t.Errorf("Expected exactly 4 registered metrics, got %d", len(families))
+	}
+}
+
+func TestNewObserverDefault_EnableFlagsSet(t *testing.T) {
+	t.Parallel()
+
+	observer := NewObserverDefault()
+
+	if !observer.cfg.enableInFlight {
+		t.Error("NewObserverDefault() should set enableInFlight = true")
+	}
+	if !observer.cfg.enableSuccess {
+		t.Error("NewObserverDefault() should set enableSuccess = true")
+	}
+	if !observer.cfg.enableErrors {
+		t.Error("NewObserverDefault() should set enableErrors = true")
+	}
+	if !observer.cfg.enableFailures {
+		t.Error("NewObserverDefault() should set enableFailures = true")
+	}
+}
+
+func TestNewObserverDefault_SuccessMetricIncrements(t *testing.T) {
+	t.Parallel()
+
+	observer := NewObserverDefault()
+
+	err := observer.Run(func() error { return nil })
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if got := testutil.ToFloat64(observer.metrics.successes); got != 1 {
+		t.Errorf("Expected success_total=1, got %f", got)
+	}
+}
+
+func TestNewObserverDefault_ErrorMetricIncrements(t *testing.T) {
+	t.Parallel()
+
+	observer := NewObserverDefault()
+
+	expectedErr := errors.New("task failed")
+	err := observer.Run(func() error { return expectedErr })
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+
+	if got := testutil.ToFloat64(observer.metrics.errors); got != 1 {
+		t.Errorf("Expected errors_total=1, got %f", got)
+	}
+}
+
+func TestNewObserverDefault_ReturnsObserverType(t *testing.T) {
+	t.Parallel()
+
+	var _ *Observer = NewObserverDefault()
+	var _ *Observer = NewObserver(nil)
+}
+
+func TestNewObserverDefault_UserOptsExtendDefaults(t *testing.T) {
+	t.Parallel()
+
+	observer := NewObserverDefault(WithSubsystem("myworkers"))
+	registry := prometheus.NewRegistry()
+	observer.MustRegister(registry)
+
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatalf("Failed to gather metrics: %v", err)
+	}
+
+	foundMetrics := make(map[string]bool)
+	for _, family := range families {
+		foundMetrics[*family.Name] = true
+	}
+
+	for _, name := range []string{
+		"myworkers_in_flight",
+		"myworkers_success_total",
+		"myworkers_errors_total",
+		"myworkers_failures_total",
+	} {
+		if !foundMetrics[name] {
+			t.Errorf("Expected metric %s to be registered", name)
+		}
+	}
+}

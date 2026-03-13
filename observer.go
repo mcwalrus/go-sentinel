@@ -90,6 +90,29 @@ func NewObserver(durationBuckets []float64, opts ...ObserverOption) *Observer {
 	}
 }
 
+// NewObserverDefault creates an Observer with in-flight, success, and error metrics enabled.
+// Use NewObserver for full control over which metrics are exported.
+//
+// Example usage:
+//
+//	// Default metrics: in_flight, success_total, errors_total, failures_total
+//	observer := sentinel.NewObserverDefault()
+//
+//	// Extend defaults with additional options
+//	observer := sentinel.NewObserverDefault(
+//	    sentinel.WithNamespace("my_app"),
+//	    sentinel.WithSubsystem("workers"),
+//	)
+func NewObserverDefault(opts ...ObserverOption) *Observer {
+	defaultOpts := []ObserverOption{
+		WithMetrics(MetricInFlight, MetricSuccesses, MetricErrors, MetricFailures),
+		WithInFlightMetrics(),
+		WithSuccessMetrics(),
+		WithErrorMetrics(),
+	}
+	return NewObserver(nil, append(defaultOpts, opts...)...)
+}
+
 // Describe implements the [prometheus.Collector] interface by describing metrics.
 // This can be useful to register the Observer with the default Prometheus registry.
 func (o *Observer) Describe(ch chan<- *prometheus.Desc) {
