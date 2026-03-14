@@ -144,13 +144,13 @@ func newVecMetrics(cfg config, labelNames []string) *vecMetrics {
 			ConstLabels: cfg.constLabels,
 		}, labelNames)
 	}
-	if len(cfg.buckets) > 0 && (cfg.metricFilter == nil || cfg.metricFilter[MetricDurations]) {
+	if len(cfg.DurationBuckets) > 0 && (cfg.metricFilter == nil || cfg.metricFilter[MetricDurations]) {
 		m.durationsVec = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace:   cfg.namespace,
 			Subsystem:   cfg.subsystem,
 			Name:        "durations_seconds",
 			Help:        fmt.Sprintf("Histogram of the observed durations of %s", cfg.description),
-			Buckets:     cfg.buckets,
+			Buckets:     cfg.DurationBuckets,
 			ConstLabels: cfg.constLabels,
 		}, labelNames)
 	}

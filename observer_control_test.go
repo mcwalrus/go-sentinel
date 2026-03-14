@@ -22,7 +22,7 @@ func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
 	t.Run("Run with Control", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver()
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -62,7 +62,7 @@ func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
 	t.Run("RunFunc with Control", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver()
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -102,7 +102,7 @@ func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
 	t.Run("Run with Control returning false", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver()
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -142,7 +142,7 @@ func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
 	t.Run("Run with nil Control", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver()
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -182,7 +182,7 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 	t.Run("Control prevents retry attempts", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver()
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -230,7 +230,7 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 	t.Run("Control allows retries initially but prevents later ones", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver()
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -277,7 +277,7 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 	t.Run("Control with RetryBreaker interaction", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver()
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -332,7 +332,7 @@ func TestObserver_ControlWithCircuitImplementations(t *testing.T) {
 	t.Run("OnSignal Control", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver()
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -389,7 +389,7 @@ func TestObserver_ControlWithCircuitImplementations(t *testing.T) {
 	t.Run("OnDone Control", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver()
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -450,7 +450,7 @@ func TestObserver_ControlWithTimeout(t *testing.T) {
 	t.Run("Control with timeout configuration", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver()
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -496,7 +496,7 @@ func TestObserver_ControlWithTimeout(t *testing.T) {
 	t.Run("Control prevents execution with timeout", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver()
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -546,7 +546,7 @@ func TestObserver_ControlConcurrency(t *testing.T) {
 	t.Run("Control with concurrent executions", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver()
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -626,7 +626,7 @@ func TestObserver_ControlWithRetryStrategy(t *testing.T) {
 	t.Run("Control with retry strategy", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver()
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -688,7 +688,7 @@ func TestObserver_ControlPanicRecovery(t *testing.T) {
 	t.Run("panicking Control allows execution and increments panics_total", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver()
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -722,7 +722,7 @@ func TestObserver_ControlPanicRecovery(t *testing.T) {
 	t.Run("panicking Control during retry allows retry and increments panics_total", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver()
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -765,7 +765,7 @@ func TestObserver_WithControlOption(t *testing.T) {
 		t.Parallel()
 
 		done := make(chan struct{})
-		observer := NewObserver(nil, WithControl(circuit.WhenClosed(done)))
+		observer := NewObserver(WithControl(circuit.WhenClosed(done)))
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -802,7 +802,7 @@ func TestObserver_WithControlOption(t *testing.T) {
 	t.Run("NewObserver without WithControl runs normally", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver()
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -823,7 +823,7 @@ func TestObserver_WithControlOption(t *testing.T) {
 		t.Parallel()
 
 		// Control that stops only on PhaseRetry
-		observer := NewObserver(nil, WithControl(func(phase circuit.ExecutionPhase) bool {
+		observer := NewObserver(WithControl(func(phase circuit.ExecutionPhase) bool {
 			return phase == circuit.PhaseRetry
 		}))
 		registry := prometheus.NewRegistry()
@@ -855,7 +855,7 @@ func TestObserver_ErrorLabelerPanicRecovery(t *testing.T) {
 	t.Run("panicking ErrorLabeler does not crash; errors_total still increments", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil, WithErrorLabels(func(_ error) prometheus.Labels {
+		observer := NewObserver(WithErrorLabels(func(_ error) prometheus.Labels {
 			panic("labeler panic")
 		}))
 		registry := prometheus.NewRegistry()
@@ -883,7 +883,7 @@ func TestObserver_ErrorLabelerPanicRecovery(t *testing.T) {
 	t.Run("non-panicking ErrorLabeler does not increment panics_total", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil, WithErrorLabels(func(_ error) prometheus.Labels {
+		observer := NewObserver(WithErrorLabels(func(_ error) prometheus.Labels {
 			return prometheus.Labels{}
 		}))
 		registry := prometheus.NewRegistry()
@@ -914,7 +914,7 @@ func TestObserver_WithErrorLabels(t *testing.T) {
 	t.Run("errors_total has label dimension when WithErrorLabels is set", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil, WithErrorLabels(func(err error) prometheus.Labels {
+		observer := NewObserver(WithErrorLabels(func(err error) prometheus.Labels {
 			return prometheus.Labels{"type": fmt.Sprintf("%T", err)}
 		}))
 		registry := prometheus.NewRegistry()
@@ -943,7 +943,7 @@ func TestObserver_WithErrorLabels(t *testing.T) {
 		t.Parallel()
 
 		labelerCalled := false
-		observer := NewObserver(nil, WithErrorLabels(func(err error) prometheus.Labels {
+		observer := NewObserver(WithErrorLabels(func(err error) prometheus.Labels {
 			labelerCalled = true
 			return prometheus.Labels{"type": fmt.Sprintf("%T", err)}
 		}))
@@ -965,7 +965,7 @@ func TestObserver_WithErrorLabels(t *testing.T) {
 	t.Run("without WithErrorLabels, errors_total is a plain counter", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver()
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
@@ -986,7 +986,7 @@ func TestObserver_WithErrorLabels(t *testing.T) {
 	t.Run("different error types get different label values", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil, WithErrorLabels(func(err error) prometheus.Labels {
+		observer := NewObserver(WithErrorLabels(func(err error) prometheus.Labels {
 			return prometheus.Labels{"type": fmt.Sprintf("%T", err)}
 		}))
 		registry := prometheus.NewRegistry()

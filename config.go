@@ -25,7 +25,6 @@ type config struct {
 	namespace    string
 	subsystem    string
 	description  string
-	buckets      []float64
 	constLabels  prometheus.Labels
 	metricFilter map[string]bool
 
@@ -64,12 +63,11 @@ type config struct {
 }
 
 // setupConfig sets up the configuration
-func setupConfig(durationBuckets []float64, opts ...ObserverOption) config {
+func setupConfig(opts ...ObserverOption) config {
 	cfg := config{
 		namespace:    "",
 		subsystem:    "",
 		description:  "tasks",
-		buckets:      durationBuckets,
 		metricFilter: make(map[string]bool),
 	}
 
@@ -111,6 +109,9 @@ func setupConfig(durationBuckets []float64, opts ...ObserverOption) config {
 	}
 	if cfg.enableDurations {
 		cfg.metricFilter[MetricDurations] = true
+		if len(cfg.DurationBuckets) == 0 {
+			cfg.DurationBuckets = prometheus.DefBuckets
+		}
 	}
 	if cfg.enablePending {
 		cfg.metricFilter[MetricPending] = true
@@ -336,6 +337,22 @@ func WithErrorLabels(labeler func(err error) prometheus.Labels) ObserverOption {
 			slices.Sort(names)
 			cfg.errorLabelNames = names
 		}()
+	}
+}
+
+// WithDurationMetrics enables the durations_seconds histogram metric for the Observer.
+// The histogram tracks the execution duration of each task. If buckets is nil or empty,
+// prometheus.DefBuckets is used as the default bucket set.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(
+//	    sentinel.WithDurationMetrics([]float64{0.1, 0.25, 0.5, 1.0, 2.5, 5.0}),
+//	)
+func WithDurationMetrics(buckets []float64) ObserverOption {
+	return func(cfg *config) {
+		cfg.enableDurations = true
+		cfg.DurationBuckets = buckets
 	}
 }
 

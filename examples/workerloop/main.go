@@ -30,7 +30,7 @@ var (
 
 func init() {
 	ob = sentinel.NewObserver(
-		[]float64{0.01, 0.1, 1, 10, 100, 1000, 10_000},
+		sentinel.WithDurationMetrics([]float64{0.01, 0.1, 1, 10, 100, 1000, 10_000}),
 		sentinel.WithNamespace("example"),
 		sentinel.WithSubsystem("workerloop"),
 		sentinel.WithDescription("Worker loop"),

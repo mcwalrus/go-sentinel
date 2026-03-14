@@ -12,10 +12,10 @@ import (
 func testConfig(t *testing.T) config {
 	t.Helper()
 	return config{
-		namespace:   "test",
-		subsystem:   "metrics",
-		description: "test operations",
-		buckets:     []float64{0.01, 0.1, 1, 10, 100},
+		namespace:       "test",
+		subsystem:       "metrics",
+		description:     "test operations",
+		DurationBuckets: []float64{0.01, 0.1, 1, 10, 100},
 	}
 }
 
@@ -196,10 +196,10 @@ func TestMetricLabels(t *testing.T) {
 		{
 			name: "no namespace or subsystem with additional metrics",
 			cfg: config{
-				namespace:   "",
-				subsystem:   "",
-				description: "tasks",
-				buckets:     []float64{0.1, 1},
+				namespace:       "",
+				subsystem:       "",
+				description:     "tasks",
+				DurationBuckets: []float64{0.1, 1},
 			},
 			expected: map[string]string{
 				"in_flight":         "in_flight",
@@ -234,10 +234,10 @@ func TestMetricLabels(t *testing.T) {
 		{
 			name: "with namespace and subsystem with additional metrics",
 			cfg: config{
-				namespace:   "myapp",
-				subsystem:   "workers",
-				description: "background tasks",
-				buckets:     []float64{0.1, 1},
+				namespace:       "myapp",
+				subsystem:       "workers",
+				description:     "background tasks",
+				DurationBuckets: []float64{0.1, 1},
 			},
 			expected: map[string]string{
 				"in_flight":         "myapp_workers_in_flight",
@@ -312,10 +312,10 @@ func TestMetricHelpText(t *testing.T) {
 
 	t.Run("with additional metrics", func(t *testing.T) {
 		cfg := config{
-			namespace:   "",
-			subsystem:   "",
-			description: "test operations",
-			buckets:     []float64{0.1, 1},
+			namespace:       "",
+			subsystem:       "",
+			description:     "test operations",
+			DurationBuckets: []float64{0.1, 1},
 		}
 
 		m := newMetrics(cfg)
@@ -366,7 +366,12 @@ func TestMetricHelpText1(t *testing.T) {
 
 		t.Log("default description should be used")
 		observer := NewObserver(
-			[]float64{0.1, 1},
+			WithDurationMetrics([]float64{0.1, 1}),
+			WithInFlightMetrics(),
+			WithSuccessMetrics(),
+			WithErrorMetrics(),
+			WithTimeoutMetrics(),
+			WithMetrics(MetricPanics, MetricRetries),
 			WithDescription(""), // no description
 		)
 
@@ -521,7 +526,7 @@ func TestConfigEnableFlagsDefaultToFalse(t *testing.T) {
 func TestConditionalMetrics_OnlySuccessRegistered(t *testing.T) {
 	t.Parallel()
 
-	observer := NewObserver(nil, WithSuccessMetrics())
+	observer := NewObserver(WithSuccessMetrics())
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
@@ -542,7 +547,7 @@ func TestConditionalMetrics_AllOptionsEnabled(t *testing.T) {
 	t.Parallel()
 
 	observer := NewObserver(
-		[]float64{0.1, 1},
+		WithDurationMetrics([]float64{0.1, 1}),
 		WithInFlightMetrics(),
 		WithSuccessMetrics(),
 		WithErrorMetrics(),
@@ -560,12 +565,13 @@ func TestConditionalMetrics_AllOptionsEnabled(t *testing.T) {
 	}
 
 	expectedNames := map[string]bool{
-		"sentinel_in_flight":      true,
-		"sentinel_success_total":  true,
-		"sentinel_errors_total":   true,
-		"sentinel_failures_total": true,
-		"sentinel_timeouts_total": true,
-		"sentinel_pending_total":  true,
+		"sentinel_in_flight":        true,
+		"sentinel_success_total":    true,
+		"sentinel_errors_total":     true,
+		"sentinel_failures_total":   true,
+		"sentinel_timeouts_total":   true,
+		"sentinel_pending_total":    true,
+		"sentinel_durations_seconds": true,
 	}
 
 	for _, family := range families {
@@ -607,7 +613,7 @@ func TestConditionalMetrics_NoMetrics_TasksExecute(t *testing.T) {
 	t.Parallel()
 
 	// Tasks should still execute normally even with no metrics enabled.
-	observer := NewObserver(nil, WithMetrics())
+	observer := NewObserver(WithMetrics())
 
 	executed := false
 	err := observer.RunFunc(func(_ context.Context) error {
@@ -627,8 +633,8 @@ func TestConditionalMetrics_TwoObservers_DifferentSubsets_NoConflict(t *testing.
 
 	registry := prometheus.NewRegistry()
 
-	obs1 := NewObserver(nil, WithSuccessMetrics(), WithNamespace("obs1"))
-	obs2 := NewObserver(nil, WithErrorMetrics(), WithNamespace("obs2"))
+	obs1 := NewObserver(WithSuccessMetrics(), WithNamespace("obs1"))
+	obs2 := NewObserver(WithErrorMetrics(), WithNamespace("obs2"))
 
 	if err := obs1.Register(registry); err != nil {
 		t.Fatalf("obs1 registration failed: %v", err)
@@ -662,7 +668,7 @@ func TestConditionalMetrics_OnlyDuration_NoNilPanicOnErrorPath(t *testing.T) {
 	t.Parallel()
 
 	// Only duration metrics enabled - error path should not nil-panic.
-	observer := NewObserver([]float64{0.1, 1}, WithMetrics(MetricDurations))
+	observer := NewObserver(WithDurationMetrics([]float64{0.1, 1}), WithMetrics(MetricDurations))
 
 	err := observer.RunFunc(func(_ context.Context) error {
 		return errors.New("test error")

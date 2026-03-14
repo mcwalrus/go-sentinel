@@ -57,26 +57,26 @@ type Observer struct {
 	poolErrs   []error
 }
 
-// NewObserver configures a new Observer with duration buckets and optional configuration.
+// NewObserver configures a new Observer with optional configuration.
 // The Observer will need to be registered with a Prometheus registry to expose metrics.
 // Please refer to [Observer.MustRegister] and [Observer.Register] for more information.
 //
 // Example usage:
 //
 //	// Default configuration
-//	observer := sentinel.NewObserver(nil)
+//	observer := sentinel.NewObserver()
 //
 //	// With duration metrics
-//	observer := sentinel.NewObserver([]float64{0.05, 1, 5, 30, 600})
+//	observer := sentinel.NewObserver(sentinel.WithDurationMetrics([]float64{0.05, 1, 5, 30, 600}))
 //
 //	// With custom namespace and subsystem
 //	observer := sentinel.NewObserver(
-//	  []float64{0.1, 0.5, 1, 2, 5},
+//	  sentinel.WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5}),
 //	  sentinel.WithNamespace("my_app"),
 //	  sentinel.WithSubsystem("workers"),
 //	)
-func NewObserver(durationBuckets []float64, opts ...ObserverOption) *Observer {
-	cfg := setupConfig(durationBuckets, opts...)
+func NewObserver(opts ...ObserverOption) *Observer {
+	cfg := setupConfig(opts...)
 	p := pool.New()
 	if cfg.maxConcurrency > 0 {
 		p = p.WithMaxGoroutines(cfg.maxConcurrency)
@@ -113,7 +113,7 @@ func NewObserverDefault(opts ...ObserverOption) *Observer {
 		WithSuccessMetrics(),
 		WithErrorMetrics(),
 	}
-	return NewObserver(nil, append(defaultOpts, opts...)...)
+	return NewObserver(append(defaultOpts, opts...)...) //nolint:gocritic
 }
 
 // Describe implements the [prometheus.Collector] interface by describing metrics.
