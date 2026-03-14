@@ -3273,3 +3273,80 @@ func TestWithTimeout_CombinedWithMaxConcurrency(t *testing.T) {
 		t.Errorf("expected context.DeadlineExceeded, got %v", err)
 	}
 }
+
+func TestSubmit_WithRetrier(t *testing.T) {
+	t.Parallel()
+
+	t.Run("retries failing tasks and records retry metrics", func(t *testing.T) {
+		t.Parallel()
+
+		var attempts atomic.Int64
+		observer := NewObserver(WithRetrier(retry.NewDefaultRetrier(retry.Immediate(), 2)))
+
+		observer.Submit(func() error {
+			if attempts.Add(1) < 3 {
+				return errors.New("transient error")
+			}
+			return nil
+		})
+		if err := observer.Wait(); err != nil {
+			t.Fatalf("Expected success after retries, got: %v", err)
+		}
+		if got := attempts.Load(); got != 3 {
+			t.Errorf("Expected 3 attempts (1 initial + 2 retries), got %d", got)
+		}
+		Verify(t, observer, metricsCounts{
+			Successes: 1,
+			Failures:  0,
+			Errors:    2,
+			Retries:   2,
+		})
+	})
+
+	t.Run("Wait returns error when all retries exhausted", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(WithRetrier(retry.NewDefaultRetrier(retry.Immediate(), 2)))
+		observer.Submit(func() error {
+			return errors.New("permanent error")
+		})
+		err := observer.Wait()
+		if err == nil {
+			t.Error("Expected error from exhausted retries, got nil")
+		}
+		Verify(t, observer, metricsCounts{
+			Successes: 0,
+			Failures:  1,
+			Errors:    3, // 1 initial + 2 retries
+			Retries:   2,
+		})
+	})
+}
+
+func TestSubmitFunc_WithRetrier(t *testing.T) {
+	t.Parallel()
+
+	t.Run("SubmitFunc retries and propagates retry count via context", func(t *testing.T) {
+		t.Parallel()
+
+		var maxRetryCount atomic.Int64
+		observer := NewObserver(WithRetrier(retry.NewDefaultRetrier(retry.Immediate(), 3)))
+
+		observer.SubmitFunc(func(ctx context.Context) error {
+			count := int64(RetryCount(ctx))
+			if current := maxRetryCount.Load(); count > current {
+				maxRetryCount.Store(count)
+			}
+			if count < 2 {
+				return errors.New("retry me")
+			}
+			return nil
+		})
+		if err := observer.Wait(); err != nil {
+			t.Fatalf("Expected success, got: %v", err)
+		}
+		if got := maxRetryCount.Load(); got != 2 {
+			t.Errorf("Expected max retry count of 2, got %d", got)
+		}
+	})
+}

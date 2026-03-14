@@ -963,3 +963,112 @@ func TestObserver_WithErrorLabels(t *testing.T) {
 		}
 	})
 }
+
+func TestObserver_WithErrorLabels_Submit(t *testing.T) {
+	t.Parallel()
+
+	t.Run("labels errors from Submit async path", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(WithErrorLabels(func(err error) prometheus.Labels {
+			return prometheus.Labels{"type": fmt.Sprintf("%T", err)}
+		}))
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
+
+		observer.Submit(func() error { return io.EOF })
+		if err := observer.Wait(); err == nil {
+			t.Error("Expected error from failing Submit task")
+		}
+
+		eofTypeName := fmt.Sprintf("%T", io.EOF)
+		got := testutil.ToFloat64(observer.metrics.errorsLabeledVec.With(prometheus.Labels{"type": eofTypeName}))
+		if got != 1 {
+			t.Errorf("Expected errors_total{type=%q}=1, got %f", eofTypeName, got)
+		}
+	})
+
+	t.Run("multiple Submit tasks with different error types each get labeled", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(WithErrorLabels(func(err error) prometheus.Labels {
+			return prometheus.Labels{"type": fmt.Sprintf("%T", err)}
+		}))
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
+
+		observer.Submit(func() error { return io.EOF })
+		observer.Submit(func() error { return &os.PathError{} })
+		observer.Submit(func() error { return io.EOF })
+		observer.Wait() //nolint:errcheck // just drain
+
+		eofTypeName := fmt.Sprintf("%T", io.EOF)
+		eofCount := testutil.ToFloat64(observer.metrics.errorsLabeledVec.With(prometheus.Labels{"type": eofTypeName}))
+		if eofCount != 2 {
+			t.Errorf("Expected errors_total{type=%q}=2, got %f", eofTypeName, eofCount)
+		}
+
+		pathTypeName := fmt.Sprintf("%T", &os.PathError{})
+		pathCount := testutil.ToFloat64(observer.metrics.errorsLabeledVec.With(prometheus.Labels{"type": pathTypeName}))
+		if pathCount != 1 {
+			t.Errorf("Expected errors_total{type=%q}=1, got %f", pathTypeName, pathCount)
+		}
+	})
+}
+
+func TestObserver_WithErrorLabels_WithRetrier(t *testing.T) {
+	t.Parallel()
+
+	t.Run("each retry attempt gets labeled independently", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(
+			WithErrorLabels(func(err error) prometheus.Labels {
+				return prometheus.Labels{"type": fmt.Sprintf("%T", err)}
+			}),
+			WithRetrier(retry.NewDefaultRetrier(retry.Immediate(), 2)),
+		)
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
+
+		// Always fail so all 3 attempts (1 initial + 2 retries) are labeled
+		_ = observer.RunFunc(func(_ context.Context) error {
+			return io.EOF
+		})
+
+		eofTypeName := fmt.Sprintf("%T", io.EOF)
+		got := testutil.ToFloat64(observer.metrics.errorsLabeledVec.With(prometheus.Labels{"type": eofTypeName}))
+		if got != 3 {
+			t.Errorf("Expected errors_total{type=%q}=3 (1 initial + 2 retries), got %f", eofTypeName, got)
+		}
+
+		Verify(t, observer, metricsCounts{
+			Successes: 0,
+			Failures:  1,
+			Errors:    3,
+			Retries:   2,
+		})
+	})
+
+	t.Run("labeler called per retry attempt in Submit async path", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(
+			WithErrorLabels(func(err error) prometheus.Labels {
+				return prometheus.Labels{"type": fmt.Sprintf("%T", err)}
+			}),
+			WithRetrier(retry.NewDefaultRetrier(retry.Immediate(), 1)),
+		)
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
+
+		observer.Submit(func() error { return io.EOF })
+		observer.Wait() //nolint:errcheck // just drain
+
+		eofTypeName := fmt.Sprintf("%T", io.EOF)
+		got := testutil.ToFloat64(observer.metrics.errorsLabeledVec.With(prometheus.Labels{"type": eofTypeName}))
+		if got != 2 {
+			t.Errorf("Expected errors_total{type=%q}=2 (1 initial + 1 retry), got %f", eofTypeName, got)
+		}
+	})
+}
