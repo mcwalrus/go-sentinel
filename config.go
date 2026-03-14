@@ -1,6 +1,9 @@
 package sentinel
 
 import (
+	"errors"
+	"slices"
+
 	"github.com/mcwalrus/go-sentinel/circuit"
 	"github.com/mcwalrus/go-sentinel/retry"
 	"github.com/prometheus/client_golang/prometheus"
@@ -44,6 +47,10 @@ type config struct {
 
 	// ErrorLabeler maps errors to prometheus label sets for WithErrorLabels() support.
 	ErrorLabeler func(err error) prometheus.Labels
+
+	// errorLabelNames holds the sorted label key names discovered from a sample call to ErrorLabeler.
+	// Non-nil only when WithErrorLabels is set and the labeler returns a non-empty label set.
+	errorLabelNames []string
 
 	// maxConcurrency limits the number of goroutines in the async worker pool.
 	// Zero means unlimited.
@@ -312,6 +319,23 @@ func WithTimeoutMetrics() ObserverOption {
 func WithErrorLabels(labeler func(err error) prometheus.Labels) ObserverOption {
 	return func(cfg *config) {
 		cfg.ErrorLabeler = labeler
+		if labeler == nil {
+			return
+		}
+		// Discover label names from a sample call
+		func() {
+			defer func() { _ = recover() }()
+			sampleLabels := labeler(errors.New(""))
+			if len(sampleLabels) == 0 {
+				return
+			}
+			names := make([]string, 0, len(sampleLabels))
+			for k := range sampleLabels {
+				names = append(names, k)
+			}
+			slices.Sort(names)
+			cfg.errorLabelNames = names
+		}()
 	}
 }
 

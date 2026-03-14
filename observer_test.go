@@ -35,8 +35,14 @@ func Verify(t *testing.T, observer *Observer, m metricsCounts) {
 	if got := testutil.ToFloat64(observer.metrics.failures); got != m.Failures {
 		t.Errorf("Expected Failures=%f, got %f", m.Failures, got)
 	}
-	if got := testutil.ToFloat64(observer.metrics.errors); got != m.Errors {
-		t.Errorf("Expected Errors=%f, got %f", m.Errors, got)
+	if observer.metrics.errorsLabeledVec != nil {
+		if got := testutil.ToFloat64(observer.metrics.errorsLabeledVec); got != m.Errors {
+			t.Errorf("Expected Errors=%f, got %f", m.Errors, got)
+		}
+	} else {
+		if got := testutil.ToFloat64(observer.metrics.errors); got != m.Errors {
+			t.Errorf("Expected Errors=%f, got %f", m.Errors, got)
+		}
 	}
 	if got := testutil.ToFloat64(observer.metrics.panics); got != m.Panics {
 		t.Errorf("Expected Panics=%f, got %f", m.Panics, got)

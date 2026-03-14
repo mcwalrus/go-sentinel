@@ -3,6 +3,9 @@ package sentinel
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -902,5 +905,110 @@ func TestObserver_ErrorLabelerPanicRecovery(t *testing.T) {
 			Panics:    0, // no panic in labeler
 			Retries:   0,
 		})
+	})
+}
+
+func TestObserver_WithErrorLabels(t *testing.T) {
+	t.Parallel()
+
+	t.Run("errors_total has label dimension when WithErrorLabels is set", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil, WithErrorLabels(func(err error) prometheus.Labels {
+			return prometheus.Labels{"type": fmt.Sprintf("%T", err)}
+		}))
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
+
+		pathErr := &os.PathError{Op: "open", Path: "/tmp/test", Err: os.ErrNotExist}
+		_ = observer.Run(func() error {
+			return pathErr
+		})
+
+		// errors_total should have 1 total error recorded
+		got := testutil.ToFloat64(observer.metrics.errorsLabeledVec)
+		if got != 1 {
+			t.Errorf("Expected errors_total total=1, got %f", got)
+		}
+
+		// The label value should match the actual type name of the error
+		errTypeName := fmt.Sprintf("%T", pathErr)
+		got = testutil.ToFloat64(observer.metrics.errorsLabeledVec.With(prometheus.Labels{"type": errTypeName}))
+		if got != 1 {
+			t.Errorf("Expected errors_total{type=%q}=1, got %f", errTypeName, got)
+		}
+	})
+
+	t.Run("labeler is not called when task returns nil error", func(t *testing.T) {
+		t.Parallel()
+
+		labelerCalled := false
+		observer := NewObserver(nil, WithErrorLabels(func(err error) prometheus.Labels {
+			labelerCalled = true
+			return prometheus.Labels{"type": fmt.Sprintf("%T", err)}
+		}))
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
+
+		// Reset flag after construction (discovery calls labeler once with a sample error)
+		labelerCalled = false
+
+		_ = observer.Run(func() error {
+			return nil
+		})
+
+		if labelerCalled {
+			t.Error("Expected labeler not to be called when task returns nil error")
+		}
+	})
+
+	t.Run("without WithErrorLabels, errors_total is a plain counter", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil)
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
+
+		_ = observer.Run(func() error {
+			return errors.New("some error")
+		})
+
+		// errorsLabeledVec should be nil (plain counter)
+		if observer.metrics.errorsLabeledVec != nil {
+			t.Error("Expected errorsLabeledVec to be nil without WithErrorLabels")
+		}
+		Verify(t, observer, metricsCounts{
+			Errors:   1,
+			Failures: 1,
+		})
+	})
+
+	t.Run("different error types get different label values", func(t *testing.T) {
+		t.Parallel()
+
+		observer := NewObserver(nil, WithErrorLabels(func(err error) prometheus.Labels {
+			return prometheus.Labels{"type": fmt.Sprintf("%T", err)}
+		}))
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
+
+		_ = observer.Run(func() error { return io.EOF })
+		_ = observer.Run(func() error { return &os.PathError{} })
+		_ = observer.Run(func() error { return io.EOF })
+
+		// io.EOF type name
+		eofTypeName := fmt.Sprintf("%T", io.EOF)
+		// io.EOF should be counted twice
+		eofCount := testutil.ToFloat64(observer.metrics.errorsLabeledVec.With(prometheus.Labels{"type": eofTypeName}))
+		if eofCount != 2 {
+			t.Errorf("Expected errors_total{type=%q}=2, got %f", eofTypeName, eofCount)
+		}
+
+		// PathError type name (may be *fs.PathError or *os.PathError depending on Go version)
+		pathTypeName := fmt.Sprintf("%T", &os.PathError{})
+		pathCount := testutil.ToFloat64(observer.metrics.errorsLabeledVec.With(prometheus.Labels{"type": pathTypeName}))
+		if pathCount != 1 {
+			t.Errorf("Expected errors_total{type=%q}=1, got %f", pathTypeName, pathCount)
+		}
 	})
 }
