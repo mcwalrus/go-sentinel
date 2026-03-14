@@ -371,7 +371,8 @@ func TestMetricHelpText1(t *testing.T) {
 			WithSuccessMetrics(),
 			WithErrorMetrics(),
 			WithTimeoutMetrics(),
-			WithMetrics(MetricPanics, MetricRetries),
+			WithPanicMetrics(),
+			WithRetryMetrics(),
 			WithDescription(""), // no description
 		)
 
@@ -790,7 +791,7 @@ func TestConditionalMetrics_OnlyDuration_NoNilPanicOnErrorPath(t *testing.T) {
 	t.Parallel()
 
 	// Only duration metrics enabled - error path should not nil-panic.
-	observer := NewObserver(WithDurationMetrics([]float64{0.1, 1}), WithMetrics(MetricDurations))
+	observer := NewObserver(WithDurationMetrics([]float64{0.1, 1}))
 
 	err := observer.RunFunc(func(_ context.Context) error {
 		return errors.New("test error")

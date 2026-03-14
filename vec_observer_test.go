@@ -561,7 +561,8 @@ func TestVecObserver_Describe(t *testing.T) {
 			WithSuccessMetrics(),
 			WithErrorMetrics(),
 			WithTimeoutMetrics(),
-			WithMetrics(MetricPanics, MetricRetries),
+			WithPanicMetrics(),
+			WithRetryMetrics(),
 		)
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
@@ -700,7 +701,8 @@ func TestVecObserver_Collect(t *testing.T) {
 			WithSuccessMetrics(),
 			WithErrorMetrics(),
 			WithTimeoutMetrics(),
-			WithMetrics(MetricPanics, MetricRetries),
+			WithPanicMetrics(),
+			WithRetryMetrics(),
 		)
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
@@ -772,7 +774,8 @@ func TestVecObserver_Collect(t *testing.T) {
 			WithSuccessMetrics(),
 			WithErrorMetrics(),
 			WithTimeoutMetrics(),
-			WithMetrics(MetricPanics, MetricRetries),
+			WithPanicMetrics(),
+			WithRetryMetrics(),
 		)
 		child, err := vecObserver.WithLabels("api")
 		if err != nil {
