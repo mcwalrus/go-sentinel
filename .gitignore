@@ -20,6 +20,12 @@ profile.cov
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
+# ralph
+.beads
+.choo-choo-ralph/
+ralph*.sh
+plans/
+
 # Go workspace file
 go.work
 go.work.sum
