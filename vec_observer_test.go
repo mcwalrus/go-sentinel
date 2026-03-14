@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mcwalrus/go-sentinel/retry"
+	"github.com/mcwalrus/go-sentinel/v2/retry"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )

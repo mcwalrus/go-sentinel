@@ -31,7 +31,7 @@ Note, `-` reflects that configured metrics are always applicable.
 Library requires Go version >= 1.23:
 
 ```bash
-go get github.com/mcwalrus/go-sentinel
+go get github.com/mcwalrus/go-sentinel/v2
 ```
 
 ## Usage Examples
@@ -47,7 +47,7 @@ import (
     "context"
     "log"
     
-    sentinel "github.com/mcwalrus/go-sentinel"
+    sentinel "github.com/mcwalrus/go-sentinel/v2"
 )
 
 func main() {
@@ -77,7 +77,7 @@ import (
     "errors"
     "log"
     
-    sentinel "github.com/mcwalrus/go-sentinel"
+    sentinel "github.com/mcwalrus/go-sentinel/v2"
 )
 
 func main() {
@@ -107,7 +107,7 @@ import (
     "errors"
     "time"
     
-    sentinel "github.com/mcwalrus/go-sentinel"
+    sentinel "github.com/mcwalrus/go-sentinel/v2"
 )
 
 func main() {
@@ -147,7 +147,7 @@ import (
     "math/rand"
     "time"
     
-    sentinel "github.com/mcwalrus/go-sentinel"
+    sentinel "github.com/mcwalrus/go-sentinel/v2"
     "github.com/prometheus/client_golang/prometheus"
 )
 
@@ -185,7 +185,7 @@ import (
     "context"
     "log"
     
-    sentinel "github.com/mcwalrus/go-sentinel"
+    sentinel "github.com/mcwalrus/go-sentinel/v2"
 )
 
 func main() {
@@ -219,7 +219,7 @@ import (
     "math/rand"
     "time"
     
-    sentinel "github.com/mcwalrus/go-sentinel"
+    sentinel "github.com/mcwalrus/go-sentinel/v2"
 )
 
 func main() {
@@ -256,8 +256,8 @@ import (
     "math/rand"
     "time"
     
-    sentinel "github.com/mcwalrus/go-sentinel"
-    "github.com/mcwalrus/go-sentinel/retry"
+    sentinel "github.com/mcwalrus/go-sentinel/v2"
+    "github.com/mcwalrus/go-sentinel/v2/retry"
 )
 
 func main() {
@@ -306,7 +306,7 @@ import (
     "time"
     "net/http"
 
-    sentinel "github.com/mcwalrus/go-sentinel"
+    sentinel "github.com/mcwalrus/go-sentinel/v2"
     "github.com/prometheus/client_golang/prometheus"
     "github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -357,9 +357,9 @@ import (
     "log"
     "time"
     
-    sentinel "github.com/mcwalrus/go-sentinel"
-    "github.com/mcwalrus/go-sentinel/circuit"
-    "github.com/mcwalrus/go-sentinel/retry"
+    sentinel "github.com/mcwalrus/go-sentinel/v2"
+    "github.com/mcwalrus/go-sentinel/v2/circuit"
+    "github.com/mcwalrus/go-sentinel/v2/retry"
 )
 
 var ErrCustom = errors.New("unrecoverable error")
@@ -398,8 +398,8 @@ package main
 import (
     "context"
 
-    sentinel "github.com/mcwalrus/go-sentinel"
-    "github.com/mcwalrus/go-sentinel/circuit"
+    sentinel "github.com/mcwalrus/go-sentinel/v2"
+    "github.com/mcwalrus/go-sentinel/v2/circuit"
 )
 
 func main() {
@@ -440,7 +440,7 @@ import (
     "sync"
     "time"
 
-    sentinel "github.com/mcwalrus/go-sentinel"
+    sentinel "github.com/mcwalrus/go-sentinel/v2"
 )
 
 func main() {
@@ -483,7 +483,7 @@ import (
     "net/http"
     "time"
 
-    sentinel "github.com/mcwalrus/go-sentinel"
+    sentinel "github.com/mcwalrus/go-sentinel/v2"
     "github.com/prometheus/client_golang/prometheus"
     "github.com/prometheus/client_golang/prometheus/promhttp"
 )

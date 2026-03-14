@@ -13,8 +13,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	dto "github.com/prometheus/client_model/go"
 
-	"github.com/mcwalrus/go-sentinel/circuit"
-	"github.com/mcwalrus/go-sentinel/retry"
+	"github.com/mcwalrus/go-sentinel/v2/circuit"
+	"github.com/mcwalrus/go-sentinel/v2/retry"
 )
 
 type metricsCounts struct {

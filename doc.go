@@ -112,7 +112,7 @@
 //	    "fmt"
 //	    "log"
 //
-//	    sentinel "github.com/mcwalrus/go-sentinel"
+//	    sentinel "github.com/mcwalrus/go-sentinel/v2"
 //	    "github.com/prometheus/client_golang/prometheus"
 //	)
 //
