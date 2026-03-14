@@ -3322,3 +3322,58 @@ func TestNewObserverDefault_UserOptsExtendDefaults(t *testing.T) {
 		}
 	}
 }
+
+func TestWithTimeout_TaskExceedsDeadline(t *testing.T) {
+	t.Parallel()
+
+	observer := NewObserver(WithTimeout(100 * time.Millisecond))
+	err := observer.RunFunc(func(ctx context.Context) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(300 * time.Millisecond):
+			return nil
+		}
+	})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("expected context.DeadlineExceeded, got %v", err)
+	}
+}
+
+func TestWithTimeout_ZeroMeansNoTimeout(t *testing.T) {
+	t.Parallel()
+
+	observer := NewObserver(WithTimeout(0))
+	done := make(chan struct{})
+	err := observer.RunFunc(func(ctx context.Context) error {
+		close(done)
+		// If no timeout, ctx should not be cancelled
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return nil
+	})
+	if err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
+}
+
+func TestWithTimeout_CombinedWithMaxConcurrency(t *testing.T) {
+	t.Parallel()
+
+	observer := NewObserver(
+		WithTimeout(100*time.Millisecond),
+		WithMaxConcurrency(2),
+	)
+	err := observer.RunFunc(func(ctx context.Context) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(300 * time.Millisecond):
+			return nil
+		}
+	})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("expected context.DeadlineExceeded, got %v", err)
+	}
+}

@@ -3,6 +3,7 @@ package sentinel
 import (
 	"errors"
 	"slices"
+	"time"
 
 	"github.com/mcwalrus/go-sentinel/circuit"
 	"github.com/mcwalrus/go-sentinel/retry"
@@ -50,6 +51,10 @@ type config struct {
 	// errorLabelNames holds the sorted label key names discovered from a sample call to ErrorLabeler.
 	// Non-nil only when WithErrorLabels is set and the labeler returns a non-empty label set.
 	errorLabelNames []string
+
+	// timeout sets a context deadline for each task execution.
+	// Zero means no timeout is applied.
+	timeout time.Duration
 
 	// maxConcurrency limits the number of goroutines in the async worker pool.
 	// Zero means unlimited.
@@ -421,6 +426,25 @@ func WithMaxConcurrency(n int) ObserverOption {
 	return func(cfg *config) {
 		if n > 0 {
 			cfg.maxConcurrency = n
+		}
+	}
+}
+
+// WithTimeout sets a context deadline applied to each task execution by this Observer.
+// The timeout is applied per attempt (including retries). When a task exceeds the deadline,
+// the context passed to the task function is cancelled with context.DeadlineExceeded.
+// Zero or negative values are ignored (no timeout applied).
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(
+//	    nil,
+//	    sentinel.WithTimeout(5*time.Second),
+//	)
+func WithTimeout(d time.Duration) ObserverOption {
+	return func(cfg *config) {
+		if d > 0 {
+			cfg.timeout = d
 		}
 	}
 }
