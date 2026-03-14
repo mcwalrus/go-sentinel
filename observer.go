@@ -39,9 +39,9 @@ func RetryCount(ctx context.Context) int {
 	return 0
 }
 
-// Observer monitors and measures task executions, collecting Prometheus metrics
-// for successes, failures, timeouts, panics, retries, and observed runtimes.
-// It provides methods to execute tasks with various ObserverConfig options.
+// Observer wraps a function and automatically records Prometheus metrics for each
+// execution. It tracks successes, failures, timeouts, panics, retries, and durations.
+// Create with [NewObserver] or [NewObserverDefault].
 type Observer struct {
 	m             *sync.RWMutex
 	cfg           config
@@ -57,9 +57,10 @@ type Observer struct {
 	poolErrs   []error
 }
 
-// NewObserver configures a new Observer with optional configuration.
-// The Observer will need to be registered with a Prometheus registry to expose metrics.
-// Please refer to [Observer.MustRegister] and [Observer.Register] for more information.
+// NewObserver returns a new Observer configured by the provided options.
+// opts are applied in order; later options override earlier ones where they conflict.
+// The returned Observer must be registered with a Prometheus registry before metrics
+// are exposed. See [Observer.Register] and [Observer.MustRegister].
 //
 // Example usage:
 //
@@ -94,8 +95,10 @@ func NewObserver(opts ...ObserverOption) *Observer {
 	return obs
 }
 
-// NewObserverDefault creates an Observer with in-flight, success, and error metrics enabled.
-// Use NewObserver for full control over which metrics are exported.
+// NewObserverDefault returns an Observer with in-flight, success, and error metrics
+// enabled by default. Additional opts are appended after the defaults, allowing callers
+// to override namespace, subsystem, or add extra metrics. Use [NewObserver] for full
+// control over which metrics are exported.
 //
 // Example usage:
 //
