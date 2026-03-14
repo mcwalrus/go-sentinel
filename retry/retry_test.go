@@ -410,3 +410,87 @@ func TestForgoAttempts(t *testing.T) {
 		}
 	}
 }
+
+// customRetrier is a minimal Retrier implementation for interface testing.
+type customRetrier struct {
+	maxAttempts int
+}
+
+func (r *customRetrier) Do(ctx context.Context, fn func() error) error {
+	var errs []error
+	for i := 0; i < r.maxAttempts; i++ {
+		if err := ctx.Err(); err != nil {
+			return errors.Join(append(errs, err)...)
+		}
+		if err := fn(); err == nil {
+			return nil
+		} else {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func TestRetrier_Interface(t *testing.T) {
+	t.Parallel()
+
+	t.Run("custom Retrier implementation satisfies interface", func(t *testing.T) {
+		t.Parallel()
+
+		var _ Retrier = &customRetrier{}
+	})
+
+	t.Run("custom Retrier retries until success", func(t *testing.T) {
+		t.Parallel()
+
+		attempts := 0
+		r := &customRetrier{maxAttempts: 3}
+		err := r.Do(context.Background(), func() error {
+			attempts++
+			if attempts < 3 {
+				return errors.New("not yet")
+			}
+			return nil
+		})
+		if err != nil {
+			t.Errorf("expected nil error, got %v", err)
+		}
+		if attempts != 3 {
+			t.Errorf("expected 3 attempts, got %d", attempts)
+		}
+	})
+
+	t.Run("custom Retrier returns joined errors on all failures", func(t *testing.T) {
+		t.Parallel()
+
+		r := &customRetrier{maxAttempts: 2}
+		err := r.Do(context.Background(), func() error {
+			return errors.New("always fail")
+		})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if joined, ok := err.(interface{ Unwrap() []error }); ok {
+			if len(joined.Unwrap()) != 2 {
+				t.Errorf("expected 2 joined errors, got %d", len(joined.Unwrap()))
+			}
+		} else {
+			t.Errorf("expected joined error, got %T", err)
+		}
+	})
+
+	t.Run("custom Retrier respects context cancellation", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		r := &customRetrier{maxAttempts: 5}
+		err := r.Do(ctx, func() error {
+			return errors.New("fail")
+		})
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled, got %v", err)
+		}
+	})
+}

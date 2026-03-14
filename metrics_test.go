@@ -800,3 +800,86 @@ func TestConditionalMetrics_OnlyDuration_NoNilPanicOnErrorPath(t *testing.T) {
 	}
 	// If we reach here without panicking, the nil-checks are working.
 }
+
+func TestMetrics_WithErrorLabels_CounterVec(t *testing.T) {
+	t.Parallel()
+
+	t.Run("errorsLabeledVec is non-nil when errorLabelNames are set", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := testConfig(t)
+		cfg.errorLabelNames = []string{"type"}
+		m := newMetrics(cfg)
+
+		if m.errorsLabeledVec == nil {
+			t.Fatal("Expected errorsLabeledVec to be non-nil when errorLabelNames are set")
+		}
+		if m.errors != nil {
+			t.Error("Expected plain errors counter to be nil when errorsLabeledVec is used")
+		}
+	})
+
+	t.Run("errorsLabeledVec supports distinct label values", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := testConfig(t)
+		cfg.errorLabelNames = []string{"type"}
+		m := newMetrics(cfg)
+		registry := prometheus.NewRegistry()
+		m.MustRegister(registry)
+
+		m.errorsLabeledVec.With(prometheus.Labels{"type": "io_error"}).Inc()
+		m.errorsLabeledVec.With(prometheus.Labels{"type": "io_error"}).Inc()
+		m.errorsLabeledVec.With(prometheus.Labels{"type": "db_error"}).Inc()
+
+		ioCount := testutil.ToFloat64(m.errorsLabeledVec.With(prometheus.Labels{"type": "io_error"}))
+		if ioCount != 2 {
+			t.Errorf("Expected io_error count=2, got %f", ioCount)
+		}
+
+		dbCount := testutil.ToFloat64(m.errorsLabeledVec.With(prometheus.Labels{"type": "db_error"}))
+		if dbCount != 1 {
+			t.Errorf("Expected db_error count=1, got %f", dbCount)
+		}
+	})
+
+	t.Run("errorsLabeledVec is registered in prometheus registry", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := testConfig(t)
+		cfg.errorLabelNames = []string{"kind"}
+		m := newMetrics(cfg)
+		registry := prometheus.NewRegistry()
+		m.MustRegister(registry)
+
+		families, err := registry.Gather()
+		if err != nil {
+			t.Fatalf("Failed to gather metrics: %v", err)
+		}
+
+		metricName := "test_metrics_errors_total"
+		found := false
+		for _, family := range families {
+			if *family.Name == metricName {
+				found = true
+				break
+			}
+		}
+		// errorsLabeledVec only appears after a label value is observed
+		// Increment to trigger registration
+		m.errorsLabeledVec.With(prometheus.Labels{"kind": "timeout"}).Inc()
+		families, err = registry.Gather()
+		if err != nil {
+			t.Fatalf("Failed to gather after increment: %v", err)
+		}
+		for _, family := range families {
+			if *family.Name == metricName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected %q to be registered", metricName)
+		}
+	})
+}
