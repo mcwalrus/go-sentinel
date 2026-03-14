@@ -422,11 +422,11 @@ func (r *customRetrier) Do(ctx context.Context, fn func() error) error {
 		if err := ctx.Err(); err != nil {
 			return errors.Join(append(errs, err)...)
 		}
-		if err := fn(); err == nil {
+		err := fn()
+		if err == nil {
 			return nil
-		} else {
-			errs = append(errs, err)
 		}
+		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
 }
