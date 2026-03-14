@@ -17,7 +17,7 @@ func ExampleNewObserverDefault() {
 	)
 	observer.MustRegister(registry)
 
-	err := observer.RunFunc(func(ctx context.Context) error {
+	err := observer.RunFunc(func(_ context.Context) error {
 		fmt.Println("hello from sentinel")
 		return nil
 	})
