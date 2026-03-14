@@ -1,9 +1,126 @@
 package retry
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 )
+
+func TestDefaultRetrier_Do(t *testing.T) {
+	t.Parallel()
+
+	t.Run("succeeds after 2 failures", func(t *testing.T) {
+		t.Parallel()
+
+		attempts := 0
+		r := NewDefaultRetrier(Immediate(), 3)
+		err := r.Do(context.Background(), func() error {
+			attempts++
+			if attempts < 3 {
+				return errors.New("fail")
+			}
+			return nil
+		})
+		if err != nil {
+			t.Errorf("expected nil error, got %v", err)
+		}
+		if attempts != 3 {
+			t.Errorf("expected 3 attempts, got %d", attempts)
+		}
+	})
+
+	t.Run("returns joined errors on all failures", func(t *testing.T) {
+		t.Parallel()
+
+		r := NewDefaultRetrier(Immediate(), 2)
+		err := r.Do(context.Background(), func() error {
+			return errors.New("fail")
+		})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		// errors.Join with 3 errors (initial + 2 retries)
+		errs := make([]error, 0)
+		for _, e := range []error{err} {
+			if joined, ok := e.(interface{ Unwrap() []error }); ok {
+				errs = joined.Unwrap()
+			}
+		}
+		if len(errs) != 3 {
+			t.Errorf("expected 3 joined errors, got %d", len(errs))
+		}
+	})
+
+	t.Run("breaker stops retries on first error", func(t *testing.T) {
+		t.Parallel()
+
+		attempts := 0
+		r := NewDefaultRetrier(Immediate(), 3)
+		r.Breaker = func(err error) bool { return true }
+		err := r.Do(context.Background(), func() error {
+			attempts++
+			return errors.New("fail")
+		})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if attempts != 1 {
+			t.Errorf("expected 1 attempt, got %d", attempts)
+		}
+	})
+
+	t.Run("context cancellation during wait returns ctx.Err", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		r := NewDefaultRetrier(Linear(10*time.Millisecond), 5)
+		attempts := 0
+		cancel() // cancel immediately
+		err := r.Do(ctx, func() error {
+			attempts++
+			return errors.New("fail")
+		})
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled, got %v", err)
+		}
+	})
+
+	t.Run("nil strategy uses immediate retry", func(t *testing.T) {
+		t.Parallel()
+
+		attempts := 0
+		r := NewDefaultRetrier(nil, 2)
+		err := r.Do(context.Background(), func() error {
+			attempts++
+			if attempts < 3 {
+				return errors.New("fail")
+			}
+			return nil
+		})
+		if err != nil {
+			t.Errorf("expected nil error, got %v", err)
+		}
+		if attempts != 3 {
+			t.Errorf("expected 3 attempts, got %d", attempts)
+		}
+	})
+}
+
+func TestNewDefaultRetrier(t *testing.T) {
+	t.Parallel()
+
+	r := NewDefaultRetrier(Immediate(), 5)
+	if r.MaxRetries != 5 {
+		t.Errorf("expected MaxRetries=5, got %d", r.MaxRetries)
+	}
+	if r.WaitStrategy == nil {
+		t.Error("expected non-nil WaitStrategy")
+	}
+	if r.Breaker != nil {
+		t.Error("expected nil Breaker")
+	}
+}
 
 func TestImmediate(t *testing.T) {
 	t.Parallel()
