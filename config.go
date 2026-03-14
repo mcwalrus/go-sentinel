@@ -334,8 +334,10 @@ func WithRetryMetrics() ObserverOption {
 
 // WithErrorLabels sets a labeler function that maps errors to Prometheus label sets.
 // When a task fails, the labeler is called with the error to produce labels for the
-// errors_total metric. If the labeler panics, errors_total is incremented without
-// labels and panics_total is incremented to record the callback failure.
+// errors_total Counter metric. The label keys are discovered by calling the labeler
+// once at construction time with an empty error; the Counter is registered with those
+// label names. If the labeler panics, errors_total is incremented without labels and
+// panics_total is incremented to record the callback failure.
 //
 // Example usage:
 //
