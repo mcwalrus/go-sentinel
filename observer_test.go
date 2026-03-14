@@ -3111,12 +3111,11 @@ func TestNewObserverDefault_RegisteredMetrics(t *testing.T) {
 		foundMetrics[*family.Name] = true
 	}
 
-	// These metrics should be registered
+	// These metrics should be registered (default: in_flight, success_total, errors_total only)
 	for _, name := range []string{
 		"sentinel_in_flight",
 		"sentinel_success_total",
 		"sentinel_errors_total",
-		"sentinel_failures_total",
 	} {
 		if !foundMetrics[name] {
 			t.Errorf("Expected metric %s to be registered", name)
@@ -3126,6 +3125,7 @@ func TestNewObserverDefault_RegisteredMetrics(t *testing.T) {
 	// These metrics should NOT be registered
 	for _, name := range []string{
 		"sentinel_durations_seconds",
+		"sentinel_failures_total",
 		"sentinel_panics_total",
 		"sentinel_retries_total",
 		"sentinel_timeouts_total",
@@ -3136,8 +3136,8 @@ func TestNewObserverDefault_RegisteredMetrics(t *testing.T) {
 		}
 	}
 
-	if len(families) != 4 {
-		t.Errorf("Expected exactly 4 registered metrics, got %d", len(families))
+	if len(families) != 3 {
+		t.Errorf("Expected exactly 3 registered metrics, got %d", len(families))
 	}
 }
 
@@ -3155,8 +3155,8 @@ func TestNewObserverDefault_EnableFlagsSet(t *testing.T) {
 	if !observer.cfg.enableErrors {
 		t.Error("NewObserverDefault() should set enableErrors = true")
 	}
-	if !observer.cfg.enableFailures {
-		t.Error("NewObserverDefault() should set enableFailures = true")
+	if observer.cfg.enableFailures {
+		t.Error("NewObserverDefault() should not set enableFailures; use WithRetryMetrics for failures_total")
 	}
 }
 
@@ -3219,7 +3219,6 @@ func TestNewObserverDefault_UserOptsExtendDefaults(t *testing.T) {
 		"myworkers_in_flight",
 		"myworkers_success_total",
 		"myworkers_errors_total",
-		"myworkers_failures_total",
 	} {
 		if !foundMetrics[name] {
 			t.Errorf("Expected metric %s to be registered", name)

@@ -98,7 +98,7 @@ func NewObserver(opts ...ObserverOption) *Observer {
 //
 // Example usage:
 //
-//	// Default metrics: in_flight, success_total, errors_total, failures_total
+//	// Default metrics: in_flight, success_total, errors_total
 //	observer := sentinel.NewObserverDefault()
 //
 //	// Extend defaults with additional options

@@ -22,6 +22,7 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 			WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5}),
 			WithSuccessMetrics(),
 			WithErrorMetrics(),
+			WithRetryMetrics(),
 		)
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
@@ -85,6 +86,7 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 			WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5}),
 			WithSuccessMetrics(),
 			WithErrorMetrics(),
+			WithRetryMetrics(),
 		)
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
@@ -816,6 +818,7 @@ func TestVecObserver_Reset(t *testing.T) {
 			WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5}),
 			WithSuccessMetrics(),
 			WithErrorMetrics(),
+			WithRetryMetrics(), // needed for failures_total / failuresVec
 		)
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)

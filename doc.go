@@ -30,10 +30,10 @@
 //
 //   - [WithInFlightMetrics]  — gauge of concurrent executions
 //   - [WithSuccessMetrics]   — counter of successful completions
-//   - [WithErrorMetrics]     — counters for errors, failures, and timeouts
+//   - [WithErrorMetrics]     — counter for errors_total
 //   - [WithPanicMetrics]     — counter of recovered panics
 //   - [WithDurationMetrics]  — histogram of execution durations
-//   - [WithRetryMetrics]     — counter of retry attempts
+//   - [WithRetryMetrics]     — counters for retries_total and failures_total
 //   - [WithQueueMetrics]     — gauge of queued async tasks
 //
 // [NewObserverDefault] enables [WithInFlightMetrics], [WithSuccessMetrics],

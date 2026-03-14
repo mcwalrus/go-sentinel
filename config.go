@@ -279,9 +279,8 @@ func WithSuccessMetrics() ObserverOption {
 	}
 }
 
-// WithErrorMetrics enables the errors_total and failures_total counter metrics for the Observer.
+// WithErrorMetrics enables the errors_total counter metric for the Observer.
 // The errors_total counter increments each time a task returns an error (including retries and panics).
-// The failures_total counter increments each time a task exhausts all retry attempts or fails permanently.
 //
 // Example usage:
 //
@@ -291,7 +290,6 @@ func WithSuccessMetrics() ObserverOption {
 func WithErrorMetrics() ObserverOption {
 	return func(cfg *config) {
 		cfg.enableErrors = true
-		cfg.enableFailures = true
 	}
 }
 
@@ -323,8 +321,9 @@ func WithPanicMetrics() ObserverOption {
 	}
 }
 
-// WithRetryMetrics enables the retries_total counter metric for the Observer.
+// WithRetryMetrics enables the retries_total and failures_total counter metrics for the Observer.
 // The retries_total counter increments each time a task is retried after a failure.
+// The failures_total counter increments each time a task exhausts all retry attempts or fails permanently.
 //
 // Example usage:
 //
@@ -334,6 +333,7 @@ func WithPanicMetrics() ObserverOption {
 func WithRetryMetrics() ObserverOption {
 	return func(cfg *config) {
 		cfg.enableRetries = true
+		cfg.enableFailures = true
 	}
 }
 

@@ -456,8 +456,8 @@ func TestWithErrorMetrics(t *testing.T) {
 	if !cfg.enableErrors {
 		t.Error("WithErrorMetrics() should set enableErrors = true")
 	}
-	if !cfg.enableFailures {
-		t.Error("WithErrorMetrics() should set enableFailures = true")
+	if cfg.enableFailures {
+		t.Error("WithErrorMetrics() should not set enableFailures; use WithRetryMetrics for failures_total")
 	}
 	if cfg.enableTimeouts {
 		t.Error("WithErrorMetrics() should not affect enableTimeouts")
@@ -662,9 +662,7 @@ func TestConditionalMetrics_TwoObservers_DifferentSubsets_NoConflict(t *testing.
 	if !foundNames["obs2_errors_total"] {
 		t.Error("Expected obs2_errors_total")
 	}
-	if !foundNames["obs2_failures_total"] {
-		t.Error("Expected obs2_failures_total")
-	}
+	// obs2 uses only WithErrorMetrics(), so failures_total is not registered
 }
 
 func TestWithPanicMetrics(t *testing.T) {
@@ -691,6 +689,9 @@ func TestWithRetryMetrics(t *testing.T) {
 
 	if !cfg.enableRetries {
 		t.Error("WithRetryMetrics() should set enableRetries = true")
+	}
+	if !cfg.enableFailures {
+		t.Error("WithRetryMetrics() should set enableFailures = true")
 	}
 	if cfg.enablePanics {
 		t.Error("WithRetryMetrics() should not affect enablePanics")
@@ -729,11 +730,22 @@ func TestConditionalMetrics_OnlyRetriesRegistered(t *testing.T) {
 		t.Fatalf("Failed to gather metrics: %v", err)
 	}
 
-	if len(families) != 1 {
-		t.Errorf("Expected 1 metric family, got %d", len(families))
+	if len(families) != 2 {
+		t.Errorf("Expected 2 metric families (retries_total, failures_total), got %d", len(families))
 	}
-	if len(families) > 0 && *families[0].Name != "sentinel_retries_total" {
-		t.Errorf("Expected sentinel_retries_total, got %s", *families[0].Name)
+	foundNames := make(map[string]bool)
+	for _, f := range families {
+		foundNames[*f.Name] = true
+	}
+	if !foundNames["sentinel_retries_total"] {
+		t.Error("Expected sentinel_retries_total")
+	}
+	if !foundNames["sentinel_failures_total"] {
+		t.Error("Expected sentinel_failures_total")
+	}
+	// failures_total is tied to WithRetryMetrics, not WithErrorMetrics
+	if foundNames["sentinel_errors_total"] {
+		t.Error("WithRetryMetrics() only should not register errors_total; use WithErrorMetrics() for that")
 	}
 }
 
@@ -749,8 +761,8 @@ func TestConditionalMetrics_PanicsAndRetriesRegisteredIndependently(t *testing.T
 		t.Fatalf("Failed to gather metrics: %v", err)
 	}
 
-	if len(families) != 2 {
-		t.Errorf("Expected 2 metric families, got %d", len(families))
+	if len(families) != 3 {
+		t.Errorf("Expected 3 metric families (panics, retries, failures), got %d", len(families))
 	}
 
 	foundNames := make(map[string]bool)
@@ -762,6 +774,9 @@ func TestConditionalMetrics_PanicsAndRetriesRegisteredIndependently(t *testing.T
 	}
 	if !foundNames["sentinel_retries_total"] {
 		t.Error("Expected sentinel_retries_total")
+	}
+	if !foundNames["sentinel_failures_total"] {
+		t.Error("Expected sentinel_failures_total")
 	}
 }
 
@@ -783,6 +798,9 @@ func TestConditionalMetrics_WithoutPanicAndRetryOptions_MetricsAbsent(t *testing
 		}
 		if *f.Name == "sentinel_retries_total" {
 			t.Error("sentinel_retries_total should not be registered without WithRetryMetrics()")
+		}
+		if *f.Name == "sentinel_failures_total" {
+			t.Error("sentinel_failures_total should not be registered without WithRetryMetrics()")
 		}
 	}
 }

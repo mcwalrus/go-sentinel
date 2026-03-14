@@ -14,17 +14,17 @@ Default configurations will automatically export the following Prometheus metric
 
 | Metric | Type | Description | Effective When |
 |--------|------|-------------|----------------|
-| `sentinel_in_flight` | Gauge | Active number of running tasks | - |
-| `sentinel_successes_total` | Counter | Total successful tasks | - |
-| `sentinel_failures_total` | Counter | Total failed tasks | - |
-| `sentinel_errors_total` | Counter | Total errors over all attempts | - |
-| `sentinel_panics_total` | Counter | Total panic occurrences | - |
-| `sentinel_timeouts_total` | Counter | Total errors based on timeouts | - |
-| `sentinel_durations_seconds` | Histogram | Task execution durations in buckets | durationBuckets is set |
-| `sentinel_pending_total` | Gauge | Active number of pending tasks | MaxConcurrency > 0 |
-| `sentinel_retries_total` | Counter | Total retry attempts for tasks | MaxRetries > 0 |
+| `sentinel_in_flight` | Gauge | Active number of running tasks | WithInFlightMetrics (default) |
+| `sentinel_successes_total` | Counter | Total successful tasks | WithSuccessMetrics (default) |
+| `sentinel_errors_total` | Counter | Total errors over all attempts | WithErrorMetrics (default) |
+| `sentinel_failures_total` | Counter | Total failed tasks (exhausted retries or permanent failure) | WithRetryMetrics |
+| `sentinel_retries_total` | Counter | Total retry attempts for tasks | WithRetryMetrics |
+| `sentinel_panics_total` | Counter | Total panic occurrences | WithPanicMetrics |
+| `sentinel_timeouts_total` | Counter | Total errors based on timeouts | WithTimeoutMetrics |
+| `sentinel_durations_seconds` | Histogram | Task execution durations in buckets | WithDurationMetrics |
+| `sentinel_pending_total` | Gauge | Active number of pending tasks | WithQueueMetrics, MaxConcurrency > 0 |
 
-Note, `-` reflects that configured metrics are always applicable.
+Default configurations (e.g. [NewObserverDefault]) export in_flight, successes_total, and errors_total. Use WithRetryMetrics to also export failures_total and retries_total.
 
 ## Installation
 
