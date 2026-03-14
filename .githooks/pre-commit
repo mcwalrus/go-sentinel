@@ -5,7 +5,6 @@ set -e
 run_dependencies() {
   echo "dependencies"
   go mod tidy
-  go mod vendor
 }
 
 run_format() {
