@@ -39,7 +39,6 @@ func RetryCount(ctx context.Context) int {
 // execution. It tracks successes, failures, timeouts, panics, retries, and durations.
 // Create with [NewObserver] or [NewObserverDefault].
 type Observer struct {
-	m             *sync.RWMutex
 	cfg           config
 	metrics       metrics
 	control       circuit.Control
@@ -78,7 +77,6 @@ func NewObserver(opts ...ObserverOption) *Observer {
 		p = p.WithMaxGoroutines(cfg.maxConcurrency)
 	}
 	obs := &Observer{
-		m:             &sync.RWMutex{},
 		cfg:           cfg,
 		metrics:       newMetrics(cfg),
 		pool:          p,
@@ -165,9 +163,7 @@ func (o *Observer) MustRegister(registry prometheus.Registerer) {
 // rather than crashing immediately. This differs from the synchronous path where
 // the panic propagates directly to the caller of Run or RunFunc.
 func (o *Observer) DisablePanicRecovery(disable bool) {
-	o.m.Lock()
 	o.recoverPanics = !disable
-	o.m.Unlock()
 }
 
 // Run executes fn synchronously and records metrics according to the observer's
@@ -192,13 +188,11 @@ func (o *Observer) DisablePanicRecovery(disable bool) {
 //		log.Printf("Task failed: %v", err)
 //	}
 func (o *Observer) Run(fn func() error) error {
-	if o == nil {
+	if o == nil || o.pool == nil {
 		panic("observer: not configured")
 	}
-	o.m.RLock()
 	control := o.control
 	limiter := o.limiter
-	o.m.RUnlock()
 
 	task := &implTask{
 		fn: func(_ context.Context) error {
@@ -238,13 +232,11 @@ func (o *Observer) Run(fn func() error) error {
 //		log.Printf("Task failed: %v", err)
 //	}
 func (o *Observer) RunFunc(fn func(ctx context.Context) error) error {
-	if o == nil {
+	if o == nil || o.pool == nil {
 		panic("observer: not configured")
 	}
-	o.m.RLock()
 	control := o.control
 	limiter := o.limiter
-	o.m.RUnlock()
 
 	task := &implTask{
 		fn: fn,
@@ -274,10 +266,8 @@ func (o *Observer) Submit(fn func() error) {
 	if o == nil {
 		panic("observer: not configured")
 	}
-	o.m.RLock()
 	control := o.control
 	limiter := o.limiter
-	o.m.RUnlock()
 
 	task := &implTask{
 		fn: func(_ context.Context) error {
@@ -333,10 +323,8 @@ func (o *Observer) SubmitFunc(fn func(ctx context.Context) error) {
 	if o == nil {
 		panic("observer: not configured")
 	}
-	o.m.RLock()
 	control := o.control
 	limiter := o.limiter
-	o.m.RUnlock()
 
 	task := &implTask{
 		fn: fn,
@@ -392,13 +380,11 @@ func (o *Observer) Wait() error {
 	o.poolErrsMu.Unlock()
 
 	// Reset pool so it is reusable
-	o.m.Lock()
 	p := pool.New()
 	if o.cfg.maxConcurrency > 0 {
 		p = p.WithMaxGoroutines(o.cfg.maxConcurrency)
 	}
 	o.pool = p
-	o.m.Unlock()
 
 	return errors.Join(errs...)
 }
@@ -485,7 +471,6 @@ func filterControlBreaker(err error) error {
 	return err
 }
 
-
 // safeControl calls the control handler with panic recovery.
 // If the handler panics, it returns false (allow execution) as a safe default,
 // and signals that a panic occurred via the second return value.
@@ -546,19 +531,16 @@ func (o *Observer) execute(task *implTask) error {
 
 			if currentAttempt > 0 {
 				// Retry attempt: check control gate before proceeding.
-				o.m.RLock()
 				if o.control != nil {
 					shouldStop, panicked := safeControl(o.control, circuit.PhaseRetry)
 					if panicked && o.metrics.panics != nil {
 						o.metrics.panics.Inc()
 					}
 					if shouldStop {
-						o.m.RUnlock()
 						controlStopped = true
 						return &ErrControlBreaker{}
 					}
 				}
-				o.m.RUnlock()
 				if o.metrics.retries != nil {
 					o.metrics.retries.Inc()
 				}
@@ -614,15 +596,12 @@ func (o *Observer) execute(task *implTask) error {
 				}
 				if panicValue != nil && o.metrics.panics != nil {
 					o.metrics.panics.Inc()
-					o.m.RLock()
 					if !o.recoverPanics {
-						o.m.RUnlock()
 						if o.metrics.failures != nil {
 							o.metrics.failures.Inc()
 						}
 						panic(panicValue) // re-throw
 					}
-					o.m.RUnlock()
 				}
 			}
 			return fnErr
@@ -703,15 +682,12 @@ func (o *Observer) execute(task *implTask) error {
 			if o.metrics.panics != nil {
 				o.metrics.panics.Inc()
 			}
-			o.m.RLock()
 			if !o.recoverPanics {
-				o.m.RUnlock()
 				if o.metrics.failures != nil {
 					o.metrics.failures.Inc()
 				}
 				panic(panicValue) // re-throw
 			}
-			o.m.RUnlock()
 		}
 
 		if o.metrics.failures != nil {
