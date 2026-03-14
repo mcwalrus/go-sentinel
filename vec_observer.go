@@ -3,9 +3,9 @@ package sentinel
 import (
 	"maps"
 	"slices"
-	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sourcegraph/conc/pool"
 )
 
 // VecObserver is a labeled Observer that supports Prometheus label dimensions.
@@ -106,9 +106,9 @@ func (vo *VecObserver) With(labels prometheus.Labels) (*Observer, error) {
 		return nil, err
 	}
 	return &Observer{
-		m:             &sync.RWMutex{},
 		cfg:           vo.cfg,
 		metrics:       m,
+		pool:          pool.New(),
 		labelValues:   slices.Collect(maps.Values(labels)),
 		recoverPanics: true,
 	}, nil
@@ -134,9 +134,9 @@ func (vo *VecObserver) WithLabels(labelValues ...string) (*Observer, error) {
 		return nil, err
 	}
 	return &Observer{
-		m:             &sync.RWMutex{},
 		cfg:           vo.cfg,
 		metrics:       m,
+		pool:          pool.New(),
 		labelValues:   labelValues,
 		recoverPanics: true,
 	}, nil
