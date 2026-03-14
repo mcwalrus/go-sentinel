@@ -553,9 +553,9 @@ func TestConditionalMetrics_AllOptionsEnabled(t *testing.T) {
 		WithErrorMetrics(),
 		WithTimeoutMetrics(),
 		WithQueueMetrics(),
+		WithPanicMetrics(),
+		WithRetryMetrics(),
 	)
-	// WithPanicMetrics and WithRetryMetrics are not yet implemented as typed options;
-	// use WithMetrics to include them explicitly.
 	registry := prometheus.NewRegistry()
 	observer.MustRegister(registry)
 
@@ -565,13 +565,15 @@ func TestConditionalMetrics_AllOptionsEnabled(t *testing.T) {
 	}
 
 	expectedNames := map[string]bool{
-		"sentinel_in_flight":        true,
-		"sentinel_success_total":    true,
-		"sentinel_errors_total":     true,
-		"sentinel_failures_total":   true,
-		"sentinel_timeouts_total":   true,
-		"sentinel_pending_total":    true,
+		"sentinel_in_flight":         true,
+		"sentinel_success_total":     true,
+		"sentinel_errors_total":      true,
+		"sentinel_failures_total":    true,
+		"sentinel_timeouts_total":    true,
+		"sentinel_pending_total":     true,
 		"sentinel_durations_seconds": true,
+		"sentinel_panics_total":      true,
+		"sentinel_retries_total":     true,
 	}
 
 	for _, family := range families {
@@ -661,6 +663,126 @@ func TestConditionalMetrics_TwoObservers_DifferentSubsets_NoConflict(t *testing.
 	}
 	if !foundNames["obs2_failures_total"] {
 		t.Error("Expected obs2_failures_total")
+	}
+}
+
+func TestWithPanicMetrics(t *testing.T) {
+	t.Parallel()
+
+	cfg := config{}
+	opt := WithPanicMetrics()
+	opt(&cfg)
+
+	if !cfg.enablePanics {
+		t.Error("WithPanicMetrics() should set enablePanics = true")
+	}
+	if cfg.enableRetries {
+		t.Error("WithPanicMetrics() should not affect enableRetries")
+	}
+}
+
+func TestWithRetryMetrics(t *testing.T) {
+	t.Parallel()
+
+	cfg := config{}
+	opt := WithRetryMetrics()
+	opt(&cfg)
+
+	if !cfg.enableRetries {
+		t.Error("WithRetryMetrics() should set enableRetries = true")
+	}
+	if cfg.enablePanics {
+		t.Error("WithRetryMetrics() should not affect enablePanics")
+	}
+}
+
+func TestConditionalMetrics_OnlyPanicsRegistered(t *testing.T) {
+	t.Parallel()
+
+	observer := NewObserver(WithPanicMetrics())
+	registry := prometheus.NewRegistry()
+	observer.MustRegister(registry)
+
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatalf("Failed to gather metrics: %v", err)
+	}
+
+	if len(families) != 1 {
+		t.Errorf("Expected 1 metric family, got %d", len(families))
+	}
+	if len(families) > 0 && *families[0].Name != "sentinel_panics_total" {
+		t.Errorf("Expected sentinel_panics_total, got %s", *families[0].Name)
+	}
+}
+
+func TestConditionalMetrics_OnlyRetriesRegistered(t *testing.T) {
+	t.Parallel()
+
+	observer := NewObserver(WithRetryMetrics())
+	registry := prometheus.NewRegistry()
+	observer.MustRegister(registry)
+
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatalf("Failed to gather metrics: %v", err)
+	}
+
+	if len(families) != 1 {
+		t.Errorf("Expected 1 metric family, got %d", len(families))
+	}
+	if len(families) > 0 && *families[0].Name != "sentinel_retries_total" {
+		t.Errorf("Expected sentinel_retries_total, got %s", *families[0].Name)
+	}
+}
+
+func TestConditionalMetrics_PanicsAndRetriesRegisteredIndependently(t *testing.T) {
+	t.Parallel()
+
+	observer := NewObserver(WithPanicMetrics(), WithRetryMetrics())
+	registry := prometheus.NewRegistry()
+	observer.MustRegister(registry)
+
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatalf("Failed to gather metrics: %v", err)
+	}
+
+	if len(families) != 2 {
+		t.Errorf("Expected 2 metric families, got %d", len(families))
+	}
+
+	foundNames := make(map[string]bool)
+	for _, f := range families {
+		foundNames[*f.Name] = true
+	}
+	if !foundNames["sentinel_panics_total"] {
+		t.Error("Expected sentinel_panics_total")
+	}
+	if !foundNames["sentinel_retries_total"] {
+		t.Error("Expected sentinel_retries_total")
+	}
+}
+
+func TestConditionalMetrics_WithoutPanicAndRetryOptions_MetricsAbsent(t *testing.T) {
+	t.Parallel()
+
+	observer := NewObserver(WithSuccessMetrics())
+	registry := prometheus.NewRegistry()
+	observer.MustRegister(registry)
+
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatalf("Failed to gather metrics: %v", err)
+	}
+
+	for _, f := range families {
+		if *f.Name == "sentinel_panics_total" {
+			t.Error("sentinel_panics_total should not be registered without WithPanicMetrics()")
+		}
+		if *f.Name == "sentinel_retries_total" {
+			t.Error("sentinel_retries_total should not be registered without WithRetryMetrics()")
+		}
 	}
 }
 
