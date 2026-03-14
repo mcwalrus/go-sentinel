@@ -304,6 +304,34 @@ func WithTimeoutMetrics() ObserverOption {
 	}
 }
 
+// WithPanicMetrics enables the panics_total counter metric for the Observer.
+// The panics_total counter increments each time a task or control handler panics.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(
+//	    sentinel.WithPanicMetrics(),
+//	)
+func WithPanicMetrics() ObserverOption {
+	return func(cfg *config) {
+		cfg.enablePanics = true
+	}
+}
+
+// WithRetryMetrics enables the retries_total counter metric for the Observer.
+// The retries_total counter increments each time a task is retried after a failure.
+//
+// Example usage:
+//
+//	observer := sentinel.NewObserver(
+//	    sentinel.WithRetryMetrics(),
+//	)
+func WithRetryMetrics() ObserverOption {
+	return func(cfg *config) {
+		cfg.enableRetries = true
+	}
+}
+
 // WithErrorLabels sets a labeler function that maps errors to Prometheus label sets.
 // When a task fails, the labeler is called with the error to produce labels for the
 // errors_total metric. If the labeler panics, errors_total is incremented without
