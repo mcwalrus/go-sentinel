@@ -1,6 +1,7 @@
 package sentinel
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -513,4 +514,161 @@ func TestConfigEnableFlagsDefaultToFalse(t *testing.T) {
 	if cfg.ErrorLabeler != nil {
 		t.Error("ErrorLabeler should default to nil")
 	}
+}
+
+// TestConditionalMetricRegistration verifies that only enabled metrics are registered.
+
+func TestConditionalMetrics_OnlySuccessRegistered(t *testing.T) {
+	t.Parallel()
+
+	observer := NewObserver(nil, WithSuccessMetrics())
+	registry := prometheus.NewRegistry()
+	observer.MustRegister(registry)
+
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatalf("Failed to gather metrics: %v", err)
+	}
+
+	if len(families) != 1 {
+		t.Errorf("Expected 1 metric family, got %d", len(families))
+	}
+	if len(families) > 0 && *families[0].Name != "sentinel_success_total" {
+		t.Errorf("Expected sentinel_success_total, got %s", *families[0].Name)
+	}
+}
+
+func TestConditionalMetrics_AllOptionsEnabled(t *testing.T) {
+	t.Parallel()
+
+	observer := NewObserver(
+		[]float64{0.1, 1},
+		WithInFlightMetrics(),
+		WithSuccessMetrics(),
+		WithErrorMetrics(),
+		WithTimeoutMetrics(),
+		WithQueueMetrics(),
+	)
+	// WithPanicMetrics and WithRetryMetrics are not yet implemented as typed options;
+	// use WithMetrics to include them explicitly.
+	registry := prometheus.NewRegistry()
+	observer.MustRegister(registry)
+
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatalf("Failed to gather metrics: %v", err)
+	}
+
+	expectedNames := map[string]bool{
+		"sentinel_in_flight":      true,
+		"sentinel_success_total":  true,
+		"sentinel_errors_total":   true,
+		"sentinel_failures_total": true,
+		"sentinel_timeouts_total": true,
+		"sentinel_pending_total":  true,
+	}
+
+	for _, family := range families {
+		if !expectedNames[*family.Name] {
+			t.Errorf("Unexpected metric: %s", *family.Name)
+		}
+	}
+	if len(families) != len(expectedNames) {
+		t.Errorf("Expected %d metric families, got %d", len(expectedNames), len(families))
+	}
+}
+
+func TestConditionalMetrics_NoMetrics_EmptyOutput(t *testing.T) {
+	t.Parallel()
+
+	// Create metrics directly with an explicitly empty (non-nil) filter,
+	// bypassing the setupConfig fallback to defaultMetricFilter.
+	cfg := config{
+		namespace:    "test",
+		subsystem:    "empty",
+		description:  "tasks",
+		metricFilter: make(map[string]bool), // non-nil empty: no metrics enabled
+	}
+	m := newMetrics(cfg)
+	registry := prometheus.NewRegistry()
+	m.MustRegister(registry)
+
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatalf("Failed to gather metrics: %v", err)
+	}
+
+	if len(families) != 0 {
+		t.Errorf("Expected 0 metric families, got %d", len(families))
+	}
+}
+
+func TestConditionalMetrics_NoMetrics_TasksExecute(t *testing.T) {
+	t.Parallel()
+
+	// Tasks should still execute normally even with no metrics enabled.
+	observer := NewObserver(nil, WithMetrics())
+
+	executed := false
+	err := observer.RunFunc(func(_ context.Context) error {
+		executed = true
+		return nil
+	})
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if !executed {
+		t.Error("Expected task to execute")
+	}
+}
+
+func TestConditionalMetrics_TwoObservers_DifferentSubsets_NoConflict(t *testing.T) {
+	t.Parallel()
+
+	registry := prometheus.NewRegistry()
+
+	obs1 := NewObserver(nil, WithSuccessMetrics(), WithNamespace("obs1"))
+	obs2 := NewObserver(nil, WithErrorMetrics(), WithNamespace("obs2"))
+
+	if err := obs1.Register(registry); err != nil {
+		t.Fatalf("obs1 registration failed: %v", err)
+	}
+	if err := obs2.Register(registry); err != nil {
+		t.Fatalf("obs2 registration failed: %v", err)
+	}
+
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatalf("Failed to gather metrics: %v", err)
+	}
+
+	foundNames := make(map[string]bool)
+	for _, f := range families {
+		foundNames[*f.Name] = true
+	}
+
+	if !foundNames["obs1_success_total"] {
+		t.Error("Expected obs1_success_total")
+	}
+	if !foundNames["obs2_errors_total"] {
+		t.Error("Expected obs2_errors_total")
+	}
+	if !foundNames["obs2_failures_total"] {
+		t.Error("Expected obs2_failures_total")
+	}
+}
+
+func TestConditionalMetrics_OnlyDuration_NoNilPanicOnErrorPath(t *testing.T) {
+	t.Parallel()
+
+	// Only duration metrics enabled - error path should not nil-panic.
+	observer := NewObserver([]float64{0.1, 1}, WithMetrics(MetricDurations))
+
+	err := observer.RunFunc(func(_ context.Context) error {
+		return errors.New("test error")
+	})
+	if err == nil {
+		t.Error("Expected error to be returned")
+	}
+	// If we reach here without panicking, the nil-checks are working.
 }

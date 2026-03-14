@@ -58,65 +58,81 @@ func newVecMetrics(cfg config, labelNames []string) *vecMetrics {
 	m := &vecMetrics{
 		labelNames:   labelNames,
 		metricFilter: cfg.metricFilter,
-		inFlightVec: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	}
+
+	if cfg.metricFilter == nil || cfg.metricFilter[MetricInFlight] {
+		m.inFlightVec = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace:   cfg.namespace,
 			Subsystem:   cfg.subsystem,
 			Name:        "in_flight",
 			Help:        fmt.Sprintf("Number of observed %s in flight", cfg.description),
 			ConstLabels: cfg.constLabels,
-		}, labelNames),
-		successesVec: prometheus.NewCounterVec(prometheus.CounterOpts{
+		}, labelNames)
+	}
+	if cfg.metricFilter == nil || cfg.metricFilter[MetricSuccesses] {
+		m.successesVec = prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace:   cfg.namespace,
 			Subsystem:   cfg.subsystem,
 			Name:        "success_total",
 			Help:        fmt.Sprintf("Number of successes from observed %s", cfg.description),
 			ConstLabels: cfg.constLabels,
-		}, labelNames),
-		failuresVec: prometheus.NewCounterVec(prometheus.CounterOpts{
+		}, labelNames)
+	}
+	if cfg.metricFilter == nil || cfg.metricFilter[MetricFailures] {
+		m.failuresVec = prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace:   cfg.namespace,
 			Subsystem:   cfg.subsystem,
 			Name:        "failures_total",
 			Help:        fmt.Sprintf("Number of failures from observed %s excluding retry attempts", cfg.description),
 			ConstLabels: cfg.constLabels,
-		}, labelNames),
-		errorsVec: prometheus.NewCounterVec(prometheus.CounterOpts{
+		}, labelNames)
+	}
+	if cfg.metricFilter == nil || cfg.metricFilter[MetricErrors] {
+		m.errorsVec = prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace:   cfg.namespace,
 			Subsystem:   cfg.subsystem,
 			Name:        "errors_total",
 			Help:        fmt.Sprintf("Number of errors from observed %s including retries and panics", cfg.description),
 			ConstLabels: cfg.constLabels,
-		}, labelNames),
-		panicsVec: prometheus.NewCounterVec(prometheus.CounterOpts{
+		}, labelNames)
+	}
+	if cfg.metricFilter == nil || cfg.metricFilter[MetricPanics] {
+		m.panicsVec = prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace:   cfg.namespace,
 			Subsystem:   cfg.subsystem,
 			Name:        "panics_total",
 			Help:        fmt.Sprintf("Number of panic occurrences from observed %s", cfg.description),
 			ConstLabels: cfg.constLabels,
-		}, labelNames),
-		timeoutsVec: prometheus.NewCounterVec(prometheus.CounterOpts{
+		}, labelNames)
+	}
+	if cfg.metricFilter == nil || cfg.metricFilter[MetricTimeouts] {
+		m.timeoutsVec = prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace:   cfg.namespace,
 			Subsystem:   cfg.subsystem,
 			Name:        "timeouts_total",
 			Help:        fmt.Sprintf("Number of timeout errors from observed %s", cfg.description),
 			ConstLabels: cfg.constLabels,
-		}, labelNames),
-		retriesVec: prometheus.NewCounterVec(prometheus.CounterOpts{
+		}, labelNames)
+	}
+	if cfg.metricFilter == nil || cfg.metricFilter[MetricRetries] {
+		m.retriesVec = prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace:   cfg.namespace,
 			Subsystem:   cfg.subsystem,
 			Name:        "retries_total",
 			Help:        fmt.Sprintf("Number of retry attempts from observed %s", cfg.description),
 			ConstLabels: cfg.constLabels,
-		}, labelNames),
-		pendingVec: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		}, labelNames)
+	}
+	if cfg.metricFilter == nil || cfg.metricFilter[MetricPending] {
+		m.pendingVec = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace:   cfg.namespace,
 			Subsystem:   cfg.subsystem,
 			Name:        "pending_total",
 			Help:        fmt.Sprintf("Number of observed %s pending concurrency limiter acquisition", cfg.description),
 			ConstLabels: cfg.constLabels,
-		}, labelNames),
+		}, labelNames)
 	}
-
-	if len(cfg.buckets) > 0 {
+	if len(cfg.buckets) > 0 && (cfg.metricFilter == nil || cfg.metricFilter[MetricDurations]) {
 		m.durationsVec = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace:   cfg.namespace,
 			Subsystem:   cfg.subsystem,
@@ -267,49 +283,63 @@ func (m *vecMetrics) withLabels(labelValues ...string) (metrics, error) {
 		return metrics{}, fmt.Errorf("number of label values (%d) must match the number of label names (%d)", len(labelValues), len(m.labelNames))
 	}
 
-	inFlight, err := m.inFlightVec.GetMetricWithLabelValues(labelValues...)
-	if err != nil {
-		return metrics{}, err
-	}
-	successes, err := m.successesVec.GetMetricWithLabelValues(labelValues...)
-	if err != nil {
-		return metrics{}, err
-	}
-	failures, err := m.failuresVec.GetMetricWithLabelValues(labelValues...)
-	if err != nil {
-		return metrics{}, err
-	}
-	errorsMetric, err := m.errorsVec.GetMetricWithLabelValues(labelValues...)
-	if err != nil {
-		return metrics{}, err
-	}
-	panics, err := m.panicsVec.GetMetricWithLabelValues(labelValues...)
-	if err != nil {
-		return metrics{}, err
-	}
-	timeouts, err := m.timeoutsVec.GetMetricWithLabelValues(labelValues...)
-	if err != nil {
-		return metrics{}, err
-	}
-	retries, err := m.retriesVec.GetMetricWithLabelValues(labelValues...)
-	if err != nil {
-		return metrics{}, err
-	}
-	pending, err := m.pendingVec.GetMetricWithLabelValues(labelValues...)
-	if err != nil {
-		return metrics{}, err
-	}
+	ob := metrics{metricFilter: m.metricFilter}
 
-	ob := metrics{
-		inFlight:     inFlight,
-		successes:    successes,
-		failures:     failures,
-		errors:       errorsMetric,
-		panics:       panics,
-		timeouts:     timeouts,
-		retries:      retries,
-		pending:      pending,
-		metricFilter: m.metricFilter,
+	if m.inFlightVec != nil {
+		inFlight, err := m.inFlightVec.GetMetricWithLabelValues(labelValues...)
+		if err != nil {
+			return metrics{}, err
+		}
+		ob.inFlight = inFlight
+	}
+	if m.successesVec != nil {
+		successes, err := m.successesVec.GetMetricWithLabelValues(labelValues...)
+		if err != nil {
+			return metrics{}, err
+		}
+		ob.successes = successes
+	}
+	if m.failuresVec != nil {
+		failures, err := m.failuresVec.GetMetricWithLabelValues(labelValues...)
+		if err != nil {
+			return metrics{}, err
+		}
+		ob.failures = failures
+	}
+	if m.errorsVec != nil {
+		errorsMetric, err := m.errorsVec.GetMetricWithLabelValues(labelValues...)
+		if err != nil {
+			return metrics{}, err
+		}
+		ob.errors = errorsMetric
+	}
+	if m.panicsVec != nil {
+		panics, err := m.panicsVec.GetMetricWithLabelValues(labelValues...)
+		if err != nil {
+			return metrics{}, err
+		}
+		ob.panics = panics
+	}
+	if m.timeoutsVec != nil {
+		timeouts, err := m.timeoutsVec.GetMetricWithLabelValues(labelValues...)
+		if err != nil {
+			return metrics{}, err
+		}
+		ob.timeouts = timeouts
+	}
+	if m.retriesVec != nil {
+		retries, err := m.retriesVec.GetMetricWithLabelValues(labelValues...)
+		if err != nil {
+			return metrics{}, err
+		}
+		ob.retries = retries
+	}
+	if m.pendingVec != nil {
+		pending, err := m.pendingVec.GetMetricWithLabelValues(labelValues...)
+		if err != nil {
+			return metrics{}, err
+		}
+		ob.pending = pending
 	}
 	if m.durationsVec != nil {
 		durations, err := m.durationsVec.GetMetricWithLabelValues(labelValues...)
@@ -341,50 +371,66 @@ func (m *vecMetrics) curryWith(labels prometheus.Labels) (vecMetrics, error) {
 		}
 	}
 
-	curriedInFlight, err := m.inFlightVec.CurryWith(labels)
-	if err != nil {
-		return vecMetrics{}, err
-	}
-	curriedSuccesses, err := m.successesVec.CurryWith(labels)
-	if err != nil {
-		return vecMetrics{}, err
-	}
-	curriedFailures, err := m.failuresVec.CurryWith(labels)
-	if err != nil {
-		return vecMetrics{}, err
-	}
-	curriedErrors, err := m.errorsVec.CurryWith(labels)
-	if err != nil {
-		return vecMetrics{}, err
-	}
-	curriedPanics, err := m.panicsVec.CurryWith(labels)
-	if err != nil {
-		return vecMetrics{}, err
-	}
-	curriedTimeouts, err := m.timeoutsVec.CurryWith(labels)
-	if err != nil {
-		return vecMetrics{}, err
-	}
-	curriedRetries, err := m.retriesVec.CurryWith(labels)
-	if err != nil {
-		return vecMetrics{}, err
-	}
-	curriedPending, err := m.pendingVec.CurryWith(labels)
-	if err != nil {
-		return vecMetrics{}, err
-	}
-
 	ob := vecMetrics{
 		labelNames:   curriedLabelNames,
-		inFlightVec:  curriedInFlight,
-		successesVec: curriedSuccesses,
-		failuresVec:  curriedFailures,
-		errorsVec:    curriedErrors,
-		panicsVec:    curriedPanics,
-		timeoutsVec:  curriedTimeouts,
-		retriesVec:   curriedRetries,
-		pendingVec:   curriedPending,
 		metricFilter: m.metricFilter,
+	}
+
+	if m.inFlightVec != nil {
+		curriedInFlight, err := m.inFlightVec.CurryWith(labels)
+		if err != nil {
+			return vecMetrics{}, err
+		}
+		ob.inFlightVec = curriedInFlight
+	}
+	if m.successesVec != nil {
+		curriedSuccesses, err := m.successesVec.CurryWith(labels)
+		if err != nil {
+			return vecMetrics{}, err
+		}
+		ob.successesVec = curriedSuccesses
+	}
+	if m.failuresVec != nil {
+		curriedFailures, err := m.failuresVec.CurryWith(labels)
+		if err != nil {
+			return vecMetrics{}, err
+		}
+		ob.failuresVec = curriedFailures
+	}
+	if m.errorsVec != nil {
+		curriedErrors, err := m.errorsVec.CurryWith(labels)
+		if err != nil {
+			return vecMetrics{}, err
+		}
+		ob.errorsVec = curriedErrors
+	}
+	if m.panicsVec != nil {
+		curriedPanics, err := m.panicsVec.CurryWith(labels)
+		if err != nil {
+			return vecMetrics{}, err
+		}
+		ob.panicsVec = curriedPanics
+	}
+	if m.timeoutsVec != nil {
+		curriedTimeouts, err := m.timeoutsVec.CurryWith(labels)
+		if err != nil {
+			return vecMetrics{}, err
+		}
+		ob.timeoutsVec = curriedTimeouts
+	}
+	if m.retriesVec != nil {
+		curriedRetries, err := m.retriesVec.CurryWith(labels)
+		if err != nil {
+			return vecMetrics{}, err
+		}
+		ob.retriesVec = curriedRetries
+	}
+	if m.pendingVec != nil {
+		curriedPending, err := m.pendingVec.CurryWith(labels)
+		if err != nil {
+			return vecMetrics{}, err
+		}
+		ob.pendingVec = curriedPending
 	}
 	if m.durationsVec != nil {
 		curriedDurations, err := m.durationsVec.CurryWith(labels)
@@ -417,15 +463,30 @@ func (m *vecMetrics) Delete(labels prometheus.Labels) bool {
 	}
 
 	deleted := false
-	deleted = m.inFlightVec.Delete(labels) || deleted
-	deleted = m.successesVec.Delete(labels) || deleted
-	deleted = m.failuresVec.Delete(labels) || deleted
-	deleted = m.errorsVec.Delete(labels) || deleted
-	deleted = m.panicsVec.Delete(labels) || deleted
-	deleted = m.timeoutsVec.Delete(labels) || deleted
-	deleted = m.retriesVec.Delete(labels) || deleted
-	deleted = m.pendingVec.Delete(labels) || deleted
-
+	if m.inFlightVec != nil {
+		deleted = m.inFlightVec.Delete(labels) || deleted
+	}
+	if m.successesVec != nil {
+		deleted = m.successesVec.Delete(labels) || deleted
+	}
+	if m.failuresVec != nil {
+		deleted = m.failuresVec.Delete(labels) || deleted
+	}
+	if m.errorsVec != nil {
+		deleted = m.errorsVec.Delete(labels) || deleted
+	}
+	if m.panicsVec != nil {
+		deleted = m.panicsVec.Delete(labels) || deleted
+	}
+	if m.timeoutsVec != nil {
+		deleted = m.timeoutsVec.Delete(labels) || deleted
+	}
+	if m.retriesVec != nil {
+		deleted = m.retriesVec.Delete(labels) || deleted
+	}
+	if m.pendingVec != nil {
+		deleted = m.pendingVec.Delete(labels) || deleted
+	}
 	if m.durationsVec != nil {
 		if durationsVec, ok := m.durationsVec.(*prometheus.HistogramVec); ok {
 			deleted = durationsVec.Delete(labels) || deleted
@@ -443,15 +504,30 @@ func (m *vecMetrics) DeleteLabelValues(labelValues ...string) bool {
 	}
 
 	deleted := false
-	deleted = m.inFlightVec.DeleteLabelValues(labelValues...) || deleted
-	deleted = m.successesVec.DeleteLabelValues(labelValues...) || deleted
-	deleted = m.failuresVec.DeleteLabelValues(labelValues...) || deleted
-	deleted = m.errorsVec.DeleteLabelValues(labelValues...) || deleted
-	deleted = m.panicsVec.DeleteLabelValues(labelValues...) || deleted
-	deleted = m.timeoutsVec.DeleteLabelValues(labelValues...) || deleted
-	deleted = m.retriesVec.DeleteLabelValues(labelValues...) || deleted
-	deleted = m.pendingVec.DeleteLabelValues(labelValues...) || deleted
-
+	if m.inFlightVec != nil {
+		deleted = m.inFlightVec.DeleteLabelValues(labelValues...) || deleted
+	}
+	if m.successesVec != nil {
+		deleted = m.successesVec.DeleteLabelValues(labelValues...) || deleted
+	}
+	if m.failuresVec != nil {
+		deleted = m.failuresVec.DeleteLabelValues(labelValues...) || deleted
+	}
+	if m.errorsVec != nil {
+		deleted = m.errorsVec.DeleteLabelValues(labelValues...) || deleted
+	}
+	if m.panicsVec != nil {
+		deleted = m.panicsVec.DeleteLabelValues(labelValues...) || deleted
+	}
+	if m.timeoutsVec != nil {
+		deleted = m.timeoutsVec.DeleteLabelValues(labelValues...) || deleted
+	}
+	if m.retriesVec != nil {
+		deleted = m.retriesVec.DeleteLabelValues(labelValues...) || deleted
+	}
+	if m.pendingVec != nil {
+		deleted = m.pendingVec.DeleteLabelValues(labelValues...) || deleted
+	}
 	if m.durationsVec != nil {
 		if durationsVec, ok := m.durationsVec.(*prometheus.HistogramVec); ok {
 			deleted = durationsVec.DeleteLabelValues(labelValues...) || deleted
@@ -462,15 +538,30 @@ func (m *vecMetrics) DeleteLabelValues(labelValues ...string) bool {
 }
 
 func (m *vecMetrics) reset() {
-	m.inFlightVec.Reset()
-	m.successesVec.Reset()
-	m.failuresVec.Reset()
-	m.errorsVec.Reset()
-	m.panicsVec.Reset()
-	m.timeoutsVec.Reset()
-	m.retriesVec.Reset()
-	m.pendingVec.Reset()
-
+	if m.inFlightVec != nil {
+		m.inFlightVec.Reset()
+	}
+	if m.successesVec != nil {
+		m.successesVec.Reset()
+	}
+	if m.failuresVec != nil {
+		m.failuresVec.Reset()
+	}
+	if m.errorsVec != nil {
+		m.errorsVec.Reset()
+	}
+	if m.panicsVec != nil {
+		m.panicsVec.Reset()
+	}
+	if m.timeoutsVec != nil {
+		m.timeoutsVec.Reset()
+	}
+	if m.retriesVec != nil {
+		m.retriesVec.Reset()
+	}
+	if m.pendingVec != nil {
+		m.pendingVec.Reset()
+	}
 	if m.durationsVec != nil {
 		if durationsVec, ok := m.durationsVec.(*prometheus.HistogramVec); ok {
 			durationsVec.Reset()

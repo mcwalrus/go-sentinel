@@ -311,7 +311,7 @@ func (o *Observer) Submit(fn func() error) {
 		},
 	}
 
-	if o.cfg.enablePending && o.cfg.maxConcurrency > 0 {
+	if o.cfg.enablePending && o.cfg.maxConcurrency > 0 && o.metrics.pending != nil {
 		o.metrics.pending.Inc()
 		o.pool.Go(func() {
 			o.metrics.pending.Dec()
@@ -366,7 +366,7 @@ func (o *Observer) SubmitFunc(fn func(ctx context.Context) error) {
 		fn:  fn,
 	}
 
-	if o.cfg.enablePending && o.cfg.maxConcurrency > 0 {
+	if o.cfg.enablePending && o.cfg.maxConcurrency > 0 && o.metrics.pending != nil {
 		o.metrics.pending.Inc()
 		o.pool.Go(func() {
 			o.metrics.pending.Dec()
@@ -439,9 +439,13 @@ func (o *Observer) observe(limiter limiter, control circuit.Control, task *implT
 		select {
 		case <-acquired:
 		default:
-			o.metrics.pending.Inc()
+			if o.metrics.pending != nil {
+				o.metrics.pending.Inc()
+			}
 			<-acquired
-			o.metrics.pending.Dec()
+			if o.metrics.pending != nil {
+				o.metrics.pending.Dec()
+			}
 		}
 		releaseLimiter = func() { limiter.release() }
 	}
@@ -449,15 +453,19 @@ func (o *Observer) observe(limiter limiter, control circuit.Control, task *implT
 	// Check control on new request phase
 	if control != nil {
 		shouldStop, panicked := safeControl(control, circuit.PhaseNewRequest)
-		if panicked {
+		if panicked && o.metrics.panics != nil {
 			o.metrics.panics.Inc()
 		}
 		if shouldStop {
 			if releaseLimiter != nil {
 				releaseLimiter()
 			}
-			o.metrics.errors.Inc()
-			o.metrics.failures.Inc()
+			if o.metrics.errors != nil {
+				o.metrics.errors.Inc()
+			}
+			if o.metrics.failures != nil {
+				o.metrics.failures.Inc()
+			}
 			return &ErrControlBreaker{}
 		}
 	}
@@ -466,8 +474,10 @@ func (o *Observer) observe(limiter limiter, control circuit.Control, task *implT
 		defer releaseLimiter()
 	}
 
-	o.metrics.inFlight.Inc()
-	defer o.metrics.inFlight.Dec()
+	if o.metrics.inFlight != nil {
+		o.metrics.inFlight.Inc()
+		defer o.metrics.inFlight.Dec()
+	}
 
 	return o.execute(task)
 }
@@ -559,7 +569,7 @@ func (o *Observer) execute(task *implTask) error {
 				o.m.RLock()
 				if o.control != nil {
 					shouldStop, panicked := safeControl(o.control, circuit.PhaseRetry)
-					if panicked {
+					if panicked && o.metrics.panics != nil {
 						o.metrics.panics.Inc()
 					}
 					if shouldStop {
@@ -568,7 +578,9 @@ func (o *Observer) execute(task *implTask) error {
 					}
 				}
 				o.m.RUnlock()
-				o.metrics.retries.Inc()
+				if o.metrics.retries != nil {
+					o.metrics.retries.Inc()
+				}
 			}
 
 			retryCtx := context.WithValue(ctx, retryCountKey{}, currentAttempt)
@@ -589,22 +601,26 @@ func (o *Observer) execute(task *implTask) error {
 			}()
 
 			if fnErr != nil {
-				o.metrics.errors.Inc()
-				if errors.Is(fnErr, context.DeadlineExceeded) {
+				if o.metrics.errors != nil {
+					o.metrics.errors.Inc()
+				}
+				if errors.Is(fnErr, context.DeadlineExceeded) && o.metrics.timeouts != nil {
 					o.metrics.timeouts.Inc()
 				}
 				if o.cfg.ErrorLabeler != nil {
 					_, labelerPanicked := safeErrorLabeler(o.cfg.ErrorLabeler, fnErr)
-					if labelerPanicked {
+					if labelerPanicked && o.metrics.panics != nil {
 						o.metrics.panics.Inc()
 					}
 				}
-				if panicValue != nil {
+				if panicValue != nil && o.metrics.panics != nil {
 					o.metrics.panics.Inc()
 					o.m.RLock()
 					if !o.recoverPanics {
 						o.m.RUnlock()
-						o.metrics.failures.Inc()
+						if o.metrics.failures != nil {
+							o.metrics.failures.Inc()
+						}
 						panic(panicValue) // re-throw
 					}
 					o.m.RUnlock()
@@ -614,9 +630,13 @@ func (o *Observer) execute(task *implTask) error {
 		})
 
 		if err != nil {
-			o.metrics.failures.Inc()
+			if o.metrics.failures != nil {
+				o.metrics.failures.Inc()
+			}
 		} else {
-			o.metrics.successes.Inc()
+			if o.metrics.successes != nil {
+				o.metrics.successes.Inc()
+			}
 		}
 		return err
 	}
@@ -643,26 +663,32 @@ func (o *Observer) execute(task *implTask) error {
 
 	// Handle errors
 	if err != nil {
-		o.metrics.errors.Inc()
-		if errors.Is(err, context.DeadlineExceeded) {
+		if o.metrics.errors != nil {
+			o.metrics.errors.Inc()
+		}
+		if errors.Is(err, context.DeadlineExceeded) && o.metrics.timeouts != nil {
 			o.metrics.timeouts.Inc()
 		}
 
 		// Invoke error labeler if configured; fall back to plain increment if it panics
 		if o.cfg.ErrorLabeler != nil {
 			_, labelerPanicked := safeErrorLabeler(o.cfg.ErrorLabeler, err)
-			if labelerPanicked {
+			if labelerPanicked && o.metrics.panics != nil {
 				o.metrics.panics.Inc()
 			}
 		}
 
 		// Handle panics
 		if panicValue != nil {
-			o.metrics.panics.Inc()
+			if o.metrics.panics != nil {
+				o.metrics.panics.Inc()
+			}
 			o.m.RLock()
 			if !o.recoverPanics {
 				o.m.RUnlock()
-				o.metrics.failures.Inc()
+				if o.metrics.failures != nil {
+					o.metrics.failures.Inc()
+				}
 				panic(panicValue) // re-throw
 			}
 			o.m.RUnlock()
@@ -673,14 +699,18 @@ func (o *Observer) execute(task *implTask) error {
 
 			// Maximum retries reached
 			if task.retryCount >= task.cfg.MaxRetries {
-				o.metrics.failures.Inc()
+				if o.metrics.failures != nil {
+					o.metrics.failures.Inc()
+				}
 				return err
 			}
 
 			// Try circuit breaker
 			if task.cfg.RetryBreaker != nil {
 				if safeRetryBreaker(task.cfg.RetryBreaker, err) {
-					o.metrics.failures.Inc()
+					if o.metrics.failures != nil {
+						o.metrics.failures.Inc()
+					}
 					return err
 				}
 			}
@@ -688,12 +718,14 @@ func (o *Observer) execute(task *implTask) error {
 			o.m.RLock()
 			if o.control != nil {
 				shouldStop, panicked := safeControl(o.control, circuit.PhaseRetry)
-				if panicked {
+				if panicked && o.metrics.panics != nil {
 					o.metrics.panics.Inc()
 				}
 				if shouldStop {
 					o.m.RUnlock()
-					o.metrics.failures.Inc()
+					if o.metrics.failures != nil {
+						o.metrics.failures.Inc()
+					}
 					return err
 				}
 			}
@@ -701,7 +733,9 @@ func (o *Observer) execute(task *implTask) error {
 
 			// Wait retry duration
 			task.retryCount++
-			o.metrics.retries.Inc()
+			if o.metrics.retries != nil {
+				o.metrics.retries.Inc()
+			}
 			if task.cfg.RetryStrategy != nil {
 				wait := safeRetryStrategy(task.cfg.RetryStrategy, task.retryCount)
 				if wait > 0 {
@@ -723,9 +757,13 @@ func (o *Observer) execute(task *implTask) error {
 			}
 			return nil
 		}
-		o.metrics.failures.Inc()
+		if o.metrics.failures != nil {
+			o.metrics.failures.Inc()
+		}
 	} else {
-		o.metrics.successes.Inc()
+		if o.metrics.successes != nil {
+			o.metrics.successes.Inc()
+		}
 	}
 
 	return err
