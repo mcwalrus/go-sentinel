@@ -564,10 +564,14 @@ func safeErrorLabeler(labeler func(err error) prometheus.Labels, err error) (lab
 func (o *Observer) execute(task *implTask) error {
 	var ctx = context.Background()
 
-	// Respect timeout
-	if task.cfg.Timeout > 0 {
+	// Respect timeout: construction-time WithTimeout takes precedence over per-task ObserverConfig.Timeout.
+	timeout := task.cfg.Timeout
+	if o.cfg.timeout > 0 {
+		timeout = o.cfg.timeout
+	}
+	if timeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, task.cfg.Timeout)
+		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
 
