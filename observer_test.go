@@ -2360,7 +2360,7 @@ func TestObserver_PendingAndInFlightMetrics(t *testing.T) {
 	t.Run("immediate acquisition does not increment pending", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver(nil, WithQueueMetrics(), WithInFlightMetrics())
 		observer.UseConfig(ObserverConfig{
 			MaxConcurrency: 10, // Large limit, should acquire immediately
 		})
@@ -2386,7 +2386,7 @@ func TestObserver_PendingAndInFlightMetrics(t *testing.T) {
 	t.Run("blocking acquisition increments pending", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver(nil, WithQueueMetrics())
 		observer.UseConfig(ObserverConfig{
 			MaxConcurrency: 2, // Small limit to force blocking
 		})
@@ -2451,7 +2451,7 @@ func TestObserver_PendingAndInFlightMetrics(t *testing.T) {
 	t.Run("concurrent tasks with limiter", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver(nil, WithQueueMetrics(), WithInFlightMetrics(), WithSuccessMetrics())
 		const maxConcurrency = 3
 		const numTasks = 10
 		observer.UseConfig(ObserverConfig{
@@ -2527,7 +2527,7 @@ func TestObserver_PendingAndInFlightMetrics(t *testing.T) {
 	t.Run("pending decreases when slot becomes available", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver(nil, WithQueueMetrics())
 		observer.UseConfig(ObserverConfig{
 			MaxConcurrency: 1, // Only one slot
 		})
@@ -2589,7 +2589,7 @@ func TestObserver_PendingAndInFlightMetrics(t *testing.T) {
 	t.Run("inFlight tracks executing tasks correctly", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver(nil, WithInFlightMetrics())
 		observer.UseConfig(ObserverConfig{
 			MaxConcurrency: 5,
 		})
@@ -2637,7 +2637,7 @@ func TestObserver_PendingAndInFlightMetrics(t *testing.T) {
 	t.Run("no limiter means no pending tracking", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver(nil, WithQueueMetrics(), WithInFlightMetrics())
 		observer.UseConfig(ObserverConfig{
 			MaxConcurrency: 0, // No limiter
 		})
@@ -2675,7 +2675,7 @@ func TestObserver_PendingAndInFlightMetrics(t *testing.T) {
 	t.Run("pending and inFlight relationship", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver(nil)
+		observer := NewObserver(nil, WithQueueMetrics(), WithInFlightMetrics())
 		observer.UseConfig(ObserverConfig{
 			MaxConcurrency: 2,
 		})
