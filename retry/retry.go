@@ -66,6 +66,15 @@ func (r DefaultRetrier) Do(ctx context.Context, fn func() error) error {
 	return errors.Join(errs...)
 }
 
+// NewDefaultRetrier creates a DefaultRetrier with the given strategy and maxRetries.
+// Pass nil for strategy to use immediate retry with no wait between attempts.
+func NewDefaultRetrier(strategy WaitFunc, maxRetries int) *DefaultRetrier {
+	return &DefaultRetrier{
+		WaitStrategy: strategy,
+		MaxRetries:   maxRetries,
+	}
+}
+
 // OnPanic returns a func(err error) bool that stops retries when the error
 // originated from a Go panic. Use this as ObserverConfig.RetryBreaker to avoid
 // retrying panic-induced failures.
