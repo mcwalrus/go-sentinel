@@ -11,14 +11,22 @@ import (
 )
 
 // Retrier abstracts retry behavior. Implement this interface to provide custom
-// retry strategies including backoff, jitter, or circuit-breaking.
+// retry strategies including backoff, jitter, or circuit-breaking. Use
+// [DefaultRetrier] for the standard implementation, or implement Retrier
+// directly when you need full control over the retry loop (e.g., integrating
+// with a third-party circuit breaker or distributed tracing).
 type Retrier interface {
+	// Do executes fn and retries on error until the strategy is exhausted or
+	// ctx is cancelled. It returns nil on the first successful call, or a
+	// joined error from all attempts if every call fails.
 	Do(ctx context.Context, fn func() error) error
 }
 
-// DefaultRetrier is a configurable Retrier that integrates retry strategies with
-// circuit-breaking. The Breaker field provides a stop condition based on the last
-// error: when it returns true, retries halt immediately.
+// DefaultRetrier is a configurable [Retrier] that integrates retry strategies
+// with circuit-breaking. Construct one with [NewDefaultRetrier] or by
+// initialising the struct directly. The Breaker field provides an optional
+// stop condition: when it returns true for the last error, retries halt
+// immediately rather than waiting for MaxRetries to be exhausted.
 type DefaultRetrier struct {
 	// WaitStrategy defines how long to wait between retry attempts.
 	WaitStrategy WaitFunc
@@ -66,8 +74,16 @@ func (r DefaultRetrier) Do(ctx context.Context, fn func() error) error {
 	return errors.Join(errs...)
 }
 
-// NewDefaultRetrier creates a DefaultRetrier with the given strategy and maxRetries.
-// Pass nil for strategy to use immediate retry with no wait between attempts.
+// NewDefaultRetrier creates a [DefaultRetrier] with the given strategy and
+// maxRetries. Pass nil for strategy to use immediate retry with no wait
+// between attempts.
+//
+// Example usage:
+//
+//	retrier := retry.NewDefaultRetrier(
+//		retry.WithLimit(2*time.Second, retry.Exponential(100*time.Millisecond)),
+//		5,
+//	)
 func NewDefaultRetrier(strategy WaitFunc, maxRetries int) *DefaultRetrier {
 	return &DefaultRetrier{
 		WaitStrategy: strategy,
@@ -89,19 +105,32 @@ func OnPanic() func(err error) bool {
 	}
 }
 
-// WaitFunc defines a function to return wait durations from a specific retry
-// attempt count. Retries start from 1 and increment with each call.
+// WaitFunc defines a function that returns the wait duration before a given
+// retry attempt. The retries argument starts at 1 for the first retry and
+// increments with each subsequent call. Returning 0 means no delay before the
+// next attempt.
 type WaitFunc func(retries int) time.Duration
 
-// Immediate returns a WaitFunc that implements immediate retry with no delay.
+// Immediate returns a WaitFunc that retries without any delay between attempts.
+// Use this when the operation is idempotent and low-latency retry is acceptable,
+// such as in tests or when the error is expected to clear instantly.
+//
+// Example usage:
+//
+//	retrier := retry.NewDefaultRetrier(retry.Immediate(), 3)
 func Immediate() WaitFunc {
 	return func(_ int) time.Duration {
 		return 0
 	}
 }
 
-// Linear returns a WaitFunc that implements linear backoff.
-// Each retry waits for wait * retryCount duration.
+// Linear returns a WaitFunc that implements linear backoff. The wait duration
+// grows proportionally with the retry count: wait * retryCount. Returns 0 when
+// retryCount is zero or negative.
+//
+// Example usage:
+//
+//	strategy := retry.Linear(200 * time.Millisecond) // 200ms, 400ms, 600ms, ...
 func Linear(wait time.Duration) WaitFunc {
 	return func(retries int) time.Duration {
 		if retries <= 0 {
@@ -111,8 +140,14 @@ func Linear(wait time.Duration) WaitFunc {
 	}
 }
 
-// Exponential returns a WaitFunc that implements exponential backoff.
-// Each retry waits for factor * 2^retryCount duration.
+// Exponential returns a WaitFunc that implements exponential backoff. The wait
+// duration doubles with every retry: factor * 2^retryCount. Returns 0 when
+// retryCount is zero or negative. Combine with [WithLimit] to cap the maximum
+// wait and [WithJitter] to avoid thundering herd problems.
+//
+// Example usage:
+//
+//	strategy := retry.Exponential(100 * time.Millisecond) // 200ms, 400ms, 800ms, ...
 func Exponential(factor time.Duration) WaitFunc {
 	return func(retries int) time.Duration {
 		if retries <= 0 {
