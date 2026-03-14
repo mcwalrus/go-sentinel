@@ -24,15 +24,16 @@ type Breaker func(err error) bool
 // This is useful for implementing time-based circuit breaking, ensuring retries
 // don't continue past a certain duration.
 //
-// Deprecated: Use a plain func(err error) bool with time tracking in [sentinel.ObserverConfig.RetryBreaker].
+// Deprecated: Use a plain func(err error) bool with time tracking in
+// [retry.DefaultRetrier.Breaker] via [sentinel.WithRetrier].
 //
 // Example usage:
 //
 //	breaker := circuit.After(30 * time.Second)
-//	observer.UseConfig(sentinel.ObserverConfig{
-//		MaxRetries:  5,
-//		RetryBreaker: breaker,
-//	})
+//	observer := sentinel.NewObserver(sentinel.WithRetrier(retry.DefaultRetrier{
+//		MaxRetries: 5,
+//		Breaker:    breaker,
+//	}))
 func After(d time.Duration) Breaker {
 	start := time.Now()
 	return func(_ error) bool {
@@ -45,15 +46,15 @@ func After(d time.Duration) Breaker {
 // typically indicate programming errors that won't be resolved by retrying.
 //
 // Deprecated: Use [retry.OnPanic] instead, which returns a plain func(err error) bool
-// compatible with [sentinel.ObserverConfig.RetryBreaker].
+// compatible with [retry.DefaultRetrier.Breaker] via [sentinel.WithRetrier].
 //
 // Example usage:
 //
 //	breaker := circuit.OnPanic()
-//	observer.UseConfig(sentinel.ObserverConfig{
-//		MaxRetries:  3,
-//		RetryBreaker: breaker,
-//	})
+//	observer := sentinel.NewObserver(sentinel.WithRetrier(retry.DefaultRetrier{
+//		MaxRetries: 3,
+//		Breaker:    breaker,
+//	}))
 func OnPanic() Breaker {
 	type panicError interface {
 		error

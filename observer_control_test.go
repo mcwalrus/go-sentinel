@@ -14,6 +14,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/mcwalrus/go-sentinel/circuit"
+	"github.com/mcwalrus/go-sentinel/retry"
 )
 
 func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
@@ -22,16 +23,11 @@ func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
 	t.Run("Run with Control", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
-		registry := prometheus.NewRegistry()
-		observer.MustRegister(registry)
-
 		// Control that always returns true (should avoid execution)
 		control := func(_ circuit.ExecutionPhase) bool { return true }
-
-		observer.UseConfig(ObserverConfig{
-			Control: control,
-		})
+		observer := NewObserver(WithControl(control))
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
 
 		// Track if the function was actually called
 		executed := false
@@ -62,16 +58,11 @@ func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
 	t.Run("RunFunc with Control", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
-		registry := prometheus.NewRegistry()
-		observer.MustRegister(registry)
-
 		// Control that always returns true (should avoid execution)
 		control := func(_ circuit.ExecutionPhase) bool { return true }
-
-		observer.UseConfig(ObserverConfig{
-			Control: control,
-		})
+		observer := NewObserver(WithControl(control))
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
 
 		// Track if the function was actually called
 		executed := false
@@ -102,16 +93,11 @@ func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
 	t.Run("Run with Control returning false", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
-		registry := prometheus.NewRegistry()
-		observer.MustRegister(registry)
-
 		// Control that returns false (should allow execution)
 		control := func(_ circuit.ExecutionPhase) bool { return false }
-
-		observer.UseConfig(ObserverConfig{
-			Control: control,
-		})
+		observer := NewObserver(WithControl(control))
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
 
 		// Track if the function was actually called
 		executed := false
@@ -146,9 +132,6 @@ func TestObserver_ControlAvoidsInitialExecution(t *testing.T) {
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
-		// No Control set (should allow execution)
-		observer.UseConfig(ObserverConfig{})
-
 		// Track if the function was actually called
 		executed := false
 		err := observer.Run(func() error {
@@ -182,10 +165,6 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 	t.Run("Control prevents retry attempts", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
-		registry := prometheus.NewRegistry()
-		observer.MustRegister(registry)
-
 		// Control that returns true after first attempt (should prevent retries)
 		attemptCount := 0
 		control := func(_ circuit.ExecutionPhase) bool {
@@ -193,10 +172,12 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 			return attemptCount > 1 // Allow first attempt, prevent retries
 		}
 
-		observer.UseConfig(ObserverConfig{
-			MaxRetries: 3,
-			Control:    control,
-		})
+		observer := NewObserver(
+			WithControl(control),
+			WithRetrier(retry.DefaultRetrier{MaxRetries: 3}),
+		)
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
 
 		// Function that always fails
 		executionCount := 0
@@ -230,10 +211,6 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 	t.Run("Control allows retries initially but prevents later ones", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
-		registry := prometheus.NewRegistry()
-		observer.MustRegister(registry)
-
 		// Control that allows first 2 attempts but prevents the 3rd retry
 		attemptCount := 0
 		control := func(_ circuit.ExecutionPhase) bool {
@@ -241,10 +218,12 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 			return attemptCount > 2 // Allow first 2 attempts, prevent 3rd
 		}
 
-		observer.UseConfig(ObserverConfig{
-			MaxRetries: 3,
-			Control:    control,
-		})
+		observer := NewObserver(
+			WithControl(control),
+			WithRetrier(retry.DefaultRetrier{MaxRetries: 3}),
+		)
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
 
 		// Function that always fails
 		executionCount := 0
@@ -277,10 +256,6 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 	t.Run("Control with RetryBreaker interaction", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
-		registry := prometheus.NewRegistry()
-		observer.MustRegister(registry)
-
 		// Control that prevents execution after first attempt
 		controlAttemptCount := 0
 		control := func(_ circuit.ExecutionPhase) bool {
@@ -293,11 +268,12 @@ func TestObserver_ControlAvoidsRetryAttempts(t *testing.T) {
 			return false
 		}
 
-		observer.UseConfig(ObserverConfig{
-			MaxRetries:   3,
-			RetryBreaker: retryBreaker,
-			Control:      control,
-		})
+		observer := NewObserver(
+			WithControl(control),
+			WithRetrier(retry.DefaultRetrier{MaxRetries: 3, Breaker: retryBreaker}),
+		)
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
 
 		// Function that always fails
 		executionCount := 0
@@ -332,17 +308,13 @@ func TestObserver_ControlWithCircuitImplementations(t *testing.T) {
 	t.Run("OnSignal Control", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
-		registry := prometheus.NewRegistry()
-		observer.MustRegister(registry)
-
 		// Create a signal channel
 		signalCh := make(chan struct{}, 1)
 		control := circuit.WhenClosed(signalCh)
 
-		observer.UseConfig(ObserverConfig{
-			Control: control,
-		})
+		observer := NewObserver(WithControl(control))
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
 
 		// First execution should succeed (no signal)
 		executed1 := false
@@ -389,17 +361,13 @@ func TestObserver_ControlWithCircuitImplementations(t *testing.T) {
 	t.Run("OnDone Control", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
-		registry := prometheus.NewRegistry()
-		observer.MustRegister(registry)
-
 		// Create a done channel
 		doneCh := make(chan struct{})
 		control := circuit.WhenClosed(doneCh)
 
-		observer.UseConfig(ObserverConfig{
-			Control: control,
-		})
+		observer := NewObserver(WithControl(control))
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
 
 		// First execution should succeed (channel not closed)
 		executed1 := false
@@ -450,17 +418,14 @@ func TestObserver_ControlWithTimeout(t *testing.T) {
 	t.Run("Control with timeout configuration", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
-		registry := prometheus.NewRegistry()
-		observer.MustRegister(registry)
-
 		// Control that allows execution
 		control := func(_ circuit.ExecutionPhase) bool { return false }
-
-		observer.UseConfig(ObserverConfig{
-			Timeout: 100 * time.Millisecond,
-			Control: control,
-		})
+		observer := NewObserver(
+			WithControl(control),
+			WithTimeout(100*time.Millisecond),
+		)
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
 
 		// Function that takes longer than timeout
 		executed := false
@@ -496,17 +461,14 @@ func TestObserver_ControlWithTimeout(t *testing.T) {
 	t.Run("Control prevents execution with timeout", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
-		registry := prometheus.NewRegistry()
-		observer.MustRegister(registry)
-
 		// Control that prevents execution
 		control := func(_ circuit.ExecutionPhase) bool { return true }
-
-		observer.UseConfig(ObserverConfig{
-			Timeout: 100 * time.Millisecond,
-			Control: control,
-		})
+		observer := NewObserver(
+			WithControl(control),
+			WithTimeout(100*time.Millisecond),
+		)
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
 
 		// Function that would timeout
 		executed := false
@@ -546,10 +508,6 @@ func TestObserver_ControlConcurrency(t *testing.T) {
 	t.Run("Control with concurrent executions", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
-		registry := prometheus.NewRegistry()
-		observer.MustRegister(registry)
-
 		// Control that allows first few executions then prevents further ones
 		var mu sync.Mutex
 		executionCount := 0
@@ -560,9 +518,9 @@ func TestObserver_ControlConcurrency(t *testing.T) {
 			return executionCount > 5 // Allow first 5 executions
 		}
 
-		observer.UseConfig(ObserverConfig{
-			Control: control,
-		})
+		observer := NewObserver(WithControl(control))
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
 
 		// Run multiple goroutines concurrently
 		const numGoroutines = 10
@@ -626,10 +584,6 @@ func TestObserver_ControlWithRetryStrategy(t *testing.T) {
 	t.Run("Control with retry strategy", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
-		registry := prometheus.NewRegistry()
-		observer.MustRegister(registry)
-
 		// Control that allows first attempt but prevents retries
 		attemptCount := 0
 		control := func(_ circuit.ExecutionPhase) bool {
@@ -638,15 +592,16 @@ func TestObserver_ControlWithRetryStrategy(t *testing.T) {
 		}
 
 		// Retry strategy that waits
-		retryStrategy := func(_ int) time.Duration {
+		retryStrategy := retry.WaitFunc(func(_ int) time.Duration {
 			return 10 * time.Millisecond
-		}
-
-		observer.UseConfig(ObserverConfig{
-			MaxRetries:    2,
-			RetryStrategy: retryStrategy,
-			Control:       control,
 		})
+
+		observer := NewObserver(
+			WithControl(control),
+			WithRetrier(retry.DefaultRetrier{MaxRetries: 2, WaitStrategy: retryStrategy}),
+		)
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
 
 		// Function that always fails
 		executionCount := 0
@@ -688,16 +643,12 @@ func TestObserver_ControlPanicRecovery(t *testing.T) {
 	t.Run("panicking Control allows execution and increments panics_total", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
+		// Control that always panics
+		observer := NewObserver(WithControl(func(_ circuit.ExecutionPhase) bool {
+			panic("control panic")
+		}))
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
-
-		// Control that always panics
-		observer.UseConfig(ObserverConfig{
-			Control: func(_ circuit.ExecutionPhase) bool {
-				panic("control panic")
-			},
-		})
 
 		executed := false
 		err := observer.Run(func() error {
@@ -722,20 +673,18 @@ func TestObserver_ControlPanicRecovery(t *testing.T) {
 	t.Run("panicking Control during retry allows retry and increments panics_total", func(t *testing.T) {
 		t.Parallel()
 
-		observer := NewObserver()
-		registry := prometheus.NewRegistry()
-		observer.MustRegister(registry)
-
 		// Control that panics on retry phase, allowing retries
-		observer.UseConfig(ObserverConfig{
-			MaxRetries: 2,
-			Control: func(phase circuit.ExecutionPhase) bool {
+		observer := NewObserver(
+			WithControl(func(phase circuit.ExecutionPhase) bool {
 				if phase == circuit.PhaseRetry {
 					panic("retry control panic")
 				}
 				return false
-			},
-		})
+			}),
+			WithRetrier(retry.DefaultRetrier{MaxRetries: 2}),
+		)
+		registry := prometheus.NewRegistry()
+		observer.MustRegister(registry)
 
 		execCount := 0
 		err := observer.Run(func() error {
@@ -823,15 +772,17 @@ func TestObserver_WithControlOption(t *testing.T) {
 		t.Parallel()
 
 		// Control that stops only on PhaseRetry
-		observer := NewObserver(WithControl(func(phase circuit.ExecutionPhase) bool {
-			return phase == circuit.PhaseRetry
-		}))
+		observer := NewObserver(
+			WithControl(func(phase circuit.ExecutionPhase) bool {
+				return phase == circuit.PhaseRetry
+			}),
+			WithRetrier(retry.DefaultRetrier{MaxRetries: 3}),
+		)
 		registry := prometheus.NewRegistry()
 		observer.MustRegister(registry)
 
 		callCount := 0
 		task := implTask{
-			cfg: ObserverConfig{MaxRetries: 3},
 			fn: func(_ context.Context) error {
 				callCount++
 				return errors.New("fail")

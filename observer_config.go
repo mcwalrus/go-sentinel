@@ -9,6 +9,12 @@ import (
 )
 
 // ObserverConfig configures observer behavior for timeouts, retries, concurrency, and control.
+//
+// Deprecated: Use construction-time ObserverOption functions instead:
+//   - [WithTimeout] for Timeout
+//   - [WithRetrier] for MaxRetries/RetryStrategy/RetryBreaker
+//   - [WithControl] for Control
+//   - [WithMaxConcurrency] for MaxConcurrency
 type ObserverConfig struct {
 	// Timeout sets a context deadline for functions passed to [Observer.RunFunc].
 	// The observer records timeout occurrences under the "timeouts" metric when enabled.
