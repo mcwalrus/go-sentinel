@@ -194,7 +194,8 @@ func (o *Observer) DisablePanicRecovery(disable bool) {
 	o.m.Unlock()
 }
 
-// Run executes fn and records metrics according to the observer's configuration.
+// Run executes fn synchronously and records metrics according to the observer's
+// configuration. The call blocks until fn returns.
 // This method does not respect timeouts set in the observer's ObserverConfig.
 // Use RunFunc if you need timeout support.
 //
@@ -234,7 +235,8 @@ func (o *Observer) Run(fn func() error) error {
 	return o.observe(limiter, control, task)
 }
 
-// RunFunc executes fn and records metrics according to the observer's configuration.
+// RunFunc executes fn synchronously and records metrics according to the observer's
+// configuration. The call blocks until fn returns.
 // For timeouts specified by the observer's ObserverConfig, the fn will be passed a context
 // with the timeout. This is the recommended method when you need timeout support.
 //
@@ -287,13 +289,18 @@ func (o *Observer) RunFunc(fn func(ctx context.Context) error) error {
 // when fn executes. The method returns immediately without waiting for fn
 // to complete. Panics in fn are captured by the pool and surface via Wait().
 //
+// Callers must call [Observer.Wait] to drain the pool and collect errors.
+// Failing to call Wait may leave goroutines running and errors unobserved.
+//
 // Example usage:
 //
 //	observer := sentinel.NewObserver(nil)
 //	observer.Submit(func() error {
 //		return doWork()
 //	})
-//	observer.Wait()
+//	if err := observer.Wait(); err != nil {
+//		log.Printf("tasks failed: %v", err)
+//	}
 func (o *Observer) Submit(fn func() error) {
 	if o == nil {
 		panic("observer: not configured")
@@ -338,6 +345,9 @@ func (o *Observer) Submit(fn func() error) {
 // when fn executes. The method returns immediately without waiting for fn
 // to complete. Panics in fn are captured by the pool and surface via Wait().
 //
+// Callers must call [Observer.Wait] to drain the pool and collect errors.
+// Failing to call Wait may leave goroutines running and errors unobserved.
+//
 // Example usage:
 //
 //	observer := sentinel.NewObserver(nil)
@@ -350,7 +360,9 @@ func (o *Observer) Submit(fn func() error) {
 //			return doWork()
 //		}
 //	})
-//	observer.Wait()
+//	if err := observer.Wait(); err != nil {
+//		log.Printf("tasks failed: %v", err)
+//	}
 func (o *Observer) SubmitFunc(fn func(ctx context.Context) error) {
 	if o == nil {
 		panic("observer: not configured")
