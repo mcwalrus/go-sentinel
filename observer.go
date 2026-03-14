@@ -601,17 +601,35 @@ func (o *Observer) execute(task *implTask) error {
 			}()
 
 			if fnErr != nil {
-				if o.metrics.errors != nil {
-					o.metrics.errors.Inc()
+				if o.metrics.errorsLabeledVec != nil {
+					labels, labelerPanicked := safeErrorLabeler(o.cfg.ErrorLabeler, fnErr)
+					if labelerPanicked {
+						if o.metrics.panics != nil {
+							o.metrics.panics.Inc()
+						}
+						// Fall back to empty label values on panic
+						fallback := make(prometheus.Labels, len(o.cfg.errorLabelNames))
+						for _, name := range o.cfg.errorLabelNames {
+							fallback[name] = ""
+						}
+						o.metrics.errorsLabeledVec.With(fallback).Inc()
+					} else {
+						o.metrics.errorsLabeledVec.With(labels).Inc()
+					}
+				} else {
+					if o.metrics.errors != nil {
+						o.metrics.errors.Inc()
+					}
+					// Check for labeler panics even without labeled vec (labeler set but discovery returned no label names)
+					if o.cfg.ErrorLabeler != nil {
+						_, labelerPanicked := safeErrorLabeler(o.cfg.ErrorLabeler, fnErr)
+						if labelerPanicked && o.metrics.panics != nil {
+							o.metrics.panics.Inc()
+						}
+					}
 				}
 				if errors.Is(fnErr, context.DeadlineExceeded) && o.metrics.timeouts != nil {
 					o.metrics.timeouts.Inc()
-				}
-				if o.cfg.ErrorLabeler != nil {
-					_, labelerPanicked := safeErrorLabeler(o.cfg.ErrorLabeler, fnErr)
-					if labelerPanicked && o.metrics.panics != nil {
-						o.metrics.panics.Inc()
-					}
 				}
 				if panicValue != nil && o.metrics.panics != nil {
 					o.metrics.panics.Inc()
@@ -663,19 +681,35 @@ func (o *Observer) execute(task *implTask) error {
 
 	// Handle errors
 	if err != nil {
-		if o.metrics.errors != nil {
-			o.metrics.errors.Inc()
+		if o.metrics.errorsLabeledVec != nil {
+			labels, labelerPanicked := safeErrorLabeler(o.cfg.ErrorLabeler, err)
+			if labelerPanicked {
+				if o.metrics.panics != nil {
+					o.metrics.panics.Inc()
+				}
+				// Fall back to empty label values on panic
+				fallback := make(prometheus.Labels, len(o.cfg.errorLabelNames))
+				for _, name := range o.cfg.errorLabelNames {
+					fallback[name] = ""
+				}
+				o.metrics.errorsLabeledVec.With(fallback).Inc()
+			} else {
+				o.metrics.errorsLabeledVec.With(labels).Inc()
+			}
+		} else {
+			if o.metrics.errors != nil {
+				o.metrics.errors.Inc()
+			}
+			// Check for labeler panics even without labeled vec (labeler set but discovery returned no label names)
+			if o.cfg.ErrorLabeler != nil {
+				_, labelerPanicked := safeErrorLabeler(o.cfg.ErrorLabeler, err)
+				if labelerPanicked && o.metrics.panics != nil {
+					o.metrics.panics.Inc()
+				}
+			}
 		}
 		if errors.Is(err, context.DeadlineExceeded) && o.metrics.timeouts != nil {
 			o.metrics.timeouts.Inc()
-		}
-
-		// Invoke error labeler if configured; fall back to plain increment if it panics
-		if o.cfg.ErrorLabeler != nil {
-			_, labelerPanicked := safeErrorLabeler(o.cfg.ErrorLabeler, err)
-			if labelerPanicked && o.metrics.panics != nil {
-				o.metrics.panics.Inc()
-			}
 		}
 
 		// Handle panics

@@ -21,16 +21,17 @@ import (
 // - Retry Attempts
 
 type metrics struct {
-	inFlight     prometheus.Gauge
-	successes    prometheus.Counter
-	failures     prometheus.Counter
-	errors       prometheus.Counter
-	timeouts     prometheus.Counter
-	panics       prometheus.Counter
-	durations    prometheus.Observer
-	retries      prometheus.Counter
-	pending      prometheus.Gauge
-	metricFilter map[string]bool
+	inFlight          prometheus.Gauge
+	successes         prometheus.Counter
+	failures          prometheus.Counter
+	errors            prometheus.Counter
+	errorsLabeledVec  *prometheus.CounterVec
+	timeouts          prometheus.Counter
+	panics            prometheus.Counter
+	durations         prometheus.Observer
+	retries           prometheus.Counter
+	pending           prometheus.Gauge
+	metricFilter      map[string]bool
 }
 
 func newMetrics(cfg config) metrics {
@@ -41,17 +42,18 @@ func newMetrics(cfg config) metrics {
 }
 
 type vecMetrics struct {
-	labelNames   []string
-	inFlightVec  *prometheus.GaugeVec
-	successesVec *prometheus.CounterVec
-	failuresVec  *prometheus.CounterVec
-	errorsVec    *prometheus.CounterVec
-	timeoutsVec  *prometheus.CounterVec
-	panicsVec    *prometheus.CounterVec
-	durationsVec prometheus.ObserverVec
-	retriesVec   *prometheus.CounterVec
-	pendingVec   *prometheus.GaugeVec
-	metricFilter map[string]bool
+	labelNames        []string
+	inFlightVec       *prometheus.GaugeVec
+	successesVec      *prometheus.CounterVec
+	failuresVec       *prometheus.CounterVec
+	errorsVec         *prometheus.CounterVec
+	errorsLabeledVec  *prometheus.CounterVec
+	timeoutsVec       *prometheus.CounterVec
+	panicsVec         *prometheus.CounterVec
+	durationsVec      prometheus.ObserverVec
+	retriesVec        *prometheus.CounterVec
+	pendingVec        *prometheus.GaugeVec
+	metricFilter      map[string]bool
 }
 
 func newVecMetrics(cfg config, labelNames []string) *vecMetrics {
@@ -88,13 +90,23 @@ func newVecMetrics(cfg config, labelNames []string) *vecMetrics {
 		}, labelNames)
 	}
 	if cfg.metricFilter == nil || cfg.metricFilter[MetricErrors] {
-		m.errorsVec = prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace:   cfg.namespace,
-			Subsystem:   cfg.subsystem,
-			Name:        "errors_total",
-			Help:        fmt.Sprintf("Number of errors from observed %s including retries and panics", cfg.description),
-			ConstLabels: cfg.constLabels,
-		}, labelNames)
+		if len(cfg.errorLabelNames) > 0 {
+			m.errorsLabeledVec = prometheus.NewCounterVec(prometheus.CounterOpts{
+				Namespace:   cfg.namespace,
+				Subsystem:   cfg.subsystem,
+				Name:        "errors_total",
+				Help:        fmt.Sprintf("Number of errors from observed %s including retries and panics", cfg.description),
+				ConstLabels: cfg.constLabels,
+			}, append(labelNames, cfg.errorLabelNames...))
+		} else {
+			m.errorsVec = prometheus.NewCounterVec(prometheus.CounterOpts{
+				Namespace:   cfg.namespace,
+				Subsystem:   cfg.subsystem,
+				Name:        "errors_total",
+				Help:        fmt.Sprintf("Number of errors from observed %s including retries and panics", cfg.description),
+				ConstLabels: cfg.constLabels,
+			}, labelNames)
+		}
 	}
 	if cfg.metricFilter == nil || cfg.metricFilter[MetricPanics] {
 		m.panicsVec = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -161,7 +173,11 @@ func (m *metrics) collectors() []prometheus.Collector {
 		c = append(c, m.failures)
 	}
 	if m.metricFilter == nil || m.metricFilter[MetricErrors] {
-		c = append(c, m.errors)
+		if m.errorsLabeledVec != nil {
+			c = append(c, m.errorsLabeledVec)
+		} else if m.errors != nil {
+			c = append(c, m.errors)
+		}
 	}
 	if m.metricFilter == nil || m.metricFilter[MetricPanics] {
 		c = append(c, m.panics)
@@ -225,7 +241,11 @@ func (m *vecMetrics) collectors() []prometheus.Collector {
 		c = append(c, m.failuresVec)
 	}
 	if m.metricFilter == nil || m.metricFilter[MetricErrors] {
-		c = append(c, m.errorsVec)
+		if m.errorsLabeledVec != nil {
+			c = append(c, m.errorsLabeledVec)
+		} else if m.errorsVec != nil {
+			c = append(c, m.errorsVec)
+		}
 	}
 	if m.metricFilter == nil || m.metricFilter[MetricPanics] {
 		c = append(c, m.panicsVec)
@@ -312,6 +332,23 @@ func (m *vecMetrics) withLabels(labelValues ...string) (metrics, error) {
 			return metrics{}, err
 		}
 		ob.errors = errorsMetric
+	}
+	if m.errorsLabeledVec != nil {
+		if len(m.labelNames) == 0 {
+			// No VecObserver labels to curry - use the vec directly
+			ob.errorsLabeledVec = m.errorsLabeledVec
+		} else {
+			// Build label map from VecObserver labels for currying
+			vecLabelMap := make(prometheus.Labels, len(m.labelNames))
+			for i, name := range m.labelNames {
+				vecLabelMap[name] = labelValues[i]
+			}
+			curried, err := m.errorsLabeledVec.CurryWith(vecLabelMap)
+			if err != nil {
+				return metrics{}, err
+			}
+			ob.errorsLabeledVec = curried
+		}
 	}
 	if m.panicsVec != nil {
 		panics, err := m.panicsVec.GetMetricWithLabelValues(labelValues...)
@@ -404,6 +441,13 @@ func (m *vecMetrics) curryWith(labels prometheus.Labels) (vecMetrics, error) {
 		}
 		ob.errorsVec = curriedErrors
 	}
+	if m.errorsLabeledVec != nil {
+		curriedErrors, err := m.errorsLabeledVec.CurryWith(labels)
+		if err != nil {
+			return vecMetrics{}, err
+		}
+		ob.errorsLabeledVec = curriedErrors
+	}
 	if m.panicsVec != nil {
 		curriedPanics, err := m.panicsVec.CurryWith(labels)
 		if err != nil {
@@ -475,6 +519,9 @@ func (m *vecMetrics) Delete(labels prometheus.Labels) bool {
 	if m.errorsVec != nil {
 		deleted = m.errorsVec.Delete(labels) || deleted
 	}
+	if m.errorsLabeledVec != nil {
+		deleted = m.errorsLabeledVec.Delete(labels) || deleted
+	}
 	if m.panicsVec != nil {
 		deleted = m.panicsVec.Delete(labels) || deleted
 	}
@@ -516,6 +563,9 @@ func (m *vecMetrics) DeleteLabelValues(labelValues ...string) bool {
 	if m.errorsVec != nil {
 		deleted = m.errorsVec.DeleteLabelValues(labelValues...) || deleted
 	}
+	if m.errorsLabeledVec != nil {
+		deleted = m.errorsLabeledVec.DeleteLabelValues(labelValues...) || deleted
+	}
 	if m.panicsVec != nil {
 		deleted = m.panicsVec.DeleteLabelValues(labelValues...) || deleted
 	}
@@ -549,6 +599,9 @@ func (m *vecMetrics) reset() {
 	}
 	if m.errorsVec != nil {
 		m.errorsVec.Reset()
+	}
+	if m.errorsLabeledVec != nil {
+		m.errorsLabeledVec.Reset()
 	}
 	if m.panicsVec != nil {
 		m.panicsVec.Reset()
