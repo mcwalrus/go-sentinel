@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	sentinel "github.com/mcwalrus/go-sentinel/v2"
-	"github.com/mcwalrus/go-sentinel/v2/retry"
+	sentinel "github.com/mcwalrus/go-sentinel"
+	"github.com/mcwalrus/go-sentinel/retry"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )

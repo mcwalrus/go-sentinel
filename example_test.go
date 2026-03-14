@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	sentinel "github.com/mcwalrus/go-sentinel/v2"
+	sentinel "github.com/mcwalrus/go-sentinel"
 	"github.com/prometheus/client_golang/prometheus"
 )
 

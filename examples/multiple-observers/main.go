@@ -13,8 +13,8 @@ import (
 	"syscall"
 	"time"
 
-	sentinel "github.com/mcwalrus/go-sentinel/v2"
-	"github.com/mcwalrus/go-sentinel/v2/retry"
+	sentinel "github.com/mcwalrus/go-sentinel"
+	"github.com/mcwalrus/go-sentinel/retry"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -42,7 +42,7 @@ func init() {
 		sentinel.WithSubsystem("background_tasks"),
 		sentinel.WithDescription("Background processing tasks"),
 		sentinel.WithTimeout(30*time.Second),
-		sentinel.WithRetrier(retry.DefaultRetrier{MaxRetries: 3, WaitStrategy: retry.Exponential(500*time.Millisecond)}),
+		sentinel.WithRetrier(retry.DefaultRetrier{MaxRetries: 3, WaitStrategy: retry.Exponential(500 * time.Millisecond)}),
 	)
 
 	// Critical tasks observer: panic + timeout metrics to surface reliability issues.

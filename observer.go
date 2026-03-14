@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mcwalrus/go-sentinel/v2/circuit"
+	"github.com/mcwalrus/go-sentinel/circuit"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sourcegraph/conc/pool"
 )

@@ -1,4 +1,4 @@
-module github.com/mcwalrus/go-sentinel/v2
+module github.com/mcwalrus/go-sentinel
 
 go 1.23.0
 

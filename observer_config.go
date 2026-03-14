@@ -4,8 +4,8 @@ import (
 	_ "context" // for documentation references to context.Context
 	"time"
 
-	"github.com/mcwalrus/go-sentinel/v2/circuit"
-	"github.com/mcwalrus/go-sentinel/v2/retry"
+	"github.com/mcwalrus/go-sentinel/circuit"
+	"github.com/mcwalrus/go-sentinel/retry"
 )
 
 // ObserverConfig configures observer behavior for timeouts, retries, concurrency, and control.
