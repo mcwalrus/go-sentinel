@@ -19,47 +19,63 @@ import (
 )
 
 func main() {
-	vecObserver := sentinel.NewVecObserver(
-		[]string{"service", "pipeline"},
+	commonOpts := []sentinel.ObserverOption{
 		sentinel.WithDurationMetrics([]float64{0.01, 0.1, 0.5, 1, 2, 5}),
 		sentinel.WithNamespace("example"),
 		sentinel.WithSubsystem("vec"),
+	}
+
+	// Create a VecObserver for API main tasks with its own config.
+	mVec := sentinel.NewVecObserver(
+		[]string{"service", "pipeline"},
+		append(commonOpts,
+			sentinel.WithTimeout(5*time.Second),
+			sentinel.WithRetrier(retry.DefaultRetrier{
+				MaxRetries:   2,
+				WaitStrategy: retry.Exponential(100 * time.Millisecond),
+			}),
+		)...,
 	)
 
-	// Register VecObserver metrics
-	registry := prometheus.NewRegistry()
-	vecObserver.MustRegister(registry)
+	// Create a VecObserver for API background tasks with its own config.
+	bVec := sentinel.NewVecObserver(
+		[]string{"service", "pipeline"},
+		append(commonOpts,
+			sentinel.WithTimeout(10*time.Second),
+			sentinel.WithRetrier(retry.DefaultRetrier{
+				MaxRetries:   3,
+				WaitStrategy: retry.Linear(200 * time.Millisecond),
+			}),
+		)...,
+	)
 
-	mObserver, err := vecObserver.WithLabels("api", "main")
+	// Create a VecObserver for database tasks with its own config.
+	dbVec := sentinel.NewVecObserver(
+		[]string{"service", "pipeline"},
+		append(commonOpts,
+			sentinel.WithTimeout(2*time.Second),
+			sentinel.WithRetrier(retry.DefaultRetrier{MaxRetries: 1}),
+		)...,
+	)
+
+	// Register each VecObserver's metrics with its own registry.
+	registry := prometheus.NewRegistry()
+	mVec.MustRegister(registry)
+	bVec.MustRegister(registry)
+	dbVec.MustRegister(registry)
+
+	mObserver, err := mVec.WithLabels("api", "main")
 	if err != nil {
 		log.Fatalf("Failed to create main observer: %v", err)
 	}
-	bObserver, err := vecObserver.WithLabels("api", "background")
+	bObserver, err := bVec.WithLabels("api", "background")
 	if err != nil {
 		log.Fatalf("Failed to create background observer: %v", err)
 	}
-	dbObserver, err := vecObserver.WithLabels("database", "read-write")
+	dbObserver, err := dbVec.WithLabels("database", "read-write")
 	if err != nil {
 		log.Fatalf("Failed to create database observer: %v", err)
 	}
-
-	// Set configurations for each observer
-	mObserver.UseConfig(sentinel.ObserverConfig{
-		Timeout:       5 * time.Second,
-		MaxRetries:    2,
-		RetryStrategy: retry.Exponential(100 * time.Millisecond),
-	})
-
-	bObserver.UseConfig(sentinel.ObserverConfig{
-		Timeout:       10 * time.Second,
-		MaxRetries:    3,
-		RetryStrategy: retry.Linear(200 * time.Millisecond),
-	})
-
-	dbObserver.UseConfig(sentinel.ObserverConfig{
-		Timeout:    2 * time.Second,
-		MaxRetries: 1,
-	})
 
 	// Start metrics server
 	metricsServer := &http.Server{

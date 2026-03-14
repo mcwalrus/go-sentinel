@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/mcwalrus/go-sentinel/circuit"
-	"github.com/mcwalrus/go-sentinel/retry"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sourcegraph/conc/pool"
 )
@@ -23,10 +22,7 @@ type retryCountKey struct{}
 //
 // Example usage:
 //
-//	observer := sentinel.NewObserver(nil)
-//	observer.UseConfig(sentinel.ObserverConfig{
-//		MaxRetries: 3,
-//	})
+//	observer := sentinel.NewObserver(sentinel.WithRetrier(retry.DefaultRetrier{MaxRetries: 3}))
 //	_ = observer.RunFunc(func(ctx context.Context) error {
 //		retryCount := sentinel.RetryCount(ctx)
 //		log.Printf("Current retry count: %d\n", retryCount)
@@ -46,7 +42,6 @@ type Observer struct {
 	m             *sync.RWMutex
 	cfg           config
 	metrics       metrics
-	runner        ObserverConfig
 	control       circuit.Control
 	limiter       limiter
 	pool          *pool.Pool
@@ -91,6 +86,9 @@ func NewObserver(opts ...ObserverOption) *Observer {
 	}
 	if cfg.control != nil {
 		obs.control = cfg.control
+	}
+	if cfg.maxConcurrency > 0 {
+		obs.limiter = make(limiter, cfg.maxConcurrency)
 	}
 	return obs
 }
@@ -157,31 +155,6 @@ func (o *Observer) MustRegister(registry prometheus.Registerer) {
 	o.metrics.MustRegister(registry)
 }
 
-// UseConfig configures the observer for how to handle Run methods.
-// This sets the ObserverConfig that will be used for all subsequent Run, RunFunc calls.
-// See [ObserverConfig] for more information on available configuration options.
-//
-// Example usage:
-//
-//	observer.UseConfig(sentinel.ObserverConfig{
-//		Timeout:    10 * time.Second,
-//		MaxRetries: 3,
-//		RetryStrategy: retry.Exponential(100 * time.Millisecond),
-//		RetryBreaker: func(err error) bool { return isPanicError(err) },
-//		MaxConcurrency: 10, // Limit to 10 concurrent executions
-//	})
-func (o *Observer) UseConfig(config ObserverConfig) {
-	o.m.Lock()
-	o.runner = config
-	o.control = config.Control
-	if config.MaxConcurrency > 0 {
-		o.limiter = make(limiter, config.MaxConcurrency)
-	} else {
-		o.limiter = nil
-	}
-	o.m.Unlock()
-}
-
 // DisablePanicRecovery sets whether panic recovery should be disabled for the observer.
 // Recovery is enabled by default, meaning panics are caught and converted to errors.
 // When disabled, panics will propagate normally and may crash the program.
@@ -223,13 +196,11 @@ func (o *Observer) Run(fn func() error) error {
 		panic("observer: not configured")
 	}
 	o.m.RLock()
-	cfg := o.runner
 	control := o.control
 	limiter := o.limiter
 	o.m.RUnlock()
 
 	task := &implTask{
-		cfg: cfg,
 		fn: func(_ context.Context) error {
 			return fn() // ignore ctx
 		},
@@ -240,8 +211,8 @@ func (o *Observer) Run(fn func() error) error {
 
 // RunFunc executes fn synchronously and records metrics according to the observer's
 // configuration. The call blocks until fn returns.
-// For timeouts specified by the observer's ObserverConfig, the fn will be passed a context
-// with the timeout. This is the recommended method when you need timeout support.
+// For timeouts configured via [WithTimeout], fn will be passed a context with the
+// timeout applied. This is the recommended method when you need timeout support.
 //
 // The function is executed with panic recovery enabled by default. Panics are
 // converted to errors and recorded in metrics. Use DisablePanicRecovery(true)
@@ -252,10 +223,7 @@ func (o *Observer) Run(fn func() error) error {
 //
 // Example usage:
 //
-//	observer := sentinel.NewObserver()
-//	observer.UseConfig(sentinel.ObserverConfig{
-//		Timeout: 10 * time.Second,
-//	})
+//	observer := sentinel.NewObserver(sentinel.WithTimeout(10 * time.Second))
 //
 //	err := observer.RunFunc(func(ctx context.Context) error {
 //		// Your task logic here with timeout support
@@ -274,14 +242,12 @@ func (o *Observer) RunFunc(fn func(ctx context.Context) error) error {
 		panic("observer: not configured")
 	}
 	o.m.RLock()
-	cfg := o.runner
 	control := o.control
 	limiter := o.limiter
 	o.m.RUnlock()
 
 	task := &implTask{
-		cfg: cfg,
-		fn:  fn,
+		fn: fn,
 	}
 
 	return o.observe(limiter, control, task)
@@ -309,13 +275,11 @@ func (o *Observer) Submit(fn func() error) {
 		panic("observer: not configured")
 	}
 	o.m.RLock()
-	cfg := o.runner
 	control := o.control
 	limiter := o.limiter
 	o.m.RUnlock()
 
 	task := &implTask{
-		cfg: cfg,
 		fn: func(_ context.Context) error {
 			return fn()
 		},
@@ -353,8 +317,7 @@ func (o *Observer) Submit(fn func() error) {
 //
 // Example usage:
 //
-//	observer := sentinel.NewObserver(nil)
-//	observer.UseConfig(sentinel.ObserverConfig{Timeout: 5 * time.Second})
+//	observer := sentinel.NewObserver(sentinel.WithTimeout(5 * time.Second))
 //	observer.SubmitFunc(func(ctx context.Context) error {
 //		select {
 //		case <-ctx.Done():
@@ -371,14 +334,12 @@ func (o *Observer) SubmitFunc(fn func(ctx context.Context) error) {
 		panic("observer: not configured")
 	}
 	o.m.RLock()
-	cfg := o.runner
 	control := o.control
 	limiter := o.limiter
 	o.m.RUnlock()
 
 	task := &implTask{
-		cfg: cfg,
-		fn:  fn,
+		fn: fn,
 	}
 
 	if o.cfg.enablePending && o.cfg.maxConcurrency > 0 && o.metrics.pending != nil {
@@ -497,35 +458,33 @@ func (o *Observer) observe(limiter limiter, control circuit.Control, task *implT
 	return o.execute(task)
 }
 
-// safeRetryStrategy calls the retry strategy handler with panic recovery.
-// If the handler panics, it returns 0 (immediate retry) as a safe default.
-func safeRetryStrategy(strategy retry.WaitFunc, retryCount int) (wait time.Duration) {
-	if strategy == nil {
-		return 0
+// filterControlBreaker removes ErrControlBreaker from a (potentially joined) error.
+// It returns nil if all constituent errors are ErrControlBreaker instances, or the
+// remaining non-control-breaker errors joined together.
+func filterControlBreaker(err error) error {
+	if err == nil {
+		return nil
 	}
-	defer func() {
-		if r := recover(); r != nil {
-			wait = 0
-			_ = r
+	// Try to unwrap a joined error (errors.Join returns an interface with Unwrap() []error).
+	type joinedErrors interface {
+		Unwrap() []error
+	}
+	if je, ok := err.(joinedErrors); ok {
+		var remaining []error
+		for _, e := range je.Unwrap() {
+			if !errors.As(e, new(*ErrControlBreaker)) {
+				remaining = append(remaining, e)
+			}
 		}
-	}()
-	return strategy(retryCount)
+		return errors.Join(remaining...)
+	}
+	// Single error: return nil if it is ErrControlBreaker, otherwise return as-is.
+	if errors.As(err, new(*ErrControlBreaker)) {
+		return nil
+	}
+	return err
 }
 
-// safeRetryBreaker calls the retry breaker handler with panic recovery.
-// If the handler panics, it returns true (stop retries) as a safe default.
-func safeRetryBreaker(breaker func(err error) bool, err error) (shouldStop bool) {
-	if breaker == nil {
-		return false
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			shouldStop = true
-			_ = r
-		}
-	}()
-	return breaker(err)
-}
 
 // safeControl calls the control handler with panic recovery.
 // If the handler panics, it returns false (allow execution) as a safe default,
@@ -564,14 +523,9 @@ func safeErrorLabeler(labeler func(err error) prometheus.Labels, err error) (lab
 func (o *Observer) execute(task *implTask) error {
 	var ctx = context.Background()
 
-	// Respect timeout: construction-time WithTimeout takes precedence over per-task ObserverConfig.Timeout.
-	timeout := task.cfg.Timeout
 	if o.cfg.timeout > 0 {
-		timeout = o.cfg.timeout
-	}
-	if timeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
+		ctx, cancel = context.WithTimeout(ctx, o.cfg.timeout)
 		defer cancel()
 	}
 
@@ -579,9 +533,16 @@ func (o *Observer) execute(task *implTask) error {
 	// The Retrier calls the wrapped fn for each attempt (initial + retries).
 	if o.cfg.retrier != nil {
 		attempt := 0
+		controlStopped := false
 		err := o.cfg.retrier.Do(ctx, func() error {
 			currentAttempt := attempt
 			attempt++
+
+			// If a previous iteration set the control-stop flag, propagate the
+			// control breaker error so the retrier's joined result reflects it.
+			if controlStopped {
+				return &ErrControlBreaker{}
+			}
 
 			if currentAttempt > 0 {
 				// Retry attempt: check control gate before proceeding.
@@ -593,6 +554,7 @@ func (o *Observer) execute(task *implTask) error {
 					}
 					if shouldStop {
 						o.m.RUnlock()
+						controlStopped = true
 						return &ErrControlBreaker{}
 					}
 				}
@@ -666,6 +628,11 @@ func (o *Observer) execute(task *implTask) error {
 			return fnErr
 		})
 
+		// Strip ErrControlBreaker from the joined error: it is a control-flow
+		// signal, not a task error, and should not be exposed to the caller.
+		if err != nil {
+			err = filterControlBreaker(err)
+		}
 		if err != nil {
 			if o.metrics.failures != nil {
 				o.metrics.failures.Inc()
@@ -747,69 +714,6 @@ func (o *Observer) execute(task *implTask) error {
 			o.m.RUnlock()
 		}
 
-		// Handle retries
-		if task.cfg.MaxRetries > 0 {
-
-			// Maximum retries reached
-			if task.retryCount >= task.cfg.MaxRetries {
-				if o.metrics.failures != nil {
-					o.metrics.failures.Inc()
-				}
-				return err
-			}
-
-			// Try circuit breaker
-			if task.cfg.RetryBreaker != nil {
-				if safeRetryBreaker(task.cfg.RetryBreaker, err) {
-					if o.metrics.failures != nil {
-						o.metrics.failures.Inc()
-					}
-					return err
-				}
-			}
-			// Try control for retry phase
-			o.m.RLock()
-			if o.control != nil {
-				shouldStop, panicked := safeControl(o.control, circuit.PhaseRetry)
-				if panicked && o.metrics.panics != nil {
-					o.metrics.panics.Inc()
-				}
-				if shouldStop {
-					o.m.RUnlock()
-					if o.metrics.failures != nil {
-						o.metrics.failures.Inc()
-					}
-					return err
-				}
-			}
-			o.m.RUnlock()
-
-			// Wait retry duration
-			task.retryCount++
-			if o.metrics.retries != nil {
-				o.metrics.retries.Inc()
-			}
-			if task.cfg.RetryStrategy != nil {
-				wait := safeRetryStrategy(task.cfg.RetryStrategy, task.retryCount)
-				if wait > 0 {
-					time.Sleep(wait)
-				}
-			}
-
-			// Next retry attempt
-			retryTask := &implTask{
-				fn:         task.fn,
-				cfg:        task.cfg,
-				retryCount: task.retryCount,
-			}
-
-			// Try retries recursively
-			err2 := o.execute(retryTask)
-			if err2 != nil {
-				return errors.Join(err, err2)
-			}
-			return nil
-		}
 		if o.metrics.failures != nil {
 			o.metrics.failures.Inc()
 		}

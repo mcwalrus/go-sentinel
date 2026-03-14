@@ -57,7 +57,7 @@ func TestDefaultRetrier_Do(t *testing.T) {
 
 		attempts := 0
 		r := NewDefaultRetrier(Immediate(), 3)
-		r.Breaker = func(err error) bool { return true }
+		r.Breaker = func(_ error) bool { return true }
 		err := r.Do(context.Background(), func() error {
 			attempts++
 			return errors.New("fail")

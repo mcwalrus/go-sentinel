@@ -43,6 +43,10 @@ type DefaultRetrier struct {
 // Do executes fn, retrying on error up to MaxRetries times using the configured
 // WaitStrategy and Breaker. Returns nil on first success, or the joined errors
 // from all attempts if all fail. Respects ctx cancellation between retries.
+//
+// Panics in WaitStrategy or Breaker are recovered silently: a panicking Breaker
+// is treated as returning false (retries continue), and a panicking WaitStrategy
+// is treated as returning 0 (immediate retry).
 func (r DefaultRetrier) Do(ctx context.Context, fn func() error) error {
 	var errs []error
 	for attempt := 0; attempt <= r.MaxRetries; attempt++ {
@@ -57,11 +61,11 @@ func (r DefaultRetrier) Do(ctx context.Context, fn func() error) error {
 		if attempt >= r.MaxRetries {
 			break
 		}
-		if r.Breaker != nil && r.Breaker(err) {
+		if r.Breaker != nil && safeBreaker(r.Breaker, err) {
 			break
 		}
 		if r.WaitStrategy != nil {
-			wait := r.WaitStrategy(attempt + 1)
+			wait := safeWait(r.WaitStrategy, attempt+1)
 			if wait > 0 {
 				select {
 				case <-time.After(wait):
@@ -72,6 +76,28 @@ func (r DefaultRetrier) Do(ctx context.Context, fn func() error) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// safeBreaker calls breaker(err) and recovers any panic, returning true on panic.
+// A panicking breaker defaults to stopping retries, consistent with the principle
+// that a broken breaker should fail safe (halt rather than continue indefinitely).
+func safeBreaker(breaker func(err error) bool, err error) (stop bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			stop = true
+		}
+	}()
+	return breaker(err)
+}
+
+// safeWait calls strategy(attempt) and recovers any panic, returning 0 on panic.
+func safeWait(strategy WaitFunc, attempt int) (wait time.Duration) {
+	defer func() {
+		if r := recover(); r != nil {
+			wait = 0
+		}
+	}()
+	return strategy(attempt)
 }
 
 // NewDefaultRetrier creates a [DefaultRetrier] with the given strategy and

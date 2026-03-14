@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mcwalrus/go-sentinel/retry"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )
@@ -222,27 +223,25 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 	t.Run("forked observers handle retries individually", func(t *testing.T) {
 		t.Parallel()
 
-		vecObserver := NewVecObserver(
-			[]string{"service"},
-		)
-		registry := prometheus.NewRegistry()
-		vecObserver.MustRegister(registry)
+		// child1: 2 retries (succeeds on 3rd attempt)
+		vec1 := NewVecObserver([]string{"service"}, WithRetrier(retry.DefaultRetrier{MaxRetries: 2}))
+		registry1 := prometheus.NewRegistry()
+		vec1.MustRegister(registry1)
 
-		child1, err := vecObserver.WithLabels("api")
+		child1, err := vec1.WithLabels("api")
 		if err != nil {
-			t.Fatalf("Failed to create forked observer: %v", err)
-		}
-		child2, err := vecObserver.WithLabels("db")
-		if err != nil {
-			t.Fatalf("Failed to create forked observer: %v", err)
+			t.Fatalf("Failed to create child1: %v", err)
 		}
 
-		child1.UseConfig(ObserverConfig{
-			MaxRetries: 2,
-		})
-		child2.UseConfig(ObserverConfig{
-			MaxRetries: 1,
-		})
+		// child2: 1 retry (always fails)
+		vec2 := NewVecObserver([]string{"service"}, WithRetrier(retry.DefaultRetrier{MaxRetries: 1}))
+		registry2 := prometheus.NewRegistry()
+		vec2.MustRegister(registry2)
+
+		child2, err := vec2.WithLabels("db")
+		if err != nil {
+			t.Fatalf("Failed to create child2: %v", err)
+		}
 
 		attemptCount1 := 0
 		err1 := child1.RunFunc(func(_ context.Context) error {
@@ -279,39 +278,39 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 			t.Errorf("child2 failures: expected 1, got %f", got)
 		}
 
-		if got := testutil.ToFloat64(vecObserver.metrics.retriesVec.WithLabelValues("api")); got != 2 {
-			t.Errorf("vecMetrics[api] retries: expected 2, got %f", got)
+		if got := testutil.ToFloat64(vec1.metrics.retriesVec.WithLabelValues("api")); got != 2 {
+			t.Errorf("vec1 retries[api]: expected 2, got %f", got)
 		}
-		if got := testutil.ToFloat64(vecObserver.metrics.retriesVec.WithLabelValues("db")); got != 1 {
-			t.Errorf("vecMetrics[db] retries: expected 1, got %f", got)
+		if got := testutil.ToFloat64(vec2.metrics.retriesVec.WithLabelValues("db")); got != 1 {
+			t.Errorf("vec2 retries[db]: expected 1, got %f", got)
 		}
 	})
 
 	t.Run("forked observers handle timeouts individually", func(t *testing.T) {
 		t.Parallel()
 
-		vecObserver := NewVecObserver(
-			[]string{"service"},
-		)
-		registry := prometheus.NewRegistry()
-		vecObserver.MustRegister(registry)
+		// child1: 50ms timeout (will timeout)
+		vec1 := NewVecObserver([]string{"service"}, WithTimeout(50*time.Millisecond))
+		registry1 := prometheus.NewRegistry()
+		vec1.MustRegister(registry1)
 
-		child1, err := vecObserver.WithLabels("api")
+		child1, err := vec1.WithLabels("api")
 		if err != nil {
-			t.Fatalf("Failed to create forked observer: %v", err)
-		}
-		child2, err := vecObserver.WithLabels("db")
-		if err != nil {
-			t.Fatalf("Failed to create forked observer: %v", err)
+			t.Fatalf("Failed to create child1: %v", err)
 		}
 
-		child1.UseConfig(ObserverConfig{
-			Timeout: 50 * time.Millisecond,
-		})
+		// child2: 200ms timeout (will not timeout)
+		vec2 := NewVecObserver([]string{"service"}, WithTimeout(200*time.Millisecond))
+		registry2 := prometheus.NewRegistry()
+		vec2.MustRegister(registry2)
 
-		child2.UseConfig(ObserverConfig{
-			Timeout: 200 * time.Millisecond,
-		})
+		child2, err := vec2.WithLabels("db")
+		if err != nil {
+			t.Fatalf("Failed to create child2: %v", err)
+		}
+
+		_ = registry1
+		_ = registry2
 
 		err1 := child1.RunFunc(func(ctx context.Context) error {
 			select {
@@ -351,11 +350,11 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 			t.Errorf("child2 successes: expected 1, got %f", got)
 		}
 
-		if got := testutil.ToFloat64(vecObserver.metrics.timeoutsVec.WithLabelValues("api")); got != 1 {
-			t.Errorf("vecMetrics[api] timeouts: expected 1, got %f", got)
+		if got := testutil.ToFloat64(vec1.metrics.timeoutsVec.WithLabelValues("api")); got != 1 {
+			t.Errorf("vec1 timeouts[api]: expected 1, got %f", got)
 		}
-		if got := testutil.ToFloat64(vecObserver.metrics.timeoutsVec.WithLabelValues("db")); got != 0 {
-			t.Errorf("vecMetrics[db] timeouts: expected 0, got %f", got)
+		if got := testutil.ToFloat64(vec2.metrics.timeoutsVec.WithLabelValues("db")); got != 0 {
+			t.Errorf("vec2 timeouts[db]: expected 0, got %f", got)
 		}
 	})
 
