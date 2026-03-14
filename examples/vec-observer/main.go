@@ -20,8 +20,8 @@ import (
 
 func main() {
 	vecObserver := sentinel.NewVecObserver(
-		[]float64{0.01, 0.1, 0.5, 1, 2, 5},
 		[]string{"service", "pipeline"},
+		sentinel.WithDurationMetrics([]float64{0.01, 0.1, 0.5, 1, 2, 5}),
 		sentinel.WithNamespace("example"),
 		sentinel.WithSubsystem("vec"),
 	)

@@ -15,8 +15,8 @@ import (
 // Example usage:
 //
 //	vecObserver := sentinel.NewVecObserver(
-//		[]float64{0.1, 0.5, 1, 2, 5},
 //		[]string{"service", "environment"},
+//		sentinel.WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5}),
 //	)
 //	apiObserver, _ := vecObserver.WithLabels("api", "production")
 //	dbObserver, _ := vecObserver.WithLabels("db", "staging")
@@ -31,12 +31,12 @@ type VecObserver struct {
 // Example usage:
 //
 //	observer := sentinel.NewVecObserver(
-//		[]float64{0.1, 0.5, 1, 2, 5},
 //		[]string{"service", "status"},
+//		sentinel.WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5}),
 //		sentinel.WithNamespace("myapp"),
 //	)
-func NewVecObserver(durationBuckets []float64, labelNames []string, opts ...ObserverOption) *VecObserver {
-	cfg := setupConfig(durationBuckets, opts...)
+func NewVecObserver(labelNames []string, opts ...ObserverOption) *VecObserver {
+	cfg := setupConfig(opts...)
 	return &VecObserver{
 		cfg:     cfg,
 		metrics: *newVecMetrics(cfg, labelNames),

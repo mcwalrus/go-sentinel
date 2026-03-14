@@ -17,8 +17,10 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 		t.Parallel()
 
 		vecObserver := NewVecObserver(
-			[]float64{0.1, 0.5, 1, 2, 5},
 			[]string{"service", "pipeline"},
+			WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5}),
+			WithSuccessMetrics(),
+			WithErrorMetrics(),
 		)
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
@@ -78,8 +80,10 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 		t.Parallel()
 
 		vecObserver := NewVecObserver(
-			[]float64{0.1, 0.5, 1, 2, 5},
 			[]string{"service", "pipeline"},
+			WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5}),
+			WithSuccessMetrics(),
+			WithErrorMetrics(),
 		)
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
@@ -128,7 +132,6 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 		t.Parallel()
 
 		vecObserver := NewVecObserver(
-			nil,
 			[]string{"service"},
 		)
 		registry := prometheus.NewRegistry()
@@ -166,7 +169,6 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 		t.Parallel()
 
 		vecObserver := NewVecObserver(
-			nil,
 			[]string{"service"},
 		)
 		registry := prometheus.NewRegistry()
@@ -221,7 +223,6 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 		t.Parallel()
 
 		vecObserver := NewVecObserver(
-			nil,
 			[]string{"service"},
 		)
 		registry := prometheus.NewRegistry()
@@ -290,7 +291,6 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 		t.Parallel()
 
 		vecObserver := NewVecObserver(
-			nil,
 			[]string{"service"},
 		)
 		registry := prometheus.NewRegistry()
@@ -363,8 +363,8 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 		t.Parallel()
 
 		vecObserver := NewVecObserver(
-			[]float64{0.01, 0.1, 1, 10},
 			[]string{"service"},
+			WithDurationMetrics([]float64{0.01, 0.1, 1, 10}),
 		)
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
@@ -421,7 +421,6 @@ func TestVecObserver_Fork_IndividualMetrics(t *testing.T) {
 		t.Parallel()
 
 		vecObserver := NewVecObserver(
-			nil,
 			[]string{"service", "environment"},
 		)
 		registry := prometheus.NewRegistry()
@@ -494,7 +493,7 @@ func TestVecObserver_Describe(t *testing.T) {
 	t.Run("describes all vec metrics without duration buckets", func(t *testing.T) {
 		t.Parallel()
 
-		vecObserver := NewVecObserver(nil, []string{"service"})
+		vecObserver := NewVecObserver([]string{"service"})
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
 
@@ -557,7 +556,14 @@ func TestVecObserver_Describe(t *testing.T) {
 	t.Run("describes all vec metrics with duration buckets", func(t *testing.T) {
 		t.Parallel()
 
-		vecObserver := NewVecObserver([]float64{0.1, 0.5, 1, 2, 5}, []string{"service", "environment"})
+		vecObserver := NewVecObserver([]string{"service", "environment"},
+			WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5}),
+			WithInFlightMetrics(),
+			WithSuccessMetrics(),
+			WithErrorMetrics(),
+			WithTimeoutMetrics(),
+			WithMetrics(MetricPanics, MetricRetries),
+		)
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
 
@@ -625,7 +631,7 @@ func TestVecObserver_Collect(t *testing.T) {
 	t.Run("collects all vec metrics without duration buckets", func(t *testing.T) {
 		t.Parallel()
 
-		vecObserver := NewVecObserver(nil, []string{"service"})
+		vecObserver := NewVecObserver([]string{"service"})
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
 
@@ -689,7 +695,14 @@ func TestVecObserver_Collect(t *testing.T) {
 	t.Run("collects all vec metrics with duration buckets", func(t *testing.T) {
 		t.Parallel()
 
-		vecObserver := NewVecObserver([]float64{0.1, 0.5, 1, 2, 5}, []string{"service", "environment"})
+		vecObserver := NewVecObserver([]string{"service", "environment"},
+			WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5}),
+			WithInFlightMetrics(),
+			WithSuccessMetrics(),
+			WithErrorMetrics(),
+			WithTimeoutMetrics(),
+			WithMetrics(MetricPanics, MetricRetries),
+		)
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
 
@@ -754,7 +767,14 @@ func TestVecObserver_Collect(t *testing.T) {
 	t.Run("collects metrics after task execution", func(t *testing.T) {
 		t.Parallel()
 
-		vecObserver := NewVecObserver([]float64{0.1, 0.5, 1, 2, 5}, []string{"service"})
+		vecObserver := NewVecObserver([]string{"service"},
+			WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5}),
+			WithInFlightMetrics(),
+			WithSuccessMetrics(),
+			WithErrorMetrics(),
+			WithTimeoutMetrics(),
+			WithMetrics(MetricPanics, MetricRetries),
+		)
 		child, err := vecObserver.WithLabels("api")
 		if err != nil {
 			t.Fatalf("Failed to create forked observer: %v", err)
@@ -790,8 +810,10 @@ func TestVecObserver_Reset(t *testing.T) {
 		t.Parallel()
 
 		vecObserver := NewVecObserver(
-			[]float64{0.1, 0.5, 1, 2, 5},
 			[]string{"service", "environment"},
+			WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5}),
+			WithSuccessMetrics(),
+			WithErrorMetrics(),
 		)
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
@@ -898,7 +920,6 @@ func TestVecObserver_Reset(t *testing.T) {
 		t.Parallel()
 
 		vecObserver := NewVecObserver(
-			nil,
 			[]string{"service"},
 		)
 		registry := prometheus.NewRegistry()
@@ -975,8 +996,8 @@ func TestVecObserver_Reset(t *testing.T) {
 		t.Parallel()
 
 		vecObserver := NewVecObserver(
-			[]float64{0.01, 0.1, 1, 10},
 			[]string{"service"},
+			WithDurationMetrics([]float64{0.01, 0.1, 1, 10}),
 		)
 		registry := prometheus.NewRegistry()
 		vecObserver.MustRegister(registry)
