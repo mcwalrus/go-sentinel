@@ -21,17 +21,17 @@ import (
 // - Retry Attempts
 
 type metrics struct {
-	inFlight          prometheus.Gauge
-	successes         prometheus.Counter
-	failures          prometheus.Counter
-	errors            prometheus.Counter
-	errorsLabeledVec  *prometheus.CounterVec
-	timeouts          prometheus.Counter
-	panics            prometheus.Counter
-	durations         prometheus.Observer
-	retries           prometheus.Counter
-	pending           prometheus.Gauge
-	metricFilter      map[string]bool
+	inFlight         prometheus.Gauge
+	successes        prometheus.Counter
+	failures         prometheus.Counter
+	errors           prometheus.Counter
+	errorsLabeledVec *prometheus.CounterVec
+	timeouts         prometheus.Counter
+	panics           prometheus.Counter
+	durations        prometheus.Observer
+	retries          prometheus.Counter
+	pending          prometheus.Gauge
+	metricFilter     map[string]bool
 }
 
 func newMetrics(cfg config) metrics {
@@ -42,18 +42,18 @@ func newMetrics(cfg config) metrics {
 }
 
 type vecMetrics struct {
-	labelNames        []string
-	inFlightVec       *prometheus.GaugeVec
-	successesVec      *prometheus.CounterVec
-	failuresVec       *prometheus.CounterVec
-	errorsVec         *prometheus.CounterVec
-	errorsLabeledVec  *prometheus.CounterVec
-	timeoutsVec       *prometheus.CounterVec
-	panicsVec         *prometheus.CounterVec
-	durationsVec      prometheus.ObserverVec
-	retriesVec        *prometheus.CounterVec
-	pendingVec        *prometheus.GaugeVec
-	metricFilter      map[string]bool
+	labelNames       []string
+	inFlightVec      *prometheus.GaugeVec
+	successesVec     *prometheus.CounterVec
+	failuresVec      *prometheus.CounterVec
+	errorsVec        *prometheus.CounterVec
+	errorsLabeledVec *prometheus.CounterVec
+	timeoutsVec      *prometheus.CounterVec
+	panicsVec        *prometheus.CounterVec
+	durationsVec     prometheus.ObserverVec
+	retriesVec       *prometheus.CounterVec
+	pendingVec       *prometheus.GaugeVec
+	metricFilter     map[string]bool
 }
 
 func newVecMetrics(cfg config, labelNames []string) *vecMetrics {
