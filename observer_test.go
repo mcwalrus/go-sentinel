@@ -134,7 +134,8 @@ func TestObserver_CustomConfig(t *testing.T) {
 		WithSuccessMetrics(),
 		WithErrorMetrics(),
 		WithTimeoutMetrics(),
-		WithMetrics(MetricPanics, MetricRetries),
+		WithPanicMetrics(),
+		WithRetryMetrics(),
 		WithNamespace("myapp"),
 		WithSubsystem("service"),
 	)
@@ -263,7 +264,8 @@ func TestObserve_SuccessfulExecution(t *testing.T) {
 		WithSuccessMetrics(),
 		WithErrorMetrics(),
 		WithTimeoutMetrics(),
-		WithMetrics(MetricPanics, MetricRetries),
+		WithPanicMetrics(),
+		WithRetryMetrics(),
 		WithTimeout(time.Second),
 	)
 	registry := prometheus.NewRegistry()
@@ -931,7 +933,8 @@ func TestObserve_MetricsRecording(t *testing.T) {
 				WithSuccessMetrics(),
 				WithErrorMetrics(),
 				WithTimeoutMetrics(),
-				WithMetrics(MetricPanics, MetricRetries),
+				WithPanicMetrics(),
+				WithRetryMetrics(),
 			}
 			observer := NewObserver(append(baseOpts, scenario.opts...)...)
 			registry := prometheus.NewRegistry()
@@ -1016,7 +1019,8 @@ func TestMultipleObservers(t *testing.T) {
 		WithSuccessMetrics(),
 		WithErrorMetrics(),
 		WithTimeoutMetrics(),
-		WithMetrics(MetricPanics, MetricRetries),
+		WithPanicMetrics(),
+		WithRetryMetrics(),
 		WithNamespace("test"),
 		WithSubsystem("observer1"),
 		WithDescription("test operations"),
@@ -1028,7 +1032,8 @@ func TestMultipleObservers(t *testing.T) {
 		WithSuccessMetrics(),
 		WithErrorMetrics(),
 		WithTimeoutMetrics(),
-		WithMetrics(MetricPanics, MetricRetries),
+		WithPanicMetrics(),
+		WithRetryMetrics(),
 		WithNamespace("test"),
 		WithSubsystem("observer2"),
 		WithDescription("test operations"),
@@ -1441,7 +1446,8 @@ func TestObserver_Describe(t *testing.T) {
 			WithSuccessMetrics(),
 			WithErrorMetrics(),
 			WithTimeoutMetrics(),
-			WithMetrics(MetricPanics, MetricRetries),
+			WithPanicMetrics(),
+			WithRetryMetrics(),
 		)
 		ch := make(chan *prometheus.Desc, 10)
 
@@ -1556,7 +1562,8 @@ func TestObserver_Collect(t *testing.T) {
 			WithSuccessMetrics(),
 			WithErrorMetrics(),
 			WithTimeoutMetrics(),
-			WithMetrics(MetricPanics, MetricRetries),
+			WithPanicMetrics(),
+			WithRetryMetrics(),
 		)
 		ch := make(chan prometheus.Metric, 10)
 
@@ -1616,7 +1623,8 @@ func TestObserver_Collect(t *testing.T) {
 			WithSuccessMetrics(),
 			WithErrorMetrics(),
 			WithTimeoutMetrics(),
-			WithMetrics(MetricPanics, MetricRetries),
+			WithPanicMetrics(),
+			WithRetryMetrics(),
 		)
 		_ = observer.Run(func() error {
 			return nil
