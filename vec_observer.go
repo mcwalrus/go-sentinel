@@ -8,9 +8,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// VecObserver is an Observer that supports Prometheus labels for multi-dimensional metrics.
-// It follows the same pattern as Prometheus's GaugeVec and CounterVec, providing methods
-// to create child observers with specific label combinations.
+// VecObserver is a labeled Observer that supports Prometheus label dimensions.
+// Use [VecObserver.With] or [VecObserver.WithLabels] to get an Observer for a
+// specific label set. Create with [NewVecObserver].
 //
 // Example usage:
 //
@@ -25,8 +25,10 @@ type VecObserver struct {
 	metrics vecMetrics
 }
 
-// NewVecObserver creates a new VecObserver with label support.
-// When LabelNames is set in the VecObserverConfig, Vec metrics are used instead of direct metrics.
+// NewVecObserver returns a new VecObserver with the given label names and options.
+// labelNames defines the Prometheus label dimensions; each call to [VecObserver.With]
+// or [VecObserver.WithLabels] must supply values for every name in this slice.
+// opts configure which metrics are recorded, namespace, subsystem, and other settings.
 //
 // Example usage:
 //
@@ -88,8 +90,8 @@ func (vo *VecObserver) Collect(ch chan<- prometheus.Metric) {
 // Example usage:
 //
 //	vecObserver := sentinel.NewVecObserver(
-//		[]float64{0.1, 0.5, 1, 2, 5},
 //		[]string{"service", "environment"},
+//		sentinel.WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5}),
 //	)
 //	observer, err := vecObserver.With(prometheus.Labels{
 //		"service":     "api",
@@ -112,14 +114,15 @@ func (vo *VecObserver) With(labels prometheus.Labels) (*Observer, error) {
 	}, nil
 }
 
-// WithLabels returns a new Observer with the given label values.
-// An error will be returned if the label values do not match initially configured label names.
+// WithLabels returns a new Observer with the given label values in the same order as
+// the label names provided to [NewVecObserver]. An error will be returned if the number
+// of label values does not match the number of label names.
 //
 // Example usage:
 //
 //	vecObserver := sentinel.NewVecObserver(
-//		[]float64{0.1, 0.5, 1, 2, 5},
 //		[]string{"service", "environment"},
+//		sentinel.WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5}),
 //	)
 //	observer, err := vecObserver.WithLabels("api", "production")
 //	if err != nil {
@@ -149,8 +152,8 @@ func (vo *VecObserver) WithLabels(labelValues ...string) (*Observer, error) {
 // Example usage:
 //
 //	vecObserver := sentinel.NewVecObserver(
-//		[]float64{0.1, 0.5, 1, 2, 5},
 //		[]string{"service", "environment"},
+//		sentinel.WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5}),
 //	)
 //	// Curry with environment="production", now only service label is needed
 //	prodObserver, err := vecObserver.CurryWith(prometheus.Labels{"environment": "production"})
