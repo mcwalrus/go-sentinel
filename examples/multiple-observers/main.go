@@ -31,28 +31,46 @@ var (
 )
 
 func init() {
-	// Background tasks observer
+	// Background tasks observer: full metrics suite with retries and a generous timeout.
 	backgroundObserver = sentinel.NewObserver(
+		sentinel.WithInFlightMetrics(),
+		sentinel.WithSuccessMetrics(),
+		sentinel.WithErrorMetrics(),
+		sentinel.WithRetryMetrics(),
 		sentinel.WithDurationMetrics([]float64{0.1, 0.5, 1, 2, 5, 10, 30, 60}),
 		sentinel.WithNamespace("app"),
 		sentinel.WithSubsystem("background_tasks"),
 		sentinel.WithDescription("Background processing tasks"),
+		sentinel.WithTimeout(30*time.Second),
+		sentinel.WithRetrier(retry.DefaultRetrier{MaxRetries: 3, WaitStrategy: retry.Exponential(500*time.Millisecond)}),
 	)
 
-	// Critical tasks observer
+	// Critical tasks observer: panic + timeout metrics to surface reliability issues.
+	// No duration histogram — latency is less important than availability for this tier.
 	criticalObserver = sentinel.NewObserver(
-		sentinel.WithDurationMetrics([]float64{0.01, 0.1, 0.5, 1, 5, 10, 30}),
+		sentinel.WithInFlightMetrics(),
+		sentinel.WithSuccessMetrics(),
+		sentinel.WithErrorMetrics(),
+		sentinel.WithTimeoutMetrics(),
+		sentinel.WithPanicMetrics(),
+		sentinel.WithRetryMetrics(),
 		sentinel.WithNamespace("app"),
 		sentinel.WithSubsystem("critical_tasks"),
 		sentinel.WithDescription("Critical business operations"),
+		sentinel.WithTimeout(5*time.Second),
+		sentinel.WithRetrier(retry.DefaultRetrier{MaxRetries: 2}),
 	)
 
-	// API tasks observer
+	// API tasks observer: latency-focused with a tight timeout; no retries.
 	apiObserver = sentinel.NewObserver(
+		sentinel.WithInFlightMetrics(),
+		sentinel.WithSuccessMetrics(),
+		sentinel.WithErrorMetrics(),
 		sentinel.WithDurationMetrics([]float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}),
 		sentinel.WithNamespace("app"),
 		sentinel.WithSubsystem("api_requests"),
 		sentinel.WithDescription("API request processing"),
+		sentinel.WithTimeout(2*time.Second),
 	)
 
 	limitChan = make(chan struct{}, 15)
@@ -67,14 +85,6 @@ func init() {
 // BackgroundTask represents a long-running background processing task
 type BackgroundTask struct {
 	TaskID string
-}
-
-func (task *BackgroundTask) ObserverConfig() sentinel.ObserverConfig {
-	return sentinel.ObserverConfig{
-		Timeout:       30 * time.Second,
-		MaxRetries:    3,
-		RetryStrategy: retry.Exponential(500 * time.Millisecond),
-	}
 }
 
 // Execute background tasks:
@@ -107,13 +117,6 @@ func (task *BackgroundTask) Execute(ctx context.Context) error {
 
 type CriticalTask struct {
 	TaskID string
-}
-
-func (task *CriticalTask) ObserverConfig() sentinel.ObserverConfig {
-	return sentinel.ObserverConfig{
-		Timeout:    5 * time.Second,
-		MaxRetries: 2,
-	}
 }
 
 // Execute critical tasks:
@@ -151,12 +154,6 @@ func (task *CriticalTask) Execute(ctx context.Context) error {
 
 type APITask struct {
 	TaskID string
-}
-
-func (task *APITask) ObserverConfig() sentinel.ObserverConfig {
-	return sentinel.ObserverConfig{
-		Timeout: 2 * time.Second,
-	}
 }
 
 // Execute API tasks:
